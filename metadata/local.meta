@@ -1,0 +1,57 @@
+[indexes/robotdata]
+owner = admin
+version = 6.5.0
+modtime = 1478202674.629899000
+
+[props/robot_data]
+owner = admin
+version = 6.5.0
+modtime = 1478202703.777555000
+
+[]
+access = read : [ * ], write : [ admin, power ]
+export = system
+version = 6.5.0
+modtime = 1478617576.921990000
+
+[lookups/partmap.csv]
+access = read : [ * ], write : [ admin, power ]
+export = system
+owner = admin
+version = 6.5.0
+modtime = 1478889329.661822000
+
+[transforms/partmap]
+access = read : [ * ], write : [ admin, power ]
+export = system
+owner = admin
+version = 6.5.0
+modtime = 1478889369.523349000
+
+[props/robotdata/LOOKUP-partmap]
+access = read : [ * ], write : [ admin, power ]
+export = system
+owner = admin
+version = 6.5.0
+modtime = 1478889504.556206000
+
+[props/robotdata/EVAL-position]
+access = read : [ * ], write : [ admin, power ]
+export = system
+owner = admin
+version = 6.5.0
+modtime = 1478893134.520042000
+
+[props/robotdata/EVAL-temperature]
+access = read : [ * ], write : [ admin, power ]
+export = system
+owner = admin
+version = 6.5.0
+modtime = 1478893145.988434000
+
+[views/robotic_arm_automation_demo]
+access = read : [ * ], write : [ * ]
+export = system
+owner = admin
+version = 6.5.0
+modtime = 1479330446.699350000

@@ -1,0 +1,123 @@
+<form>
+  <label>Robotic Arm Automation</label>
+  <description>Leveraging Universal Robotic Visualization in Real-Time</description>
+  <fieldset submitButton="false" autoRun="true"></fieldset>
+  <row>
+    <panel>
+      <title>Universal Robotic Arm Movement, Temperature and Velocity</title>
+      <input type="time" token="TIME">
+        <label>Real Time - 30 Second Window</label>
+        <default>
+          <earliest>rt-30s</earliest>
+          <latest>rt</latest>
+        </default>
+      </input>
+      <viz type="Bender.rotator">
+        <search>
+          <query>index=robotdata Tag!=Omron* Tag!="MODBUS.ROBOT.Vel*" Tag!="MODBUS.ROBOT.Robot_Cur*"| table _time, part, purpose, Value</query>
+          <earliest>rt-5s</earliest>
+          <latest>rtnow</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="Bender.rotator.highTemp">40</option>
+        <option name="Bender.rotator.medTemp">30</option>
+        <option name="height">379</option>
+      </viz>
+      <html>
+        <p/>
+      </html>
+      <chart>
+        <title>Component Temperature - 30 Minute Rolling WIndow</title>
+        <search>
+          <query>index=* NOT kepware | rex "Tag=.*(?:Position|Velocity)_(?&lt;Part&gt;[^\"]+)"  | rex "Value=\"(?&lt;Position&gt;\d+)" | convert ctime(_time) as Time | timechart latest(*Temperature*)</query>
+          <earliest>rt-30m</earliest>
+          <latest>rt</latest>
+          <sampleRatio>1</sampleRatio>
+          <refresh>1m</refresh>
+          <refreshType>delay</refreshType>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.text">Time</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">collapsed</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">area</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">1</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">1</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisStart</option>
+        <option name="charting.legend.placement">bottom</option>
+      </chart>
+      <html>
+        <p/>
+      </html>
+      <chart>
+        <title>Component Velocity - 30 Minute Rolling Window</title>
+        <search>
+          <query>index=* NOT kepware | rex "Tag=.*(?:Position|Velocity)_(?&lt;Part&gt;[^\"]+)"  | rex "Value=\"(?&lt;Position&gt;\d+)" | convert ctime(_time) as Time | timechart latest(*Velocity*)</query>
+          <earliest>rt-30m</earliest>
+          <latest>rt</latest>
+          <sampleRatio>1</sampleRatio>
+          <refresh>1m</refresh>
+          <refreshType>delay</refreshType>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.text">Time</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">collapsed</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">1</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisStart</option>
+        <option name="charting.legend.placement">bottom</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Robot Data</title>
+      <table>
+        <title>Robotic Arm - Real-Time - Unified Event View</title>
+        <search>
+          <query>index=* NOT kepware | rex "Tag=.*(?:Position|Velocity)_(?&lt;Part&gt;[^\"]+)"  | rex "Value=\"(?&lt;Position&gt;\d+)" | convert ctime(_time) as Time | rename UNIT as Unit | stats latest(*) as * | fields Time Part Position Quality Unit Value M* O* | transpose | rename column as Robot "row 1" as RobotData</query>
+          <earliest>$TIME.earliest$</earliest>
+          <latest>$TIME.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">100</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">cell</option>
+        <option name="percentagesRow">false</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</form>

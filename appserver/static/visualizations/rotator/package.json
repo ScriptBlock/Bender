@@ -1,0 +1,24 @@
+{
+  "name": "rotator",
+  "version": "1.0.0",
+  "description": "Simple d3 that rotates a bar around a center for varying degrees.",
+  "main": "visualization.js",
+  "scripts": {
+    "build": "$SPLUNK_HOME/bin/splunk cmd node ./node_modules/webpack/bin/webpack.js",
+    "devbuild": "$SPLUNK_HOME/bin/splunk cmd node ./node_modules/webpack/bin/webpack.js --progress",
+    "watch": "$SPLUNK_HOME/bin/splunk cmd node ./node_modules/webpack/bin/webpack.js -d --watch --progress"
+  },
+  "author": "Nick Zambo",
+  "license": "MIT",
+  "devDependencies": {
+    "webpack": "^1.12.6"
+  },
+  "dependencies": {
+    "three": "^0.82.1",
+    "three-math": "^0.69.0",
+    "tween.js":"^16.3.5",
+    "jquery": "^2.2.4",
+    "underscore": "^1.8.3",
+    "mathjs":"^3.7.0"
+  }
+}
