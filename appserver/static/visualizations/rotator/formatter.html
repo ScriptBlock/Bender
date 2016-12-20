@@ -11,3 +11,24 @@
     </splunk-control-group>
     <p>All other temperatures will be standard blue</p>
 </form>
+<form class="splunk-formatter-section" section-label="Tranform Controls">
+    <p>Select the mode for your transform controls</p>
+    <splunk-control-group label="Transform control state">
+        <splunk-radio-input name="{{VIZ_NAMESPACE}}.transformState">
+            <option value="on">On</option>
+            <option value="off">Off</option>
+        </splunk-radio-input>
+    </splunk-control-group>
+    <splunk-control-group label="Controls">
+        <splunk-select name="{{VIZ_NAMESPACE}}.transformMode">
+            <option value="translate">Translate</option>
+            <option value="scale">Scale</option>
+            <option value="rotate">Rotate</option>
+        </splunk-select>
+    </splunk-control-group>
+</form>
+<form class="splunk-formatter-section" section-label="Scene Editor">
+    <splunk-control-group label="Add Models">
+        <button name="AddModel" value="Testing">Add Model</button>
+    </splunk-control-group>
+</form>
