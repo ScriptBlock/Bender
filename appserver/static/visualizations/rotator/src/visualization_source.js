@@ -1,5 +1,13 @@
 /*
  * Visualization source
+ *
+ * TODO - refactor code for scene selection & multiple models
+ * TODO - refactor code for CRUD integration and Splunk KVStore
+ *
+ *
+
+
+
  */
 define([
             'jquery',
@@ -146,25 +154,28 @@ function getParentUntil(obj) {
 function onSceneMouseDown(event) {
 	event.preventDefault();
 
-	//standard raycaster object selection code
-	var mv = new THREE.Vector3();
-	mv.x = ( event.offsetX / globalElement.innerWidth() ) * 2 - 1;
-	mv.y = - ( event.offsetY / globalElement.innerHeight() ) * 2 + 1;
-	raycaster.setFromCamera(mv.clone(), camera);
-	var intersects = raycaster.intersectObjects( scene.children,true );
+	if(transformControlState) {
+
+		//standard raycaster object selection code
+		var mv = new THREE.Vector3();
+		mv.x = ( event.offsetX / globalElement.innerWidth() ) * 2 - 1;
+		mv.y = - ( event.offsetY / globalElement.innerHeight() ) * 2 + 1;
+		raycaster.setFromCamera(mv.clone(), camera);
+		var intersects = raycaster.intersectObjects( scene.children,true );
 
 
-	if ( intersects.length > 0 ) {
-		var theParent = getParentUntil(intersects[0].object);
-		if(theParent) {
-			currentTransformObject = theParent;
-			if(transformControlState) {
-				transformControl.attach(currentTransformObject);
+		if ( intersects.length > 0 ) {
+			var theParent = getParentUntil(intersects[0].object);
+			if(theParent) {
+				currentTransformObject = theParent;
+				console.log(theParent);
+				if(transformControlState) {
+					transformControl.attach(currentTransformObject);
+				}
 			}
-		}
 
-	} 
-
+		} 
+	}
 
 }
 
@@ -173,13 +184,8 @@ function onSceneKeyDown(event) {
 }
 
 
-function addModelToScene() {
-	console.log("Clicked addModelToScene")
-	console.log("Will try to add matching mode: " + globalConfig[globalNamespace + "modelName"]);
-}
 
-
-//called on every data update or
+//this will need to be refactored for CRUD
 function updateControls() {
 	var transformState;
 	var transformMode;
@@ -251,6 +257,19 @@ function updateControls() {
 
 
 			//this needs to be refactored into a save file and/or multiple models
+			//need to implement KVStore code similar to home automation code
+			//provide a CRUD interface to add component and dynamically load
+			//scene based on KV elements.
+			//KVSTORE
+			//   model root (scene.json for example)
+			//   model name - will be used to give unique joint/poisition names
+			//   Vector3 for scene placement (translation)
+			//	 Vector3 for rotational placement 
+			//	 Vector3 for scale 
+			//   These vector3's will be stored in the KV store but not user editable
+			//   movement within the scene will save the resulting data off to KVstore
+			//	 
+			//   
 			loader = new THREE.ObjectLoader();
 			loader.load(armJSONFile, function(obj) {
 				scene.add(obj);
@@ -283,8 +302,6 @@ function updateControls() {
         	mediumTemp = parseInt(config[globalNamespace + "medTemp"])
 
         	updateControls();
-
-
 	
 			// Check for empty data
 			if(_.size(data.results) < 1) { console.log("no data"); return; }

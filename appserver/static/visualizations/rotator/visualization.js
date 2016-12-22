@@ -46,6 +46,14 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;/*
 	 * Visualization source
+	 *
+	 * TODO - refactor code for scene selection & multiple models
+	 * TODO - refactor code for CRUD integration and Splunk KVStore
+	 *
+	 *
+
+
+
 	 */
 	!(__WEBPACK_AMD_DEFINE_ARRAY__ = [
 	            __webpack_require__(3),
@@ -81,7 +89,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 	var camera, scene, loader, renderer;
-	var base, shoulder, elbow, wrist1, wrist2, wrist3;
+	var base, shoulder, elbow, wrist1, wrist2, wrist3; //this needs to be refactored into multiple models
 	var counter = 0;
 	var activeTween;
 	var globalVizBase, globalConfig, globalNamespace;
@@ -103,19 +111,25 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	}
 
 	function render() {
+		//this is a safety check.  if you try to set the camera angles and scene size before
+		//the dom element and camera is initialized it doesn't work.  once the camera and dom
+		//element is built, you can get the screen size and your model won't be skewed
 		if(camera) {
-			//camera.lookAt(scene.position);
 			renderer.render(scene, camera);
 		} else {
+
+			//100 is the default bogus value for some reason.  this code is a little henky, but works.
 			if(globalElement.innerWidth() != 100 && globalElement.innerHeight() != 100) {
 				renderer.setSize( globalElement.innerWidth(), globalElement.innerHeight() );
 				camera = new THREE.PerspectiveCamera( 80, globalElement.innerWidth()/globalElement.innerHeight(), 0.1, 1000 );	
 				camera.position.y = 55;
 				camera.position.z = 45;
-
 				camera.lookAt(scene.position);
 
 
+				//build up pan/zoom/scroll controls for the whole viz.  
+				//could probably put these options in the formatter as well but these values work
+				//pretty well.
 				orbitControls = new OrbitControls( camera, renderer.domElement );
 				orbitControls.rotateSpeed = 0.4;
 				orbitControls.zoomSpeed = 0.4;
@@ -124,6 +138,8 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 				orbitControls.enableZoom = true;
 
 
+				//build up a transform control to be used whenever a model is clicked
+				//and the formatter api indicates that the transform control is "on"
 				transformControl = new THREE.TransformControls( camera, renderer.domElement );
 				scene.add(transformControl);
 				transformControl.addEventListener( 'change', render );
@@ -133,6 +149,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	}
 
 
+	//this needs a whole lotta work.  kind of just a first go at it.
 	function setJointColor(part, temp) {
 		var r,g,b;
 		if(temp) {
@@ -158,205 +175,169 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 		}
 	}
 
-	function getParentUntil(obj) {
-		console.log("looking for base parent");
 
-		if(!obj.parent) {
-			console.log("there is no parent object.  returning null");
-			return null;
-		}
+	//this is a recursive function to get the whole model when clicked instead of just a 
+	//specific part.  Scene is hardcoded here assuming that every model that is loaded is
+	//an imported scene.
+	function getParentUntil(obj) { 
+		if(!obj.parent) { return null; }
 
-		if(obj.parent && obj.parent.name != "Scene") {
-			console.log("current object = " + obj.name)
-			console.log("object has a parent but it's not a scene, looking into that one (" + obj.parent.name + ")");
-			return getParentUntil(obj.parent);
-		}
+		//recursive
+		if(obj.parent && obj.parent.name != "Scene") { return getParentUntil(obj.parent); } 
 
 		if(obj.parent.name == "Scene") {
-			console.log("this objects parent is the scene.  returning that");
 			return obj.parent;
 		} else {
-			console.log("i have no idea how i got here");
 			return null;
 		}
 
 
 	}
 
+	//this selects the entire model and reflects the wishes of the formatter api settings
+	//currently just supports transforms.
 	function onSceneMouseDown(event) {
 		event.preventDefault();
 
-		var mv = new THREE.Vector3();
-		mv.x = ( event.offsetX / globalElement.innerWidth() ) * 2 - 1;
-		mv.y = - ( event.offsetY / globalElement.innerHeight() ) * 2 + 1;
+		if(transformControlState) {
 
-		raycaster.setFromCamera(mv.clone(), camera);
-		var intersects = raycaster.intersectObjects( scene.children,true );
+			//standard raycaster object selection code
+			var mv = new THREE.Vector3();
+			mv.x = ( event.offsetX / globalElement.innerWidth() ) * 2 - 1;
+			mv.y = - ( event.offsetY / globalElement.innerHeight() ) * 2 + 1;
+			raycaster.setFromCamera(mv.clone(), camera);
+			var intersects = raycaster.intersectObjects( scene.children,true );
 
-		if ( intersects.length > 0 ) {
-			console.log("intersected");
-			console.log(intersects);
-			var theParent = getParentUntil(intersects[0].object);
 
-			console.log(theParent);
-
-			if(theParent) {
-
-				//renderer.domElement.removeEventListener("mousedown", onSceneMouseDown);
-
-				currentTransformObject = theParent;
-				if(transformControlState) {
-					transformControl.attach(currentTransformObject);
+			if ( intersects.length > 0 ) {
+				var theParent = getParentUntil(intersects[0].object);
+				if(theParent) {
+					currentTransformObject = theParent;
+					console.log(theParent);
+					if(transformControlState) {
+						transformControl.attach(currentTransformObject);
+					}
 				}
-				//scene.add(transformControl);
-			}
 
-		} /*else {
-			console.log("there was no intersection - clearing transform control attachment");
-			transformControl.detach();
-			scene.remove(transformControl);
-		}*/
-
+			} 
+		}
 
 	}
 
 	function onSceneKeyDown(event) {
-
-		switch(event.keyCode) {
-
-			case 27: //esc
-				//transformControl.detach();
-				//scene.remove(transformControl);
-
-				//renderer.domElement.addEventListener('mousedown', onSceneMouseDown);
-				break;
-
-			case 82: //r = scale
-				//transformControl.setMode("scale");
-				break;
-
-
-
-		}
-
-
-	}
-
-	function addModelToScene() {
-		console.log("Clicked addModelToScene")
-		console.log("Will try to add matching mode: " + globalConfig[globalNamespace + "modelName"]);
+		//nadda right now.  probably deprecated
 	}
 
 
+
+	//this will need to be refactored for CRUD
 	function updateControls() {
-
 		var transformState;
 		var transformMode;
 
 		switch(globalConfig[globalNamespace + "transformState"]) {
 			case "on":
-				console.log("time to turn the transform control on");
 				transformControlState = true;
 				break;
 			case "off": 
-				console.log("time to turn the transform control off");
 				transformControlState = false;
 				transformControl.detach();
 				break;
 		}
 
-		switch(globalConfig[globalNamespace + "transformMode"]) {
-			case "translate":
-				console.log("transform mode = translate");
-				transformControl.setMode("translate");
-				break;
-			case "scale": 
-				console.log("transform mode = scale");
-				transformControl.setMode("scale");
-				break;
-			case "rotate": 
-				console.log("transform mode = rotate");
-				transformControl.setMode("rotate");
-				break;
-
+		//just a little control logic to make sure that we're not creating new events 
+		//unnecessarily.  every time you call setmode the transformcontrols code dispatches a 
+		//change event.  this would get called every time new data comes in.  we don't want that.
+		if(transformControl.getMode != globalConfig[globalNamespace + "transformMode"]) {
+			switch(globalConfig[globalNamespace + "transformMode"]) {
+				case "translate":
+					transformControl.setMode("translate");
+					break;
+				case "scale": 
+					transformControl.setMode("scale");
+					break;
+				case "rotate": 
+					transformControl.setMode("rotate");
+					break;
+			}
 		}
 
 
 	}
-
-	/*
-	fnction simCheck() {
-		if(simMode) {
-			console.log("simluation dataset size: " + _.size(simulationData));
-			var tempData = {};
-			tempData.results = new Array();
-			tempData.results[0] = {part: simulationData[simCounter]["move"], position: simulationData[simCounter]["rad"]};
-			globalVizBase.updateView(tempData, globalConfig);
-			if(simCounter++ >= _.size(simulationData)-1) { simCounter = 0; }
-
-			// console.log("TWEEN Size");
-			//console.log(_.size(TWEEN.getAll()));
-			//console.log(TWEEN.getAll()[0]);
-		}
-	}
-	*/
 
 	    // Extend from SplunkVisualizationBase
 	    return SplunkVisualizationBase.extend({
 	  
 
 	        initialize: function() {
+
+	        	//just some viz setup stuff
 	            SplunkVisualizationBase.prototype.initialize.apply(this, arguments);
 	            this.$el = $(this.el);
 	            globalElement = this.$el;
 	            hasViz = false;
 	            this.$el.addClass('rotator');
-	            // Initialization logic goes here
 
 
+	            //build up the base scane
 				scene = new THREE.Scene();
 				scene.add( new THREE.GridHelper( 500, 100 ) );
+				//needs to be customizable for formatter api
+				scene.background = new THREE.Color( 0x000000 );
 
+
+				//build up the viz renderer
+				renderer = new THREE.WebGLRenderer();
+				renderer.setPixelRatio( window.devicePixelRatio );
+				this.$el.append(renderer.domElement);
+
+
+				//set up some variables.  hightemp and mediumtemp can probably be moved somewhere better
+				highTemp = 40;
+				mediumTemp = 30;
+				globalVizBase = this;
+				raycaster = new THREE.Raycaster();
+				mouse = new THREE.Vector2();
+
+
+
+				//this needs to be refactored into a save file and/or multiple models
+				//need to implement KVStore code similar to home automation code
+				//provide a CRUD interface to add component and dynamically load
+				//scene based on KV elements.
+				//KVSTORE
+				//   model root (scene.json for example)
+				//   model name - will be used to give unique joint/poisition names
+				//   Vector3 for scene placement (translation)
+				//	 Vector3 for rotational placement 
+				//	 Vector3 for scale 
+				//   These vector3's will be stored in the KV store but not user editable
+				//   movement within the scene will save the resulting data off to KVstore
+				//	 
+				//   
 				loader = new THREE.ObjectLoader();
-
 				loader.load(armJSONFile, function(obj) {
 					scene.add(obj);
 
 				});
-				//scene.background = new THREE.Color( 0xd3d3d3 );
-				scene.background = new THREE.Color( 0x000000 );
-
-				renderer = new THREE.WebGLRenderer();
-				renderer.setPixelRatio( window.devicePixelRatio );
-				this.$el.append(renderer.domElement);
-				highTemp = 40;
-				mediumTemp = 30;
-				globalVizBase = this;
 				
 
-				raycaster = new THREE.Raycaster();
-				mouse = new THREE.Vector2();
+				//mouse-down for model selection.  this is used with transform tools
 				renderer.domElement.addEventListener('mousedown', onSceneMouseDown);
 
-				window.addEventListener('keydown', onSceneKeyDown);
-
+				//hooking keyboard events isn't working well..  probably not going to use this in lieu of
+				//formatter api and maybe some on-screen buttons
+				//window.addEventListener('keydown', onSceneKeyDown);
 
 				animate();
 
 	        },
 
-	        // Optionally implement to format data returned from search. 
-	        // The returned object will be passed to updateView as 'data'
 	        formatData: function(data) {
-
-	            // Format data 
-
+	        	//no data formatting
 	            return data;
 	        },
 	  
-	        // Implement updateView to render a visualization.
-	        //  'data' will be the data object returned from formatData or from the search
-	        //  'config' will be the configuration property object
 	        
 	        updateView: function(data, config) {
 	        	globalConfig = config;
@@ -366,19 +347,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	        	mediumTemp = parseInt(config[globalNamespace + "medTemp"])
 
 	        	updateControls();
-
-
 		
 				// Check for empty data
 				if(_.size(data.results) < 1) { console.log("no data"); return; }
-	/*
-				if(data.results[0]["mode"] == "sim") { simMode = true; }
-				if(simMode) {
-					console.log("executing sim data");
-					window.setTimeout(simCheck, 300);
-				}
-	*/
-				//while(!base || !shoulder || !elbow || !wrist1 || !wrist2 || !wrist3) {
+
+
+				//needs to be refactored for multiple models.  This just creates
+				//some variables for tweening/manipulation
 				if(!base || !shoulder || !elbow || !wrist1 || !wrist2 || !wrist3) {
 					console.log("waiting to enumerate all parts");
 					scene.traverse(function(i) {
@@ -401,16 +376,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 					_.each(data.results, function(d) { 
 
-	//					console.log("current data");
-	//					console.log(d);
-
+						//this whole section needs to be fixed for logic reuse (the tween code sucks)
+						//also needs to support multiple models
 						var thisPart = d["part"];
 						var thisPurpose = d["purpose"];
 						var thisValue = d["Value"];
 
 
-				        //var dataRadians = d["position"] || undefined;
-				        //var dataTemperature = d["temperature"] || undefined;
 				        var dataRadians = undefined;
 				        var dataTemperature = undefined;
 
@@ -419,6 +391,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 				        	case "temperature": dataTemperature = thisValue; break;
 				        }
 
+				        //tween the various parts for whatever angle is passed in
 						switch(thisPart) {
 							case "base":
 								if(dataTemperature != undefined) { setJointColor(jointBase, dataTemperature); }
