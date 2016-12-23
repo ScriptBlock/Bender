@@ -431,14 +431,16 @@ require([
 
 
         $("#addSceneButton").click(function() {
-                console.log("Adding new scene called" + newSceneName.val());
+                var tempSceneName = newSceneName.val();
+                console.log("Adding new scene called" + tempSceneName);
                 //add scene via KVSTORE
                 //and refresh viz panel with this scene
                 //set the sceneNamePicker token/value to new scene name.
-                var tempSceneName = sceneNamePicker.val();
+                
                 var record = { "sceneName": tempSceneName };
+                console.log(record);
                 service.request(
-                    "storage/collections/data/scenes",
+                    "storage/collections/data/scenes/",
                     "POST",
                     null,
                     null,
