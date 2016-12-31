@@ -1,4 +1,4 @@
-define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(__WEBPACK_EXTERNAL_MODULE_4__, __WEBPACK_EXTERNAL_MODULE_5__) { return /******/ (function(modules) { // webpackBootstrap
+define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","api/SplunkVisualizationUtils","splunkjs/mvc/utils"], function(__WEBPACK_EXTERNAL_MODULE_2__, __WEBPACK_EXTERNAL_MODULE_3__, __WEBPACK_EXTERNAL_MODULE_6__, __WEBPACK_EXTERNAL_MODULE_7__, __WEBPACK_EXTERNAL_MODULE_9__) { return /******/ (function(modules) { // webpackBootstrap
 /******/ 	// The module cache
 /******/ 	var installedModules = {};
 
@@ -56,17 +56,27 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 	 */
 	!(__WEBPACK_AMD_DEFINE_ARRAY__ = [
-	            __webpack_require__(3),
-	            __webpack_require__(8),
+				__webpack_require__(2),
+				__webpack_require__(9),
+				__webpack_require__(3),
+				//'splunkjs/mvc/simpleform/formutils',
+	    		//'splunkjs/mvc/simplexml/urltokenmodel',
 	            __webpack_require__(4),
 	            __webpack_require__(5),
-		    	__webpack_require__(6),
+	            __webpack_require__(6),
 	            __webpack_require__(7),
+		    	__webpack_require__(8),
 	            __webpack_require__(1),
-	            __webpack_require__(9)
-	       
+	            __webpack_require__(10),
+	            __webpack_require__(12)
+
 	            // Add required assets to this list
 	        ], __WEBPACK_AMD_DEFINE_RESULT__ = function(
+		        mvc,
+		        utils,
+		        TokenUtils,
+	        	//FormUtils,
+	        	//UrlTokenModel,
 	            $,
 	            _,
 	            SplunkVisualizationBase,
@@ -75,20 +85,36 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	            Math,
 	            TWEEN,
 	            mathjs
+
 	        ) {
 
 	    var hasViz = false;
 
 	var armJSONFile = "/en-us/static/app/Bender/scene.json";
+	var modelPath = "/en-us/static/app/Bender/";
 
 
 
 	var container;
-	var OrbitControls = __webpack_require__(517)(THREE);
-	var TransformControls = __webpack_require__(518);
+	var OrbitControls = __webpack_require__(520)(THREE);
+	var TransformControls = __webpack_require__(521);
 
 
 	var camera, scene, loader, renderer;
+
+	var currentSceneKey;
+	var currentSceneComponents = new Object();
+	var sceneComponentCount = 0;
+	var sceneComponentsCounted = 0;
+
+
+	var	sceneModelsDeferred = $.Deferred();
+	var	modelMappingDeferred = $.Deferred();
+
+
+
+	var mvcService;
+
 	var base, shoulder, elbow, wrist1, wrist2, wrist3; //this needs to be refactored into multiple models
 	var counter = 0;
 	var activeTween;
@@ -103,6 +129,57 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	var transformControlState = false;
 
 
+	var crudMode = false;
+	var crudCommand;
+
+	//if(true) { console.log("osdijfodisjfiodsfjsdf"); }
+	/*
+	var fu;
+	try {
+		console.log("doing stuff before require");
+		fu = require('splunkjs/mvc/simpleform/formutils');
+		console.log("loaded formutils");
+	} catch(e) {
+		console.log("error requiring formutils");
+		console.log(e);
+	}
+	*/
+	//////////////////////////
+	/*
+	        var urlTokenModel = new UrlTokenModel();
+	        mvc.Components.registerInstance('url', urlTokenModel);
+	        var defaultTokenModel = mvc.Components.getInstance('default', {create: true});
+	        var submittedTokenModel = mvc.Components.getInstance('submitted', {create: true});
+	        urlTokenModel.on('url:navigate', function() {
+	            defaultTokenModel.set(urlTokenModel.toJSON());
+	            if (!_.isEmpty(urlTokenModel.toJSON()) && !_.all(urlTokenModel.toJSON(), _.isUndefined)) {
+	                submitTokens();
+	            } else {
+	                submittedTokenModel.clear();
+	            }
+	        });
+
+	        // Initialize tokens
+	        defaultTokenModel.set(urlTokenModel.toJSON());
+
+
+	        function getToken(name) {
+	            var retVal = defaultTokenModel.get(name);
+	            console.log("token value for " + name + " is " + retVal);
+	            return retVal;
+
+	        }
+
+	function getToken(name) {
+	    var retVal = defaultTokenModel.get(name);
+	    console.log("token value for " + name + " is " + retVal);
+	    return retVal;
+
+	}
+	*/
+
+
+
 	function animate() {
 		requestAnimationFrame(animate);
 		render();
@@ -111,6 +188,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	}
 
 	function render() {
+		//token testing
+		
+		//var tokenTemp = getToken("vizbridge_selectmodel");
+		//console.log("token temp");
+		//console.log(tokenTemp);
+		
+		updateFromDom();
 		//this is a safety check.  if you try to set the camera angles and scene size before
 		//the dom element and camera is initialized it doesn't work.  once the camera and dom
 		//element is built, you can get the screen size and your model won't be skewed
@@ -176,6 +260,68 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	}
 
 
+	function updateFromDom() {
+
+
+	/*
+	<div id="vizbridge_crudmode" style="display:none">on</div>
+	        <div id="vizbridge_crudcommand" style="display:none">none</div>
+	*/
+
+		if(crudMode != $("#vizbridge_crudmode").text()) {
+			console.log("current crudMode: [" + crudMode + "] doesn't match " + $("#vizbridge_crudmode").text());
+			crudMode = $("#vizbridge_crudmode").text();
+			console.log("changed crudmode to " + crudMode);
+		}
+
+		var tempCommand = $("#vizbridge_crudcommand").text();
+		if(tempCommand != "") {
+			crudCommand = $("#vizbridge_crudcommand").text();
+			console.log("received dom based viz command: " + crudCommand);
+
+			$("#vizbridge_crudcommand").text("");
+
+			if(crudCommand == "save") {}
+
+			if(crudCommand == "reloadSceneModels") {
+				reloadSceneModels();
+
+			}
+
+
+			if(/switchscene:/.test(crudCommand)) {
+				var sceneKey = /switchscene:(.*)$/.exec(crudCommand)[1];
+
+				loadScene(sceneKey);
+
+			}
+
+			if(/selectcomponent:/.test(crudCommand)) {
+				var componentKey = /selectcomponent:(.*)$/.exec(crudCommand)[1];
+				selectComponent(componentKey);
+			}
+
+
+			if(/switchxform:/.test(crudCommand)) {
+				var xformType = /switchxform:(.*)$/.exec(crudCommand)[1];
+				switch(xformType) {
+					case "translate": 
+						transformControl.setMode("translate");
+						break;
+					case "scale":
+						transformControl.setMode("scale");
+						break;
+					case "rotate":
+						transformControl.setMode("rotate");
+						break;
+				}
+			}
+			
+		}
+
+	}
+
+
 	//this is a recursive function to get the whole model when clicked instead of just a 
 	//specific part.  Scene is hardcoded here assuming that every model that is loaded is
 	//an imported scene.
@@ -196,9 +342,20 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 	//this selects the entire model and reflects the wishes of the formatter api settings
 	//currently just supports transforms.
-	function onSceneMouseDown(event) {
-		event.preventDefault();
+	function selectComponent(componentKey) {
+		console.log("selecting component: " + componentKey);
+		transformControl.detach();
 
+		transformControl.attach(currentSceneComponents[componentKey].threeObject);
+		//component key needs to be added to model during loading.
+		//perhaps maintain a hash during scene load so that selecting components 
+		//isn't an enumeration of all scene objects
+
+	//	event.preventDefault();
+	/*
+
+		//refactor this stuff out.  no need for raycasting since we are picking components
+		//from the list in the GUI
 		if(transformControlState) {
 
 			//standard raycaster object selection code
@@ -221,15 +378,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 			} 
 		}
+	*/
 
 	}
 
-	function onSceneKeyDown(event) {
-		//nadda right now.  probably deprecated
-	}
 
 
-
+	/*
 	//this will need to be refactored for CRUD
 	function updateControls() {
 		var transformState;
@@ -261,7 +416,168 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 					break;
 			}
 		}
+	}
+	*/
 
+
+	function loadScene(sceneKey) {
+		console.log("loading scene for " + sceneKey);
+
+		if(transformControl) {
+			transformControl.detach();
+		}
+
+		console.log("re/setting scenecomponent vars")
+		currentSceneKey = sceneKey;
+		currentSceneComponents = new Object();
+
+		console.log("creating a new scene.");
+		scene = new THREE.Scene();
+		scene.add( new THREE.GridHelper( 500, 100 ) );
+		scene.background = new THREE.Color( 0x000000 );
+		scene.add(transformControl);
+
+		sceneModelsDeferred = $.Deferred();
+		modelMappingDeferred = $.Deferred();
+
+
+		//KV lookup
+		loadSceneModels(sceneKey);
+
+	}
+
+	function modelLoadingTracker() {
+		if(sceneComponentsCounted != sceneComponentCount) {
+			setTimeout(modelLoadingTracker, 1000);
+		} else {
+			modelMappingDeferred.resolve();
+		}
+
+
+	}
+
+	function loadSceneModels(sceneKey) {
+		console.log("loading scene models");
+		//fields_list = _key, sceneKey, componentUniqueName, modelName, rotation, translation, scale
+
+	//?query={"id": {"$gt": 24}}
+		var searchString = '{"sceneKey": "' + sceneKey + '"}';
+
+
+
+		mvcService.request("storage/collections/data/scene_models", 
+			"GET", 
+			{"query": searchString},
+			null,
+			null,
+			null,	
+			function(err, response) {
+				_.each(response.data, function(model) {
+					currentSceneComponents[model._key] = model;
+					//console.log(model);
+				});
+
+				console.log("here's the currentSceneComponents object after scene model loading");
+				console.log(currentSceneComponents);
+
+				sceneModelsDeferred.resolve(currentSceneComponents);
+
+
+
+			});
+
+		sceneComponentCount = _.size(currentSceneComponents);
+		sceneComponentsCounted = 0;
+		_.each(currentSceneComponents, function(model) {
+			console.log("loading mapping for component " + model._key);
+			console.log(model);
+			mvcService.request("storage/collections/data/model_component_mapping",
+				"GET",
+				{"query": '{"modelKey: "' + model._key + '"}'},
+				null,
+				null,
+				null,
+				function(err, response) {
+					console.log("working with output for model key: " + model._key);
+					var fieldMapping = new Object();
+					_.each(response.data, function(mapping) {
+						fieldMapping[mapping._key] = mapping;
+					})
+					model["fieldmapping"] = fieldMapping;
+					sceneComponentsCounted++;
+				}
+
+				)
+
+
+		});
+		
+		console.log("tracking model loading for deferred variable");
+		setTimeout(modelLoadingTracker, 250);
+		
+
+		//kv lookup
+		//add models to a hash during load
+
+		console.log("calling $.when");
+		$.when(sceneModelsDeferred, modelMappingDeferred).done(function() {
+			console.log("inside $.when block");
+			console.log(currentSceneComponents);
+			//actually create the model and apply translations and field mapping and unique identified to it.
+
+			_.each(currentSceneComponents, function(model) {
+				loader.load(modelPath + model.modelName, function(obj) {
+					console.log("loaded object: " + model.componentUniqueName);
+					//set object properties recursively to add _key
+					obj.kvkey = model._key;
+
+					var xyz = JSON.parse(model.translation);
+
+					obj.position.x = xyz.x;
+					obj.position.y = xyz.y;
+					obj.position.z = xyz.z;
+
+					xyz = JSON.parse(model.scale);
+					console.log("model.scale = " + model.scale);
+					obj.scale.set(xyz.x,xyz.y,xyz.z);
+
+
+					currentSceneComponents[model._key].threeObject = obj;
+
+
+
+					scene.add(currentSceneComponents[model._key].threeObject);
+				});
+			});
+
+			console.log("current scene components with three object loaded");
+			console.log(currentSceneComponents);
+
+
+		});
+
+
+	}
+
+	function reloadSceneModels() {
+		console.log("reloading scene models");
+
+		sceneModelsDeferred = $.Deferred();
+		modelMappingDeferred = $.Deferred();
+
+		if(transformControl) {
+			transformControl.detach();
+		}
+
+		_.each(currentSceneComponents, function(model) {
+			console.log("removing " + model.componentUniqueName);
+			scene.remove(model.threeObject);
+		});
+
+		currentSceneComponents = new Object();
+
+		
+		loadSceneModels(currentSceneKey); //then reload them
 
 	}
 
@@ -276,7 +592,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	            this.$el = $(this.el);
 	            globalElement = this.$el;
 	            hasViz = false;
-	            this.$el.addClass('rotator');
+	            this.$el.addClass('bender');
 
 
 	            //build up the base scane
@@ -299,6 +615,8 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 				raycaster = new THREE.Raycaster();
 				mouse = new THREE.Vector2();
 
+			    mvcService = mvc.createService({ owner: "nobody"});
+
 
 
 				//this needs to be refactored into a save file and/or multiple models
@@ -315,15 +633,19 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 				//   movement within the scene will save the resulting data off to KVstore
 				//	 
 				//   
+
+
 				loader = new THREE.ObjectLoader();
+				/* deprecated for true loading of unique models
 				loader.load(armJSONFile, function(obj) {
 					scene.add(obj);
 
 				});
+				*/
 				
 
 				//mouse-down for model selection.  this is used with transform tools
-				renderer.domElement.addEventListener('mousedown', onSceneMouseDown);
+				//renderer.domElement.addEventListener('mousedown', onSceneMouseDown);
 
 				//hooking keyboard events isn't working well..  probably not going to use this in lieu of
 				//formatter api and maybe some on-screen buttons
@@ -346,11 +668,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	        	highTemp = parseInt(config[globalNamespace + "highTemp"])
 	        	mediumTemp = parseInt(config[globalNamespace + "medTemp"])
 
-	        	updateControls();
+	        	updateFromDom();
 		
 				// Check for empty data
 				if(_.size(data.results) < 1) { console.log("no data"); return; }
 
+
+				var dataRows = data.results;
 
 				//needs to be refactored for multiple models.  This just creates
 				//some variables for tweening/manipulation
@@ -492,400 +816,6104 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 /* 1 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;/* WEBPACK VAR INJECTION */(function(process) {/**
-	 * Tween.js - Licensed under the MIT license
-	 * https://github.com/tweenjs/tween.js
-	 * ----------------------------------------------
-	 *
-	 * See https://github.com/tweenjs/tween.js/graphs/contributors for the full list of contributors.
-	 * Thank you all, you're awesome!
+	var self = self || {};// File:src/Three.js
+
+	/**
+	 * @author mrdoob / http://mrdoob.com/
 	 */
 
-	var TWEEN = TWEEN || (function () {
+	var THREE = { REVISION: '69' };
 
-		var _tweens = [];
+	// browserify support
 
-		return {
+	if ( true ) {
 
-			getAll: function () {
+		module.exports = THREE;
 
-				return _tweens;
+	}
 
-			},
+	// polyfills
 
-			removeAll: function () {
+	if ( Math.sign === undefined ) {
 
-				_tweens = [];
+		Math.sign = function ( x ) {
 
-			},
+			return ( x < 0 ) ? - 1 : ( x > 0 ) ? 1 : 0;
 
-			add: function (tween) {
+		};
 
-				_tweens.push(tween);
+	}
 
-			},
+	// https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent.button
 
-			remove: function (tween) {
+	THREE.MOUSE = { LEFT: 0, MIDDLE: 1, RIGHT: 2 };
 
-				var i = _tweens.indexOf(tween);
+	// GL STATE CONSTANTS
 
-				if (i !== -1) {
-					_tweens.splice(i, 1);
+	THREE.CullFaceNone = 0;
+	THREE.CullFaceBack = 1;
+	THREE.CullFaceFront = 2;
+	THREE.CullFaceFrontBack = 3;
+
+	THREE.FrontFaceDirectionCW = 0;
+	THREE.FrontFaceDirectionCCW = 1;
+
+	// SHADOWING TYPES
+
+	THREE.BasicShadowMap = 0;
+	THREE.PCFShadowMap = 1;
+	THREE.PCFSoftShadowMap = 2;
+
+	// MATERIAL CONSTANTS
+
+	// side
+
+	THREE.FrontSide = 0;
+	THREE.BackSide = 1;
+	THREE.DoubleSide = 2;
+
+	// shading
+
+	THREE.NoShading = 0;
+	THREE.FlatShading = 1;
+	THREE.SmoothShading = 2;
+
+	// colors
+
+	THREE.NoColors = 0;
+	THREE.FaceColors = 1;
+	THREE.VertexColors = 2;
+
+	// blending modes
+
+	THREE.NoBlending = 0;
+	THREE.NormalBlending = 1;
+	THREE.AdditiveBlending = 2;
+	THREE.SubtractiveBlending = 3;
+	THREE.MultiplyBlending = 4;
+	THREE.CustomBlending = 5;
+
+	// custom blending equations
+	// (numbers start from 100 not to clash with other
+	//  mappings to OpenGL constants defined in Texture.js)
+
+	THREE.AddEquation = 100;
+	THREE.SubtractEquation = 101;
+	THREE.ReverseSubtractEquation = 102;
+	THREE.MinEquation = 103;
+	THREE.MaxEquation = 104;
+
+	// custom blending destination factors
+
+	THREE.ZeroFactor = 200;
+	THREE.OneFactor = 201;
+	THREE.SrcColorFactor = 202;
+	THREE.OneMinusSrcColorFactor = 203;
+	THREE.SrcAlphaFactor = 204;
+	THREE.OneMinusSrcAlphaFactor = 205;
+	THREE.DstAlphaFactor = 206;
+	THREE.OneMinusDstAlphaFactor = 207;
+
+	// custom blending source factors
+
+	//THREE.ZeroFactor = 200;
+	//THREE.OneFactor = 201;
+	//THREE.SrcAlphaFactor = 204;
+	//THREE.OneMinusSrcAlphaFactor = 205;
+	//THREE.DstAlphaFactor = 206;
+	//THREE.OneMinusDstAlphaFactor = 207;
+	THREE.DstColorFactor = 208;
+	THREE.OneMinusDstColorFactor = 209;
+	THREE.SrcAlphaSaturateFactor = 210;
+
+
+	// TEXTURE CONSTANTS
+
+	THREE.MultiplyOperation = 0;
+	THREE.MixOperation = 1;
+	THREE.AddOperation = 2;
+
+	// Mapping modes
+
+	THREE.UVMapping = function () {};
+
+	THREE.CubeReflectionMapping = function () {};
+	THREE.CubeRefractionMapping = function () {};
+
+	THREE.SphericalReflectionMapping = function () {};
+	THREE.SphericalRefractionMapping = function () {};
+
+	// Wrapping modes
+
+	THREE.RepeatWrapping = 1000;
+	THREE.ClampToEdgeWrapping = 1001;
+	THREE.MirroredRepeatWrapping = 1002;
+
+	// Filters
+
+	THREE.NearestFilter = 1003;
+	THREE.NearestMipMapNearestFilter = 1004;
+	THREE.NearestMipMapLinearFilter = 1005;
+	THREE.LinearFilter = 1006;
+	THREE.LinearMipMapNearestFilter = 1007;
+	THREE.LinearMipMapLinearFilter = 1008;
+
+	// Data types
+
+	THREE.UnsignedByteType = 1009;
+	THREE.ByteType = 1010;
+	THREE.ShortType = 1011;
+	THREE.UnsignedShortType = 1012;
+	THREE.IntType = 1013;
+	THREE.UnsignedIntType = 1014;
+	THREE.FloatType = 1015;
+
+	// Pixel types
+
+	//THREE.UnsignedByteType = 1009;
+	THREE.UnsignedShort4444Type = 1016;
+	THREE.UnsignedShort5551Type = 1017;
+	THREE.UnsignedShort565Type = 1018;
+
+	// Pixel formats
+
+	THREE.AlphaFormat = 1019;
+	THREE.RGBFormat = 1020;
+	THREE.RGBAFormat = 1021;
+	THREE.LuminanceFormat = 1022;
+	THREE.LuminanceAlphaFormat = 1023;
+
+	// DDS / ST3C Compressed texture formats
+
+	THREE.RGB_S3TC_DXT1_Format = 2001;
+	THREE.RGBA_S3TC_DXT1_Format = 2002;
+	THREE.RGBA_S3TC_DXT3_Format = 2003;
+	THREE.RGBA_S3TC_DXT5_Format = 2004;
+
+
+	// PVRTC compressed texture formats
+
+	THREE.RGB_PVRTC_4BPPV1_Format = 2100;
+	THREE.RGB_PVRTC_2BPPV1_Format = 2101;
+	THREE.RGBA_PVRTC_4BPPV1_Format = 2102;
+	THREE.RGBA_PVRTC_2BPPV1_Format = 2103;
+
+
+	// File:src/math/Color.js
+
+	/**
+	 * @author mrdoob / http://mrdoob.com/
+	 */
+
+	THREE.Color = function ( color ) {
+
+		if ( arguments.length === 3 ) {
+
+			return this.setRGB( arguments[ 0 ], arguments[ 1 ], arguments[ 2 ] );
+
+		}
+
+		return this.set( color )
+
+	};
+
+	THREE.Color.prototype = {
+
+		constructor: THREE.Color,
+
+		r: 1, g: 1, b: 1,
+
+		set: function ( value ) {
+
+			if ( value instanceof THREE.Color ) {
+
+				this.copy( value );
+
+			} else if ( typeof value === 'number' ) {
+
+				this.setHex( value );
+
+			} else if ( typeof value === 'string' ) {
+
+				this.setStyle( value );
+
+			}
+
+			return this;
+
+		},
+
+		setHex: function ( hex ) {
+
+			hex = Math.floor( hex );
+
+			this.r = ( hex >> 16 & 255 ) / 255;
+			this.g = ( hex >> 8 & 255 ) / 255;
+			this.b = ( hex & 255 ) / 255;
+
+			return this;
+
+		},
+
+		setRGB: function ( r, g, b ) {
+
+			this.r = r;
+			this.g = g;
+			this.b = b;
+
+			return this;
+
+		},
+
+		setHSL: function ( h, s, l ) {
+
+			// h,s,l ranges are in 0.0 - 1.0
+
+			if ( s === 0 ) {
+
+				this.r = this.g = this.b = l;
+
+			} else {
+
+				var hue2rgb = function ( p, q, t ) {
+
+					if ( t < 0 ) t += 1;
+					if ( t > 1 ) t -= 1;
+					if ( t < 1 / 6 ) return p + ( q - p ) * 6 * t;
+					if ( t < 1 / 2 ) return q;
+					if ( t < 2 / 3 ) return p + ( q - p ) * 6 * ( 2 / 3 - t );
+					return p;
+
+				};
+
+				var p = l <= 0.5 ? l * ( 1 + s ) : l + s - ( l * s );
+				var q = ( 2 * l ) - p;
+
+				this.r = hue2rgb( q, p, h + 1 / 3 );
+				this.g = hue2rgb( q, p, h );
+				this.b = hue2rgb( q, p, h - 1 / 3 );
+
+			}
+
+			return this;
+
+		},
+
+		setStyle: function ( style ) {
+
+			// rgb(255,0,0)
+
+			if ( /^rgb\((\d+), ?(\d+), ?(\d+)\)$/i.test( style ) ) {
+
+				var color = /^rgb\((\d+), ?(\d+), ?(\d+)\)$/i.exec( style );
+
+				this.r = Math.min( 255, parseInt( color[ 1 ], 10 ) ) / 255;
+				this.g = Math.min( 255, parseInt( color[ 2 ], 10 ) ) / 255;
+				this.b = Math.min( 255, parseInt( color[ 3 ], 10 ) ) / 255;
+
+				return this;
+
+			}
+
+			// rgb(100%,0%,0%)
+
+			if ( /^rgb\((\d+)\%, ?(\d+)\%, ?(\d+)\%\)$/i.test( style ) ) {
+
+				var color = /^rgb\((\d+)\%, ?(\d+)\%, ?(\d+)\%\)$/i.exec( style );
+
+				this.r = Math.min( 100, parseInt( color[ 1 ], 10 ) ) / 100;
+				this.g = Math.min( 100, parseInt( color[ 2 ], 10 ) ) / 100;
+				this.b = Math.min( 100, parseInt( color[ 3 ], 10 ) ) / 100;
+
+				return this;
+
+			}
+
+			// #ff0000
+
+			if ( /^\#([0-9a-f]{6})$/i.test( style ) ) {
+
+				var color = /^\#([0-9a-f]{6})$/i.exec( style );
+
+				this.setHex( parseInt( color[ 1 ], 16 ) );
+
+				return this;
+
+			}
+
+			// #f00
+
+			if ( /^\#([0-9a-f])([0-9a-f])([0-9a-f])$/i.test( style ) ) {
+
+				var color = /^\#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec( style );
+
+				this.setHex( parseInt( color[ 1 ] + color[ 1 ] + color[ 2 ] + color[ 2 ] + color[ 3 ] + color[ 3 ], 16 ) );
+
+				return this;
+
+			}
+
+			// red
+
+			if ( /^(\w+)$/i.test( style ) ) {
+
+				this.setHex( THREE.ColorKeywords[ style ] );
+
+				return this;
+
+			}
+
+
+		},
+
+		copy: function ( color ) {
+
+			this.r = color.r;
+			this.g = color.g;
+			this.b = color.b;
+
+			return this;
+
+		},
+
+		copyGammaToLinear: function ( color ) {
+
+			this.r = color.r * color.r;
+			this.g = color.g * color.g;
+			this.b = color.b * color.b;
+
+			return this;
+
+		},
+
+		copyLinearToGamma: function ( color ) {
+
+			this.r = Math.sqrt( color.r );
+			this.g = Math.sqrt( color.g );
+			this.b = Math.sqrt( color.b );
+
+			return this;
+
+		},
+
+		convertGammaToLinear: function () {
+
+			var r = this.r, g = this.g, b = this.b;
+
+			this.r = r * r;
+			this.g = g * g;
+			this.b = b * b;
+
+			return this;
+
+		},
+
+		convertLinearToGamma: function () {
+
+			this.r = Math.sqrt( this.r );
+			this.g = Math.sqrt( this.g );
+			this.b = Math.sqrt( this.b );
+
+			return this;
+
+		},
+
+		getHex: function () {
+
+			return ( this.r * 255 ) << 16 ^ ( this.g * 255 ) << 8 ^ ( this.b * 255 ) << 0;
+
+		},
+
+		getHexString: function () {
+
+			return ( '000000' + this.getHex().toString( 16 ) ).slice( - 6 );
+
+		},
+
+		getHSL: function ( optionalTarget ) {
+
+			// h,s,l ranges are in 0.0 - 1.0
+
+			var hsl = optionalTarget || { h: 0, s: 0, l: 0 };
+
+			var r = this.r, g = this.g, b = this.b;
+
+			var max = Math.max( r, g, b );
+			var min = Math.min( r, g, b );
+
+			var hue, saturation;
+			var lightness = ( min + max ) / 2.0;
+
+			if ( min === max ) {
+
+				hue = 0;
+				saturation = 0;
+
+			} else {
+
+				var delta = max - min;
+
+				saturation = lightness <= 0.5 ? delta / ( max + min ) : delta / ( 2 - max - min );
+
+				switch ( max ) {
+
+					case r: hue = ( g - b ) / delta + ( g < b ? 6 : 0 ); break;
+					case g: hue = ( b - r ) / delta + 2; break;
+					case b: hue = ( r - g ) / delta + 4; break;
+
 				}
 
-			},
+				hue /= 6;
 
-			update: function (time, preserve) {
+			}
 
-				if (_tweens.length === 0) {
-					return false;
-				}
+			hsl.h = hue;
+			hsl.s = saturation;
+			hsl.l = lightness;
 
-				var i = 0;
+			return hsl;
 
-				time = time !== undefined ? time : TWEEN.now();
+		},
 
-				while (i < _tweens.length) {
+		getStyle: function () {
 
-					if (_tweens[i].update(time) || preserve) {
-						i++;
+			return 'rgb(' + ( ( this.r * 255 ) | 0 ) + ',' + ( ( this.g * 255 ) | 0 ) + ',' + ( ( this.b * 255 ) | 0 ) + ')';
+
+		},
+
+		offsetHSL: function ( h, s, l ) {
+
+			var hsl = this.getHSL();
+
+			hsl.h += h; hsl.s += s; hsl.l += l;
+
+			this.setHSL( hsl.h, hsl.s, hsl.l );
+
+			return this;
+
+		},
+
+		add: function ( color ) {
+
+			this.r += color.r;
+			this.g += color.g;
+			this.b += color.b;
+
+			return this;
+
+		},
+
+		addColors: function ( color1, color2 ) {
+
+			this.r = color1.r + color2.r;
+			this.g = color1.g + color2.g;
+			this.b = color1.b + color2.b;
+
+			return this;
+
+		},
+
+		addScalar: function ( s ) {
+
+			this.r += s;
+			this.g += s;
+			this.b += s;
+
+			return this;
+
+		},
+
+		multiply: function ( color ) {
+
+			this.r *= color.r;
+			this.g *= color.g;
+			this.b *= color.b;
+
+			return this;
+
+		},
+
+		multiplyScalar: function ( s ) {
+
+			this.r *= s;
+			this.g *= s;
+			this.b *= s;
+
+			return this;
+
+		},
+
+		lerp: function ( color, alpha ) {
+
+			this.r += ( color.r - this.r ) * alpha;
+			this.g += ( color.g - this.g ) * alpha;
+			this.b += ( color.b - this.b ) * alpha;
+
+			return this;
+
+		},
+
+		equals: function ( c ) {
+
+			return ( c.r === this.r ) && ( c.g === this.g ) && ( c.b === this.b );
+
+		},
+
+		fromArray: function ( array ) {
+
+			this.r = array[ 0 ];
+			this.g = array[ 1 ];
+			this.b = array[ 2 ];
+
+			return this;
+
+		},
+
+		toArray: function () {
+
+			return [ this.r, this.g, this.b ];
+
+		},
+
+		clone: function () {
+
+			return new THREE.Color().setRGB( this.r, this.g, this.b );
+
+		}
+
+	};
+
+	THREE.ColorKeywords = { 'aliceblue': 0xF0F8FF, 'antiquewhite': 0xFAEBD7, 'aqua': 0x00FFFF, 'aquamarine': 0x7FFFD4, 'azure': 0xF0FFFF,
+	'beige': 0xF5F5DC, 'bisque': 0xFFE4C4, 'black': 0x000000, 'blanchedalmond': 0xFFEBCD, 'blue': 0x0000FF, 'blueviolet': 0x8A2BE2,
+	'brown': 0xA52A2A, 'burlywood': 0xDEB887, 'cadetblue': 0x5F9EA0, 'chartreuse': 0x7FFF00, 'chocolate': 0xD2691E, 'coral': 0xFF7F50,
+	'cornflowerblue': 0x6495ED, 'cornsilk': 0xFFF8DC, 'crimson': 0xDC143C, 'cyan': 0x00FFFF, 'darkblue': 0x00008B, 'darkcyan': 0x008B8B,
+	'darkgoldenrod': 0xB8860B, 'darkgray': 0xA9A9A9, 'darkgreen': 0x006400, 'darkgrey': 0xA9A9A9, 'darkkhaki': 0xBDB76B, 'darkmagenta': 0x8B008B,
+	'darkolivegreen': 0x556B2F, 'darkorange': 0xFF8C00, 'darkorchid': 0x9932CC, 'darkred': 0x8B0000, 'darksalmon': 0xE9967A, 'darkseagreen': 0x8FBC8F,
+	'darkslateblue': 0x483D8B, 'darkslategray': 0x2F4F4F, 'darkslategrey': 0x2F4F4F, 'darkturquoise': 0x00CED1, 'darkviolet': 0x9400D3,
+	'deeppink': 0xFF1493, 'deepskyblue': 0x00BFFF, 'dimgray': 0x696969, 'dimgrey': 0x696969, 'dodgerblue': 0x1E90FF, 'firebrick': 0xB22222,
+	'floralwhite': 0xFFFAF0, 'forestgreen': 0x228B22, 'fuchsia': 0xFF00FF, 'gainsboro': 0xDCDCDC, 'ghostwhite': 0xF8F8FF, 'gold': 0xFFD700,
+	'goldenrod': 0xDAA520, 'gray': 0x808080, 'green': 0x008000, 'greenyellow': 0xADFF2F, 'grey': 0x808080, 'honeydew': 0xF0FFF0, 'hotpink': 0xFF69B4,
+	'indianred': 0xCD5C5C, 'indigo': 0x4B0082, 'ivory': 0xFFFFF0, 'khaki': 0xF0E68C, 'lavender': 0xE6E6FA, 'lavenderblush': 0xFFF0F5, 'lawngreen': 0x7CFC00,
+	'lemonchiffon': 0xFFFACD, 'lightblue': 0xADD8E6, 'lightcoral': 0xF08080, 'lightcyan': 0xE0FFFF, 'lightgoldenrodyellow': 0xFAFAD2, 'lightgray': 0xD3D3D3,
+	'lightgreen': 0x90EE90, 'lightgrey': 0xD3D3D3, 'lightpink': 0xFFB6C1, 'lightsalmon': 0xFFA07A, 'lightseagreen': 0x20B2AA, 'lightskyblue': 0x87CEFA,
+	'lightslategray': 0x778899, 'lightslategrey': 0x778899, 'lightsteelblue': 0xB0C4DE, 'lightyellow': 0xFFFFE0, 'lime': 0x00FF00, 'limegreen': 0x32CD32,
+	'linen': 0xFAF0E6, 'magenta': 0xFF00FF, 'maroon': 0x800000, 'mediumaquamarine': 0x66CDAA, 'mediumblue': 0x0000CD, 'mediumorchid': 0xBA55D3,
+	'mediumpurple': 0x9370DB, 'mediumseagreen': 0x3CB371, 'mediumslateblue': 0x7B68EE, 'mediumspringgreen': 0x00FA9A, 'mediumturquoise': 0x48D1CC,
+	'mediumvioletred': 0xC71585, 'midnightblue': 0x191970, 'mintcream': 0xF5FFFA, 'mistyrose': 0xFFE4E1, 'moccasin': 0xFFE4B5, 'navajowhite': 0xFFDEAD,
+	'navy': 0x000080, 'oldlace': 0xFDF5E6, 'olive': 0x808000, 'olivedrab': 0x6B8E23, 'orange': 0xFFA500, 'orangered': 0xFF4500, 'orchid': 0xDA70D6,
+	'palegoldenrod': 0xEEE8AA, 'palegreen': 0x98FB98, 'paleturquoise': 0xAFEEEE, 'palevioletred': 0xDB7093, 'papayawhip': 0xFFEFD5, 'peachpuff': 0xFFDAB9,
+	'peru': 0xCD853F, 'pink': 0xFFC0CB, 'plum': 0xDDA0DD, 'powderblue': 0xB0E0E6, 'purple': 0x800080, 'red': 0xFF0000, 'rosybrown': 0xBC8F8F,
+	'royalblue': 0x4169E1, 'saddlebrown': 0x8B4513, 'salmon': 0xFA8072, 'sandybrown': 0xF4A460, 'seagreen': 0x2E8B57, 'seashell': 0xFFF5EE,
+	'sienna': 0xA0522D, 'silver': 0xC0C0C0, 'skyblue': 0x87CEEB, 'slateblue': 0x6A5ACD, 'slategray': 0x708090, 'slategrey': 0x708090, 'snow': 0xFFFAFA,
+	'springgreen': 0x00FF7F, 'steelblue': 0x4682B4, 'tan': 0xD2B48C, 'teal': 0x008080, 'thistle': 0xD8BFD8, 'tomato': 0xFF6347, 'turquoise': 0x40E0D0,
+	'violet': 0xEE82EE, 'wheat': 0xF5DEB3, 'white': 0xFFFFFF, 'whitesmoke': 0xF5F5F5, 'yellow': 0xFFFF00, 'yellowgreen': 0x9ACD32 };
+
+	// File:src/math/Quaternion.js
+
+	/**
+	 * @author mikael emtinger / http://gomo.se/
+	 * @author alteredq / http://alteredqualia.com/
+	 * @author WestLangley / http://github.com/WestLangley
+	 * @author bhouston / http://exocortex.com
+	 */
+
+	THREE.Quaternion = function ( x, y, z, w ) {
+
+		this._x = x || 0;
+		this._y = y || 0;
+		this._z = z || 0;
+		this._w = ( w !== undefined ) ? w : 1;
+
+	};
+
+	THREE.Quaternion.prototype = {
+
+		constructor: THREE.Quaternion,
+
+		_x: 0,_y: 0, _z: 0, _w: 0,
+
+		get x () {
+
+			return this._x;
+
+		},
+
+		set x ( value ) {
+
+			this._x = value;
+			this.onChangeCallback();
+
+		},
+
+		get y () {
+
+			return this._y;
+
+		},
+
+		set y ( value ) {
+
+			this._y = value;
+			this.onChangeCallback();
+
+		},
+
+		get z () {
+
+			return this._z;
+
+		},
+
+		set z ( value ) {
+
+			this._z = value;
+			this.onChangeCallback();
+
+		},
+
+		get w () {
+
+			return this._w;
+
+		},
+
+		set w ( value ) {
+
+			this._w = value;
+			this.onChangeCallback();
+
+		},
+
+		set: function ( x, y, z, w ) {
+
+			this._x = x;
+			this._y = y;
+			this._z = z;
+			this._w = w;
+
+			this.onChangeCallback();
+
+			return this;
+
+		},
+
+		copy: function ( quaternion ) {
+
+			this._x = quaternion.x;
+			this._y = quaternion.y;
+			this._z = quaternion.z;
+			this._w = quaternion.w;
+
+			this.onChangeCallback();
+
+			return this;
+
+		},
+
+		setFromEuler: function ( euler, update ) {
+
+			if ( euler instanceof THREE.Euler === false ) {
+
+				throw new Error( 'THREE.Quaternion: .setFromEuler() now expects a Euler rotation rather than a Vector3 and order.' );
+			}
+
+			// http://www.mathworks.com/matlabcentral/fileexchange/
+			// 	20696-function-to-convert-between-dcm-euler-angles-quaternions-and-euler-vectors/
+			//	content/SpinCalc.m
+
+			var c1 = Math.cos( euler._x / 2 );
+			var c2 = Math.cos( euler._y / 2 );
+			var c3 = Math.cos( euler._z / 2 );
+			var s1 = Math.sin( euler._x / 2 );
+			var s2 = Math.sin( euler._y / 2 );
+			var s3 = Math.sin( euler._z / 2 );
+
+			if ( euler.order === 'XYZ' ) {
+
+				this._x = s1 * c2 * c3 + c1 * s2 * s3;
+				this._y = c1 * s2 * c3 - s1 * c2 * s3;
+				this._z = c1 * c2 * s3 + s1 * s2 * c3;
+				this._w = c1 * c2 * c3 - s1 * s2 * s3;
+
+			} else if ( euler.order === 'YXZ' ) {
+
+				this._x = s1 * c2 * c3 + c1 * s2 * s3;
+				this._y = c1 * s2 * c3 - s1 * c2 * s3;
+				this._z = c1 * c2 * s3 - s1 * s2 * c3;
+				this._w = c1 * c2 * c3 + s1 * s2 * s3;
+
+			} else if ( euler.order === 'ZXY' ) {
+
+				this._x = s1 * c2 * c3 - c1 * s2 * s3;
+				this._y = c1 * s2 * c3 + s1 * c2 * s3;
+				this._z = c1 * c2 * s3 + s1 * s2 * c3;
+				this._w = c1 * c2 * c3 - s1 * s2 * s3;
+
+			} else if ( euler.order === 'ZYX' ) {
+
+				this._x = s1 * c2 * c3 - c1 * s2 * s3;
+				this._y = c1 * s2 * c3 + s1 * c2 * s3;
+				this._z = c1 * c2 * s3 - s1 * s2 * c3;
+				this._w = c1 * c2 * c3 + s1 * s2 * s3;
+
+			} else if ( euler.order === 'YZX' ) {
+
+				this._x = s1 * c2 * c3 + c1 * s2 * s3;
+				this._y = c1 * s2 * c3 + s1 * c2 * s3;
+				this._z = c1 * c2 * s3 - s1 * s2 * c3;
+				this._w = c1 * c2 * c3 - s1 * s2 * s3;
+
+			} else if ( euler.order === 'XZY' ) {
+
+				this._x = s1 * c2 * c3 - c1 * s2 * s3;
+				this._y = c1 * s2 * c3 - s1 * c2 * s3;
+				this._z = c1 * c2 * s3 + s1 * s2 * c3;
+				this._w = c1 * c2 * c3 + s1 * s2 * s3;
+
+			}
+
+			if ( update !== false ) this.onChangeCallback();
+
+			return this;
+
+		},
+
+		setFromAxisAngle: function ( axis, angle ) {
+
+			// http://www.euclideanspace.com/maths/geometry/rotations/conversions/angleToQuaternion/index.htm
+
+			// assumes axis is normalized
+
+			var halfAngle = angle / 2, s = Math.sin( halfAngle );
+
+			this._x = axis.x * s;
+			this._y = axis.y * s;
+			this._z = axis.z * s;
+			this._w = Math.cos( halfAngle );
+
+			this.onChangeCallback();
+
+			return this;
+
+		},
+
+		setFromRotationMatrix: function ( m ) {
+
+			// http://www.euclideanspace.com/maths/geometry/rotations/conversions/matrixToQuaternion/index.htm
+
+			// assumes the upper 3x3 of m is a pure rotation matrix (i.e, unscaled)
+
+			var te = m.elements,
+
+				m11 = te[ 0 ], m12 = te[ 4 ], m13 = te[ 8 ],
+				m21 = te[ 1 ], m22 = te[ 5 ], m23 = te[ 9 ],
+				m31 = te[ 2 ], m32 = te[ 6 ], m33 = te[ 10 ],
+
+				trace = m11 + m22 + m33,
+				s;
+
+			if ( trace > 0 ) {
+
+				s = 0.5 / Math.sqrt( trace + 1.0 );
+
+				this._w = 0.25 / s;
+				this._x = ( m32 - m23 ) * s;
+				this._y = ( m13 - m31 ) * s;
+				this._z = ( m21 - m12 ) * s;
+
+			} else if ( m11 > m22 && m11 > m33 ) {
+
+				s = 2.0 * Math.sqrt( 1.0 + m11 - m22 - m33 );
+
+				this._w = ( m32 - m23 ) / s;
+				this._x = 0.25 * s;
+				this._y = ( m12 + m21 ) / s;
+				this._z = ( m13 + m31 ) / s;
+
+			} else if ( m22 > m33 ) {
+
+				s = 2.0 * Math.sqrt( 1.0 + m22 - m11 - m33 );
+
+				this._w = ( m13 - m31 ) / s;
+				this._x = ( m12 + m21 ) / s;
+				this._y = 0.25 * s;
+				this._z = ( m23 + m32 ) / s;
+
+			} else {
+
+				s = 2.0 * Math.sqrt( 1.0 + m33 - m11 - m22 );
+
+				this._w = ( m21 - m12 ) / s;
+				this._x = ( m13 + m31 ) / s;
+				this._y = ( m23 + m32 ) / s;
+				this._z = 0.25 * s;
+
+			}
+
+			this.onChangeCallback();
+
+			return this;
+
+		},
+
+		setFromUnitVectors: function () {
+
+			// http://lolengine.net/blog/2014/02/24/quaternion-from-two-vectors-final
+
+			// assumes direction vectors vFrom and vTo are normalized
+
+			var v1, r;
+
+			var EPS = 0.000001;
+
+			return function ( vFrom, vTo ) {
+
+				if ( v1 === undefined ) v1 = new THREE.Vector3();
+
+				r = vFrom.dot( vTo ) + 1;
+
+				if ( r < EPS ) {
+
+					r = 0;
+
+					if ( Math.abs( vFrom.x ) > Math.abs( vFrom.z ) ) {
+
+						v1.set( - vFrom.y, vFrom.x, 0 );
+
 					} else {
-						_tweens.splice(i, 1);
+
+						v1.set( 0, - vFrom.z, vFrom.y );
+
+					}
+
+				} else {
+
+					v1.crossVectors( vFrom, vTo );
+
+				}
+
+				this._x = v1.x;
+				this._y = v1.y;
+				this._z = v1.z;
+				this._w = r;
+
+				this.normalize();
+
+				return this;
+
+			}
+
+		}(),
+
+		inverse: function () {
+
+			this.conjugate().normalize();
+
+			return this;
+
+		},
+
+		conjugate: function () {
+
+			this._x *= - 1;
+			this._y *= - 1;
+			this._z *= - 1;
+
+			this.onChangeCallback();
+
+			return this;
+
+		},
+
+		dot: function ( v ) {
+
+			return this._x * v._x + this._y * v._y + this._z * v._z + this._w * v._w;
+
+		},
+
+		lengthSq: function () {
+
+			return this._x * this._x + this._y * this._y + this._z * this._z + this._w * this._w;
+
+		},
+
+		length: function () {
+
+			return Math.sqrt( this._x * this._x + this._y * this._y + this._z * this._z + this._w * this._w );
+
+		},
+
+		normalize: function () {
+
+			var l = this.length();
+
+			if ( l === 0 ) {
+
+				this._x = 0;
+				this._y = 0;
+				this._z = 0;
+				this._w = 1;
+
+			} else {
+
+				l = 1 / l;
+
+				this._x = this._x * l;
+				this._y = this._y * l;
+				this._z = this._z * l;
+				this._w = this._w * l;
+
+			}
+
+			this.onChangeCallback();
+
+			return this;
+
+		},
+
+		multiply: function ( q, p ) {
+
+			if ( p !== undefined ) {
+
+				console.warn( 'THREE.Quaternion: .multiply() now only accepts one argument. Use .multiplyQuaternions( a, b ) instead.' );
+				return this.multiplyQuaternions( q, p );
+
+			}
+
+			return this.multiplyQuaternions( this, q );
+
+		},
+
+		multiplyQuaternions: function ( a, b ) {
+
+			// from http://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/code/index.htm
+
+			var qax = a._x, qay = a._y, qaz = a._z, qaw = a._w;
+			var qbx = b._x, qby = b._y, qbz = b._z, qbw = b._w;
+
+			this._x = qax * qbw + qaw * qbx + qay * qbz - qaz * qby;
+			this._y = qay * qbw + qaw * qby + qaz * qbx - qax * qbz;
+			this._z = qaz * qbw + qaw * qbz + qax * qby - qay * qbx;
+			this._w = qaw * qbw - qax * qbx - qay * qby - qaz * qbz;
+
+			this.onChangeCallback();
+
+			return this;
+
+		},
+
+		multiplyVector3: function ( vector ) {
+
+			console.warn( 'THREE.Quaternion: .multiplyVector3() has been removed. Use is now vector.applyQuaternion( quaternion ) instead.' );
+			return vector.applyQuaternion( this );
+
+		},
+
+		slerp: function ( qb, t ) {
+
+			if ( t === 0 ) return this;
+			if ( t === 1 ) return this.copy( qb );
+
+			var x = this._x, y = this._y, z = this._z, w = this._w;
+
+			// http://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/slerp/
+
+			var cosHalfTheta = w * qb._w + x * qb._x + y * qb._y + z * qb._z;
+
+			if ( cosHalfTheta < 0 ) {
+
+				this._w = - qb._w;
+				this._x = - qb._x;
+				this._y = - qb._y;
+				this._z = - qb._z;
+
+				cosHalfTheta = - cosHalfTheta;
+
+			} else {
+
+				this.copy( qb );
+
+			}
+
+			if ( cosHalfTheta >= 1.0 ) {
+
+				this._w = w;
+				this._x = x;
+				this._y = y;
+				this._z = z;
+
+				return this;
+
+			}
+
+			var halfTheta = Math.acos( cosHalfTheta );
+			var sinHalfTheta = Math.sqrt( 1.0 - cosHalfTheta * cosHalfTheta );
+
+			if ( Math.abs( sinHalfTheta ) < 0.001 ) {
+
+				this._w = 0.5 * ( w + this._w );
+				this._x = 0.5 * ( x + this._x );
+				this._y = 0.5 * ( y + this._y );
+				this._z = 0.5 * ( z + this._z );
+
+				return this;
+
+			}
+
+			var ratioA = Math.sin( ( 1 - t ) * halfTheta ) / sinHalfTheta,
+			ratioB = Math.sin( t * halfTheta ) / sinHalfTheta;
+
+			this._w = ( w * ratioA + this._w * ratioB );
+			this._x = ( x * ratioA + this._x * ratioB );
+			this._y = ( y * ratioA + this._y * ratioB );
+			this._z = ( z * ratioA + this._z * ratioB );
+
+			this.onChangeCallback();
+
+			return this;
+
+		},
+
+		equals: function ( quaternion ) {
+
+			return ( quaternion._x === this._x ) && ( quaternion._y === this._y ) && ( quaternion._z === this._z ) && ( quaternion._w === this._w );
+
+		},
+
+		fromArray: function ( array, offset ) {
+
+			if ( offset === undefined ) offset = 0;
+
+			this._x = array[ offset ];
+			this._y = array[ offset + 1 ];
+			this._z = array[ offset + 2 ];
+			this._w = array[ offset + 3 ];
+
+			this.onChangeCallback();
+
+			return this;
+
+		},
+
+		toArray: function ( array, offset ) {
+
+			if ( array === undefined ) array = [];
+			if ( offset === undefined ) offset = 0;
+
+			array[ offset ] = this._x;
+			array[ offset + 1 ] = this._y;
+			array[ offset + 2 ] = this._z;
+			array[ offset + 3 ] = this._w;
+
+			return array;
+
+		},
+
+		onChange: function ( callback ) {
+
+			this.onChangeCallback = callback;
+
+			return this;
+
+		},
+
+		onChangeCallback: function () {},
+
+		clone: function () {
+
+			return new THREE.Quaternion( this._x, this._y, this._z, this._w );
+
+		}
+
+	};
+
+	THREE.Quaternion.slerp = function ( qa, qb, qm, t ) {
+
+		return qm.copy( qa ).slerp( qb, t );
+
+	}
+
+	// File:src/math/Vector2.js
+
+	/**
+	 * @author mrdoob / http://mrdoob.com/
+	 * @author philogb / http://blog.thejit.org/
+	 * @author egraether / http://egraether.com/
+	 * @author zz85 / http://www.lab4games.net/zz85/blog
+	 */
+
+	THREE.Vector2 = function ( x, y ) {
+
+		this.x = x || 0;
+		this.y = y || 0;
+
+	};
+
+	THREE.Vector2.prototype = {
+
+		constructor: THREE.Vector2,
+
+		set: function ( x, y ) {
+
+			this.x = x;
+			this.y = y;
+
+			return this;
+
+		},
+
+		setX: function ( x ) {
+
+			this.x = x;
+
+			return this;
+
+		},
+
+		setY: function ( y ) {
+
+			this.y = y;
+
+			return this;
+
+		},
+
+		setComponent: function ( index, value ) {
+
+			switch ( index ) {
+
+				case 0: this.x = value; break;
+				case 1: this.y = value; break;
+				default: throw new Error( 'index is out of range: ' + index );
+
+			}
+
+		},
+
+		getComponent: function ( index ) {
+
+			switch ( index ) {
+
+				case 0: return this.x;
+				case 1: return this.y;
+				default: throw new Error( 'index is out of range: ' + index );
+
+			}
+
+		},
+
+		copy: function ( v ) {
+
+			this.x = v.x;
+			this.y = v.y;
+
+			return this;
+
+		},
+
+		add: function ( v, w ) {
+
+			if ( w !== undefined ) {
+
+				console.warn( 'THREE.Vector2: .add() now only accepts one argument. Use .addVectors( a, b ) instead.' );
+				return this.addVectors( v, w );
+
+			}
+
+			this.x += v.x;
+			this.y += v.y;
+
+			return this;
+
+		},
+
+		addVectors: function ( a, b ) {
+
+			this.x = a.x + b.x;
+			this.y = a.y + b.y;
+
+			return this;
+
+		},
+
+		addScalar: function ( s ) {
+
+			this.x += s;
+			this.y += s;
+
+			return this;
+
+		},
+
+		sub: function ( v, w ) {
+
+			if ( w !== undefined ) {
+
+				console.warn( 'THREE.Vector2: .sub() now only accepts one argument. Use .subVectors( a, b ) instead.' );
+				return this.subVectors( v, w );
+
+			}
+
+			this.x -= v.x;
+			this.y -= v.y;
+
+			return this;
+
+		},
+
+		subVectors: function ( a, b ) {
+
+			this.x = a.x - b.x;
+			this.y = a.y - b.y;
+
+			return this;
+
+		},
+
+		multiply: function ( v ) {
+
+			this.x *= v.x;
+			this.y *= v.y;
+
+			return this;
+
+		},
+
+		multiplyScalar: function ( s ) {
+
+			this.x *= s;
+			this.y *= s;
+
+			return this;
+
+		},
+
+		divide: function ( v ) {
+
+			this.x /= v.x;
+			this.y /= v.y;
+
+			return this;
+
+		},
+
+		divideScalar: function ( scalar ) {
+
+			if ( scalar !== 0 ) {
+
+				var invScalar = 1 / scalar;
+
+				this.x *= invScalar;
+				this.y *= invScalar;
+
+			} else {
+
+				this.x = 0;
+				this.y = 0;
+
+			}
+
+			return this;
+
+		},
+
+		min: function ( v ) {
+
+			if ( this.x > v.x ) {
+
+				this.x = v.x;
+
+			}
+
+			if ( this.y > v.y ) {
+
+				this.y = v.y;
+
+			}
+
+			return this;
+
+		},
+
+		max: function ( v ) {
+
+			if ( this.x < v.x ) {
+
+				this.x = v.x;
+
+			}
+
+			if ( this.y < v.y ) {
+
+				this.y = v.y;
+
+			}
+
+			return this;
+
+		},
+
+		clamp: function ( min, max ) {
+
+			// This function assumes min < max, if this assumption isn't true it will not operate correctly
+
+			if ( this.x < min.x ) {
+
+				this.x = min.x;
+
+			} else if ( this.x > max.x ) {
+
+				this.x = max.x;
+
+			}
+
+			if ( this.y < min.y ) {
+
+				this.y = min.y;
+
+			} else if ( this.y > max.y ) {
+
+				this.y = max.y;
+
+			}
+
+			return this;
+		},
+
+		clampScalar: ( function () {
+
+			var min, max;
+
+			return function ( minVal, maxVal ) {
+
+				if ( min === undefined ) {
+
+					min = new THREE.Vector2();
+					max = new THREE.Vector2();
+
+				}
+
+				min.set( minVal, minVal );
+				max.set( maxVal, maxVal );
+
+				return this.clamp( min, max );
+
+			};
+
+		} )(),
+
+		floor: function () {
+
+			this.x = Math.floor( this.x );
+			this.y = Math.floor( this.y );
+
+			return this;
+
+		},
+
+		ceil: function () {
+
+			this.x = Math.ceil( this.x );
+			this.y = Math.ceil( this.y );
+
+			return this;
+
+		},
+
+		round: function () {
+
+			this.x = Math.round( this.x );
+			this.y = Math.round( this.y );
+
+			return this;
+
+		},
+
+		roundToZero: function () {
+
+			this.x = ( this.x < 0 ) ? Math.ceil( this.x ) : Math.floor( this.x );
+			this.y = ( this.y < 0 ) ? Math.ceil( this.y ) : Math.floor( this.y );
+
+			return this;
+
+		},
+
+		negate: function () {
+
+			this.x = - this.x;
+			this.y = - this.y;
+
+			return this;
+
+		},
+
+		dot: function ( v ) {
+
+			return this.x * v.x + this.y * v.y;
+
+		},
+
+		lengthSq: function () {
+
+			return this.x * this.x + this.y * this.y;
+
+		},
+
+		length: function () {
+
+			return Math.sqrt( this.x * this.x + this.y * this.y );
+
+		},
+
+		normalize: function () {
+
+			return this.divideScalar( this.length() );
+
+		},
+
+		distanceTo: function ( v ) {
+
+			return Math.sqrt( this.distanceToSquared( v ) );
+
+		},
+
+		distanceToSquared: function ( v ) {
+
+			var dx = this.x - v.x, dy = this.y - v.y;
+			return dx * dx + dy * dy;
+
+		},
+
+		setLength: function ( l ) {
+
+			var oldLength = this.length();
+
+			if ( oldLength !== 0 && l !== oldLength ) {
+
+				this.multiplyScalar( l / oldLength );
+			}
+
+			return this;
+
+		},
+
+		lerp: function ( v, alpha ) {
+
+			this.x += ( v.x - this.x ) * alpha;
+			this.y += ( v.y - this.y ) * alpha;
+
+			return this;
+
+		},
+
+		equals: function ( v ) {
+
+			return ( ( v.x === this.x ) && ( v.y === this.y ) );
+
+		},
+
+		fromArray: function ( array, offset ) {
+
+			if ( offset === undefined ) offset = 0;
+
+			this.x = array[ offset ];
+			this.y = array[ offset + 1 ];
+
+			return this;
+
+		},
+
+		toArray: function ( array, offset ) {
+
+			if ( array === undefined ) array = [];
+			if ( offset === undefined ) offset = 0;
+
+			array[ offset ] = this.x;
+			array[ offset + 1 ] = this.y;
+
+			return array;
+
+		},
+
+		clone: function () {
+
+			return new THREE.Vector2( this.x, this.y );
+
+		}
+
+	};
+
+	// File:src/math/Vector3.js
+
+	/**
+	 * @author mrdoob / http://mrdoob.com/
+	 * @author *kile / http://kile.stravaganza.org/
+	 * @author philogb / http://blog.thejit.org/
+	 * @author mikael emtinger / http://gomo.se/
+	 * @author egraether / http://egraether.com/
+	 * @author WestLangley / http://github.com/WestLangley
+	 */
+
+	THREE.Vector3 = function ( x, y, z ) {
+
+		this.x = x || 0;
+		this.y = y || 0;
+		this.z = z || 0;
+
+	};
+
+	THREE.Vector3.prototype = {
+
+		constructor: THREE.Vector3,
+
+		set: function ( x, y, z ) {
+
+			this.x = x;
+			this.y = y;
+			this.z = z;
+
+			return this;
+
+		},
+
+		setX: function ( x ) {
+
+			this.x = x;
+
+			return this;
+
+		},
+
+		setY: function ( y ) {
+
+			this.y = y;
+
+			return this;
+
+		},
+
+		setZ: function ( z ) {
+
+			this.z = z;
+
+			return this;
+
+		},
+
+		setComponent: function ( index, value ) {
+
+			switch ( index ) {
+
+				case 0: this.x = value; break;
+				case 1: this.y = value; break;
+				case 2: this.z = value; break;
+				default: throw new Error( 'index is out of range: ' + index );
+
+			}
+
+		},
+
+		getComponent: function ( index ) {
+
+			switch ( index ) {
+
+				case 0: return this.x;
+				case 1: return this.y;
+				case 2: return this.z;
+				default: throw new Error( 'index is out of range: ' + index );
+
+			}
+
+		},
+
+		copy: function ( v ) {
+
+			this.x = v.x;
+			this.y = v.y;
+			this.z = v.z;
+
+			return this;
+
+		},
+
+		add: function ( v, w ) {
+
+			if ( w !== undefined ) {
+
+				console.warn( 'THREE.Vector3: .add() now only accepts one argument. Use .addVectors( a, b ) instead.' );
+				return this.addVectors( v, w );
+
+			}
+
+			this.x += v.x;
+			this.y += v.y;
+			this.z += v.z;
+
+			return this;
+
+		},
+
+		addScalar: function ( s ) {
+
+			this.x += s;
+			this.y += s;
+			this.z += s;
+
+			return this;
+
+		},
+
+		addVectors: function ( a, b ) {
+
+			this.x = a.x + b.x;
+			this.y = a.y + b.y;
+			this.z = a.z + b.z;
+
+			return this;
+
+		},
+
+		sub: function ( v, w ) {
+
+			if ( w !== undefined ) {
+
+				console.warn( 'THREE.Vector3: .sub() now only accepts one argument. Use .subVectors( a, b ) instead.' );
+				return this.subVectors( v, w );
+
+			}
+
+			this.x -= v.x;
+			this.y -= v.y;
+			this.z -= v.z;
+
+			return this;
+
+		},
+
+		subVectors: function ( a, b ) {
+
+			this.x = a.x - b.x;
+			this.y = a.y - b.y;
+			this.z = a.z - b.z;
+
+			return this;
+
+		},
+
+		multiply: function ( v, w ) {
+
+			if ( w !== undefined ) {
+
+				console.warn( 'THREE.Vector3: .multiply() now only accepts one argument. Use .multiplyVectors( a, b ) instead.' );
+				return this.multiplyVectors( v, w );
+
+			}
+
+			this.x *= v.x;
+			this.y *= v.y;
+			this.z *= v.z;
+
+			return this;
+
+		},
+
+		multiplyScalar: function ( scalar ) {
+
+			this.x *= scalar;
+			this.y *= scalar;
+			this.z *= scalar;
+
+			return this;
+
+		},
+
+		multiplyVectors: function ( a, b ) {
+
+			this.x = a.x * b.x;
+			this.y = a.y * b.y;
+			this.z = a.z * b.z;
+
+			return this;
+
+		},
+
+		applyEuler: function () {
+
+			var quaternion;
+
+			return function ( euler ) {
+
+				if ( euler instanceof THREE.Euler === false ) {
+
+					console.error( 'THREE.Vector3: .applyEuler() now expects a Euler rotation rather than a Vector3 and order.' );
+
+				}
+
+				if ( quaternion === undefined ) quaternion = new THREE.Quaternion();
+
+				this.applyQuaternion( quaternion.setFromEuler( euler ) );
+
+				return this;
+
+			};
+
+		}(),
+
+		applyAxisAngle: function () {
+
+			var quaternion;
+
+			return function ( axis, angle ) {
+
+				if ( quaternion === undefined ) quaternion = new THREE.Quaternion();
+
+				this.applyQuaternion( quaternion.setFromAxisAngle( axis, angle ) );
+
+				return this;
+
+			};
+
+		}(),
+
+		applyMatrix3: function ( m ) {
+
+			var x = this.x;
+			var y = this.y;
+			var z = this.z;
+
+			var e = m.elements;
+
+			this.x = e[ 0 ] * x + e[ 3 ] * y + e[ 6 ] * z;
+			this.y = e[ 1 ] * x + e[ 4 ] * y + e[ 7 ] * z;
+			this.z = e[ 2 ] * x + e[ 5 ] * y + e[ 8 ] * z;
+
+			return this;
+
+		},
+
+		applyMatrix4: function ( m ) {
+
+			// input: THREE.Matrix4 affine matrix
+
+			var x = this.x, y = this.y, z = this.z;
+
+			var e = m.elements;
+
+			this.x = e[ 0 ] * x + e[ 4 ] * y + e[ 8 ]  * z + e[ 12 ];
+			this.y = e[ 1 ] * x + e[ 5 ] * y + e[ 9 ]  * z + e[ 13 ];
+			this.z = e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z + e[ 14 ];
+
+			return this;
+
+		},
+
+		applyProjection: function ( m ) {
+
+			// input: THREE.Matrix4 projection matrix
+
+			var x = this.x, y = this.y, z = this.z;
+
+			var e = m.elements;
+			var d = 1 / ( e[ 3 ] * x + e[ 7 ] * y + e[ 11 ] * z + e[ 15 ] ); // perspective divide
+
+			this.x = ( e[ 0 ] * x + e[ 4 ] * y + e[ 8 ]  * z + e[ 12 ] ) * d;
+			this.y = ( e[ 1 ] * x + e[ 5 ] * y + e[ 9 ]  * z + e[ 13 ] ) * d;
+			this.z = ( e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z + e[ 14 ] ) * d;
+
+			return this;
+
+		},
+
+		applyQuaternion: function ( q ) {
+
+			var x = this.x;
+			var y = this.y;
+			var z = this.z;
+
+			var qx = q.x;
+			var qy = q.y;
+			var qz = q.z;
+			var qw = q.w;
+
+			// calculate quat * vector
+
+			var ix =  qw * x + qy * z - qz * y;
+			var iy =  qw * y + qz * x - qx * z;
+			var iz =  qw * z + qx * y - qy * x;
+			var iw = - qx * x - qy * y - qz * z;
+
+			// calculate result * inverse quat
+
+			this.x = ix * qw + iw * - qx + iy * - qz - iz * - qy;
+			this.y = iy * qw + iw * - qy + iz * - qx - ix * - qz;
+			this.z = iz * qw + iw * - qz + ix * - qy - iy * - qx;
+
+			return this;
+
+		},
+
+		project: function () {
+
+			var matrix;
+
+			return function ( camera ) {
+
+				if ( matrix === undefined ) matrix = new THREE.Matrix4();
+
+				matrix.multiplyMatrices( camera.projectionMatrix, matrix.getInverse( camera.matrixWorld ) );
+				return this.applyProjection( matrix );
+
+			};
+
+		}(),
+
+		unproject: function () {
+
+			var matrix;
+
+			return function ( camera ) {
+
+				if ( matrix === undefined ) matrix = new THREE.Matrix4();
+
+				matrix.multiplyMatrices( camera.matrixWorld, matrix.getInverse( camera.projectionMatrix ) );
+				return this.applyProjection( matrix );
+
+			};
+
+		}(),
+
+		transformDirection: function ( m ) {
+
+			// input: THREE.Matrix4 affine matrix
+			// vector interpreted as a direction
+
+			var x = this.x, y = this.y, z = this.z;
+
+			var e = m.elements;
+
+			this.x = e[ 0 ] * x + e[ 4 ] * y + e[ 8 ]  * z;
+			this.y = e[ 1 ] * x + e[ 5 ] * y + e[ 9 ]  * z;
+			this.z = e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z;
+
+			this.normalize();
+
+			return this;
+
+		},
+
+		divide: function ( v ) {
+
+			this.x /= v.x;
+			this.y /= v.y;
+			this.z /= v.z;
+
+			return this;
+
+		},
+
+		divideScalar: function ( scalar ) {
+
+			if ( scalar !== 0 ) {
+
+				var invScalar = 1 / scalar;
+
+				this.x *= invScalar;
+				this.y *= invScalar;
+				this.z *= invScalar;
+
+			} else {
+
+				this.x = 0;
+				this.y = 0;
+				this.z = 0;
+
+			}
+
+			return this;
+
+		},
+
+		min: function ( v ) {
+
+			if ( this.x > v.x ) {
+
+				this.x = v.x;
+
+			}
+
+			if ( this.y > v.y ) {
+
+				this.y = v.y;
+
+			}
+
+			if ( this.z > v.z ) {
+
+				this.z = v.z;
+
+			}
+
+			return this;
+
+		},
+
+		max: function ( v ) {
+
+			if ( this.x < v.x ) {
+
+				this.x = v.x;
+
+			}
+
+			if ( this.y < v.y ) {
+
+				this.y = v.y;
+
+			}
+
+			if ( this.z < v.z ) {
+
+				this.z = v.z;
+
+			}
+
+			return this;
+
+		},
+
+		clamp: function ( min, max ) {
+
+			// This function assumes min < max, if this assumption isn't true it will not operate correctly
+
+			if ( this.x < min.x ) {
+
+				this.x = min.x;
+
+			} else if ( this.x > max.x ) {
+
+				this.x = max.x;
+
+			}
+
+			if ( this.y < min.y ) {
+
+				this.y = min.y;
+
+			} else if ( this.y > max.y ) {
+
+				this.y = max.y;
+
+			}
+
+			if ( this.z < min.z ) {
+
+				this.z = min.z;
+
+			} else if ( this.z > max.z ) {
+
+				this.z = max.z;
+
+			}
+
+			return this;
+
+		},
+
+		clampScalar: ( function () {
+
+			var min, max;
+
+			return function ( minVal, maxVal ) {
+
+				if ( min === undefined ) {
+
+					min = new THREE.Vector3();
+					max = new THREE.Vector3();
+
+				}
+
+				min.set( minVal, minVal, minVal );
+				max.set( maxVal, maxVal, maxVal );
+
+				return this.clamp( min, max );
+
+			};
+
+		} )(),
+
+		floor: function () {
+
+			this.x = Math.floor( this.x );
+			this.y = Math.floor( this.y );
+			this.z = Math.floor( this.z );
+
+			return this;
+
+		},
+
+		ceil: function () {
+
+			this.x = Math.ceil( this.x );
+			this.y = Math.ceil( this.y );
+			this.z = Math.ceil( this.z );
+
+			return this;
+
+		},
+
+		round: function () {
+
+			this.x = Math.round( this.x );
+			this.y = Math.round( this.y );
+			this.z = Math.round( this.z );
+
+			return this;
+
+		},
+
+		roundToZero: function () {
+
+			this.x = ( this.x < 0 ) ? Math.ceil( this.x ) : Math.floor( this.x );
+			this.y = ( this.y < 0 ) ? Math.ceil( this.y ) : Math.floor( this.y );
+			this.z = ( this.z < 0 ) ? Math.ceil( this.z ) : Math.floor( this.z );
+
+			return this;
+
+		},
+
+		negate: function () {
+
+			this.x = - this.x;
+			this.y = - this.y;
+			this.z = - this.z;
+
+			return this;
+
+		},
+
+		dot: function ( v ) {
+
+			return this.x * v.x + this.y * v.y + this.z * v.z;
+
+		},
+
+		lengthSq: function () {
+
+			return this.x * this.x + this.y * this.y + this.z * this.z;
+
+		},
+
+		length: function () {
+
+			return Math.sqrt( this.x * this.x + this.y * this.y + this.z * this.z );
+
+		},
+
+		lengthManhattan: function () {
+
+			return Math.abs( this.x ) + Math.abs( this.y ) + Math.abs( this.z );
+
+		},
+
+		normalize: function () {
+
+			return this.divideScalar( this.length() );
+
+		},
+
+		setLength: function ( l ) {
+
+			var oldLength = this.length();
+
+			if ( oldLength !== 0 && l !== oldLength  ) {
+
+				this.multiplyScalar( l / oldLength );
+			}
+
+			return this;
+
+		},
+
+		lerp: function ( v, alpha ) {
+
+			this.x += ( v.x - this.x ) * alpha;
+			this.y += ( v.y - this.y ) * alpha;
+			this.z += ( v.z - this.z ) * alpha;
+
+			return this;
+
+		},
+
+		cross: function ( v, w ) {
+
+			if ( w !== undefined ) {
+
+				console.warn( 'THREE.Vector3: .cross() now only accepts one argument. Use .crossVectors( a, b ) instead.' );
+				return this.crossVectors( v, w );
+
+			}
+
+			var x = this.x, y = this.y, z = this.z;
+
+			this.x = y * v.z - z * v.y;
+			this.y = z * v.x - x * v.z;
+			this.z = x * v.y - y * v.x;
+
+			return this;
+
+		},
+
+		crossVectors: function ( a, b ) {
+
+			var ax = a.x, ay = a.y, az = a.z;
+			var bx = b.x, by = b.y, bz = b.z;
+
+			this.x = ay * bz - az * by;
+			this.y = az * bx - ax * bz;
+			this.z = ax * by - ay * bx;
+
+			return this;
+
+		},
+
+		projectOnVector: function () {
+
+			var v1, dot;
+
+			return function ( vector ) {
+
+				if ( v1 === undefined ) v1 = new THREE.Vector3();
+
+				v1.copy( vector ).normalize();
+
+				dot = this.dot( v1 );
+
+				return this.copy( v1 ).multiplyScalar( dot );
+
+			};
+
+		}(),
+
+		projectOnPlane: function () {
+
+			var v1;
+
+			return function ( planeNormal ) {
+
+				if ( v1 === undefined ) v1 = new THREE.Vector3();
+
+				v1.copy( this ).projectOnVector( planeNormal );
+
+				return this.sub( v1 );
+
+			}
+
+		}(),
+
+		reflect: function () {
+
+			// reflect incident vector off plane orthogonal to normal
+			// normal is assumed to have unit length
+
+			var v1;
+
+			return function ( normal ) {
+
+				if ( v1 === undefined ) v1 = new THREE.Vector3();
+
+				return this.sub( v1.copy( normal ).multiplyScalar( 2 * this.dot( normal ) ) );
+
+			}
+
+		}(),
+
+		angleTo: function ( v ) {
+
+			var theta = this.dot( v ) / ( this.length() * v.length() );
+
+			// clamp, to handle numerical problems
+
+			return Math.acos( THREE.Math.clamp( theta, - 1, 1 ) );
+
+		},
+
+		distanceTo: function ( v ) {
+
+			return Math.sqrt( this.distanceToSquared( v ) );
+
+		},
+
+		distanceToSquared: function ( v ) {
+
+			var dx = this.x - v.x;
+			var dy = this.y - v.y;
+			var dz = this.z - v.z;
+
+			return dx * dx + dy * dy + dz * dz;
+
+		},
+
+		setEulerFromRotationMatrix: function ( m, order ) {
+
+			console.error( 'THREE.Vector3: .setEulerFromRotationMatrix() has been removed. Use Euler.setFromRotationMatrix() instead.' );
+
+		},
+
+		setEulerFromQuaternion: function ( q, order ) {
+
+			console.error( 'THREE.Vector3: .setEulerFromQuaternion() has been removed. Use Euler.setFromQuaternion() instead.' );
+
+		},
+
+		getPositionFromMatrix: function ( m ) {
+
+			console.warn( 'THREE.Vector3: .getPositionFromMatrix() has been renamed to .setFromMatrixPosition().' );
+
+			return this.setFromMatrixPosition( m );
+
+		},
+
+		getScaleFromMatrix: function ( m ) {
+
+			console.warn( 'THREE.Vector3: .getScaleFromMatrix() has been renamed to .setFromMatrixScale().' );
+
+			return this.setFromMatrixScale( m );
+		},
+
+		getColumnFromMatrix: function ( index, matrix ) {
+
+			console.warn( 'THREE.Vector3: .getColumnFromMatrix() has been renamed to .setFromMatrixColumn().' );
+
+			return this.setFromMatrixColumn( index, matrix );
+
+		},
+
+		setFromMatrixPosition: function ( m ) {
+
+			this.x = m.elements[ 12 ];
+			this.y = m.elements[ 13 ];
+			this.z = m.elements[ 14 ];
+
+			return this;
+
+		},
+
+		setFromMatrixScale: function ( m ) {
+
+			var sx = this.set( m.elements[ 0 ], m.elements[ 1 ], m.elements[  2 ] ).length();
+			var sy = this.set( m.elements[ 4 ], m.elements[ 5 ], m.elements[  6 ] ).length();
+			var sz = this.set( m.elements[ 8 ], m.elements[ 9 ], m.elements[ 10 ] ).length();
+
+			this.x = sx;
+			this.y = sy;
+			this.z = sz;
+
+			return this;
+		},
+
+		setFromMatrixColumn: function ( index, matrix ) {
+
+			var offset = index * 4;
+
+			var me = matrix.elements;
+
+			this.x = me[ offset ];
+			this.y = me[ offset + 1 ];
+			this.z = me[ offset + 2 ];
+
+			return this;
+
+		},
+
+		equals: function ( v ) {
+
+			return ( ( v.x === this.x ) && ( v.y === this.y ) && ( v.z === this.z ) );
+
+		},
+
+		fromArray: function ( array, offset ) {
+
+			if ( offset === undefined ) offset = 0;
+
+			this.x = array[ offset ];
+			this.y = array[ offset + 1 ];
+			this.z = array[ offset + 2 ];
+
+			return this;
+
+		},
+
+		toArray: function ( array, offset ) {
+
+			if ( array === undefined ) array = [];
+			if ( offset === undefined ) offset = 0;
+
+			array[ offset ] = this.x;
+			array[ offset + 1 ] = this.y;
+			array[ offset + 2 ] = this.z;
+
+			return array;
+
+		},
+
+		clone: function () {
+
+			return new THREE.Vector3( this.x, this.y, this.z );
+
+		}
+
+	};
+
+	// File:src/math/Vector4.js
+
+	/**
+	 * @author supereggbert / http://www.paulbrunt.co.uk/
+	 * @author philogb / http://blog.thejit.org/
+	 * @author mikael emtinger / http://gomo.se/
+	 * @author egraether / http://egraether.com/
+	 * @author WestLangley / http://github.com/WestLangley
+	 */
+
+	THREE.Vector4 = function ( x, y, z, w ) {
+
+		this.x = x || 0;
+		this.y = y || 0;
+		this.z = z || 0;
+		this.w = ( w !== undefined ) ? w : 1;
+
+	};
+
+	THREE.Vector4.prototype = {
+
+		constructor: THREE.Vector4,
+
+		set: function ( x, y, z, w ) {
+
+			this.x = x;
+			this.y = y;
+			this.z = z;
+			this.w = w;
+
+			return this;
+
+		},
+
+		setX: function ( x ) {
+
+			this.x = x;
+
+			return this;
+
+		},
+
+		setY: function ( y ) {
+
+			this.y = y;
+
+			return this;
+
+		},
+
+		setZ: function ( z ) {
+
+			this.z = z;
+
+			return this;
+
+		},
+
+		setW: function ( w ) {
+
+			this.w = w;
+
+			return this;
+
+		},
+
+		setComponent: function ( index, value ) {
+
+			switch ( index ) {
+
+				case 0: this.x = value; break;
+				case 1: this.y = value; break;
+				case 2: this.z = value; break;
+				case 3: this.w = value; break;
+				default: throw new Error( 'index is out of range: ' + index );
+
+			}
+
+		},
+
+		getComponent: function ( index ) {
+
+			switch ( index ) {
+
+				case 0: return this.x;
+				case 1: return this.y;
+				case 2: return this.z;
+				case 3: return this.w;
+				default: throw new Error( 'index is out of range: ' + index );
+
+			}
+
+		},
+
+		copy: function ( v ) {
+
+			this.x = v.x;
+			this.y = v.y;
+			this.z = v.z;
+			this.w = ( v.w !== undefined ) ? v.w : 1;
+
+			return this;
+
+		},
+
+		add: function ( v, w ) {
+
+			if ( w !== undefined ) {
+
+				console.warn( 'THREE.Vector4: .add() now only accepts one argument. Use .addVectors( a, b ) instead.' );
+				return this.addVectors( v, w );
+
+			}
+
+			this.x += v.x;
+			this.y += v.y;
+			this.z += v.z;
+			this.w += v.w;
+
+			return this;
+
+		},
+
+		addScalar: function ( s ) {
+
+			this.x += s;
+			this.y += s;
+			this.z += s;
+			this.w += s;
+
+			return this;
+
+		},
+
+		addVectors: function ( a, b ) {
+
+			this.x = a.x + b.x;
+			this.y = a.y + b.y;
+			this.z = a.z + b.z;
+			this.w = a.w + b.w;
+
+			return this;
+
+		},
+
+		sub: function ( v, w ) {
+
+			if ( w !== undefined ) {
+
+				console.warn( 'THREE.Vector4: .sub() now only accepts one argument. Use .subVectors( a, b ) instead.' );
+				return this.subVectors( v, w );
+
+			}
+
+			this.x -= v.x;
+			this.y -= v.y;
+			this.z -= v.z;
+			this.w -= v.w;
+
+			return this;
+
+		},
+
+		subVectors: function ( a, b ) {
+
+			this.x = a.x - b.x;
+			this.y = a.y - b.y;
+			this.z = a.z - b.z;
+			this.w = a.w - b.w;
+
+			return this;
+
+		},
+
+		multiplyScalar: function ( scalar ) {
+
+			this.x *= scalar;
+			this.y *= scalar;
+			this.z *= scalar;
+			this.w *= scalar;
+
+			return this;
+
+		},
+
+		applyMatrix4: function ( m ) {
+
+			var x = this.x;
+			var y = this.y;
+			var z = this.z;
+			var w = this.w;
+
+			var e = m.elements;
+
+			this.x = e[ 0 ] * x + e[ 4 ] * y + e[ 8 ] * z + e[ 12 ] * w;
+			this.y = e[ 1 ] * x + e[ 5 ] * y + e[ 9 ] * z + e[ 13 ] * w;
+			this.z = e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z + e[ 14 ] * w;
+			this.w = e[ 3 ] * x + e[ 7 ] * y + e[ 11 ] * z + e[ 15 ] * w;
+
+			return this;
+
+		},
+
+		divideScalar: function ( scalar ) {
+
+			if ( scalar !== 0 ) {
+
+				var invScalar = 1 / scalar;
+
+				this.x *= invScalar;
+				this.y *= invScalar;
+				this.z *= invScalar;
+				this.w *= invScalar;
+
+			} else {
+
+				this.x = 0;
+				this.y = 0;
+				this.z = 0;
+				this.w = 1;
+
+			}
+
+			return this;
+
+		},
+
+		setAxisAngleFromQuaternion: function ( q ) {
+
+			// http://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToAngle/index.htm
+
+			// q is assumed to be normalized
+
+			this.w = 2 * Math.acos( q.w );
+
+			var s = Math.sqrt( 1 - q.w * q.w );
+
+			if ( s < 0.0001 ) {
+
+				 this.x = 1;
+				 this.y = 0;
+				 this.z = 0;
+
+			} else {
+
+				 this.x = q.x / s;
+				 this.y = q.y / s;
+				 this.z = q.z / s;
+
+			}
+
+			return this;
+
+		},
+
+		setAxisAngleFromRotationMatrix: function ( m ) {
+
+			// http://www.euclideanspace.com/maths/geometry/rotations/conversions/matrixToAngle/index.htm
+
+			// assumes the upper 3x3 of m is a pure rotation matrix (i.e, unscaled)
+
+			var angle, x, y, z,		// variables for result
+				epsilon = 0.01,		// margin to allow for rounding errors
+				epsilon2 = 0.1,		// margin to distinguish between 0 and 180 degrees
+
+				te = m.elements,
+
+				m11 = te[ 0 ], m12 = te[ 4 ], m13 = te[ 8 ],
+				m21 = te[ 1 ], m22 = te[ 5 ], m23 = te[ 9 ],
+				m31 = te[ 2 ], m32 = te[ 6 ], m33 = te[ 10 ];
+
+			if ( ( Math.abs( m12 - m21 ) < epsilon )
+			   && ( Math.abs( m13 - m31 ) < epsilon )
+			   && ( Math.abs( m23 - m32 ) < epsilon ) ) {
+
+				// singularity found
+				// first check for identity matrix which must have +1 for all terms
+				// in leading diagonal and zero in other terms
+
+				if ( ( Math.abs( m12 + m21 ) < epsilon2 )
+				   && ( Math.abs( m13 + m31 ) < epsilon2 )
+				   && ( Math.abs( m23 + m32 ) < epsilon2 )
+				   && ( Math.abs( m11 + m22 + m33 - 3 ) < epsilon2 ) ) {
+
+					// this singularity is identity matrix so angle = 0
+
+					this.set( 1, 0, 0, 0 );
+
+					return this; // zero angle, arbitrary axis
+
+				}
+
+				// otherwise this singularity is angle = 180
+
+				angle = Math.PI;
+
+				var xx = ( m11 + 1 ) / 2;
+				var yy = ( m22 + 1 ) / 2;
+				var zz = ( m33 + 1 ) / 2;
+				var xy = ( m12 + m21 ) / 4;
+				var xz = ( m13 + m31 ) / 4;
+				var yz = ( m23 + m32 ) / 4;
+
+				if ( ( xx > yy ) && ( xx > zz ) ) { // m11 is the largest diagonal term
+
+					if ( xx < epsilon ) {
+
+						x = 0;
+						y = 0.707106781;
+						z = 0.707106781;
+
+					} else {
+
+						x = Math.sqrt( xx );
+						y = xy / x;
+						z = xz / x;
+
+					}
+
+				} else if ( yy > zz ) { // m22 is the largest diagonal term
+
+					if ( yy < epsilon ) {
+
+						x = 0.707106781;
+						y = 0;
+						z = 0.707106781;
+
+					} else {
+
+						y = Math.sqrt( yy );
+						x = xy / y;
+						z = yz / y;
+
+					}
+
+				} else { // m33 is the largest diagonal term so base result on this
+
+					if ( zz < epsilon ) {
+
+						x = 0.707106781;
+						y = 0.707106781;
+						z = 0;
+
+					} else {
+
+						z = Math.sqrt( zz );
+						x = xz / z;
+						y = yz / z;
+
 					}
 
 				}
+
+				this.set( x, y, z, angle );
+
+				return this; // return 180 deg rotation
+
+			}
+
+			// as we have reached here there are no singularities so we can handle normally
+
+			var s = Math.sqrt( ( m32 - m23 ) * ( m32 - m23 )
+							  + ( m13 - m31 ) * ( m13 - m31 )
+							  + ( m21 - m12 ) * ( m21 - m12 ) ); // used to normalize
+
+			if ( Math.abs( s ) < 0.001 ) s = 1;
+
+			// prevent divide by zero, should not happen if matrix is orthogonal and should be
+			// caught by singularity test above, but I've left it in just in case
+
+			this.x = ( m32 - m23 ) / s;
+			this.y = ( m13 - m31 ) / s;
+			this.z = ( m21 - m12 ) / s;
+			this.w = Math.acos( ( m11 + m22 + m33 - 1 ) / 2 );
+
+			return this;
+
+		},
+
+		min: function ( v ) {
+
+			if ( this.x > v.x ) {
+
+				this.x = v.x;
+
+			}
+
+			if ( this.y > v.y ) {
+
+				this.y = v.y;
+
+			}
+
+			if ( this.z > v.z ) {
+
+				this.z = v.z;
+
+			}
+
+			if ( this.w > v.w ) {
+
+				this.w = v.w;
+
+			}
+
+			return this;
+
+		},
+
+		max: function ( v ) {
+
+			if ( this.x < v.x ) {
+
+				this.x = v.x;
+
+			}
+
+			if ( this.y < v.y ) {
+
+				this.y = v.y;
+
+			}
+
+			if ( this.z < v.z ) {
+
+				this.z = v.z;
+
+			}
+
+			if ( this.w < v.w ) {
+
+				this.w = v.w;
+
+			}
+
+			return this;
+
+		},
+
+		clamp: function ( min, max ) {
+
+			// This function assumes min < max, if this assumption isn't true it will not operate correctly
+
+			if ( this.x < min.x ) {
+
+				this.x = min.x;
+
+			} else if ( this.x > max.x ) {
+
+				this.x = max.x;
+
+			}
+
+			if ( this.y < min.y ) {
+
+				this.y = min.y;
+
+			} else if ( this.y > max.y ) {
+
+				this.y = max.y;
+
+			}
+
+			if ( this.z < min.z ) {
+
+				this.z = min.z;
+
+			} else if ( this.z > max.z ) {
+
+				this.z = max.z;
+
+			}
+
+			if ( this.w < min.w ) {
+
+				this.w = min.w;
+
+			} else if ( this.w > max.w ) {
+
+				this.w = max.w;
+
+			}
+
+			return this;
+
+		},
+
+		clampScalar: ( function () {
+
+			var min, max;
+
+			return function ( minVal, maxVal ) {
+
+				if ( min === undefined ) {
+
+					min = new THREE.Vector4();
+					max = new THREE.Vector4();
+
+				}
+
+				min.set( minVal, minVal, minVal, minVal );
+				max.set( maxVal, maxVal, maxVal, maxVal );
+
+				return this.clamp( min, max );
+
+			};
+
+		} )(),
+
+	    floor: function () {
+
+	        this.x = Math.floor( this.x );
+	        this.y = Math.floor( this.y );
+	        this.z = Math.floor( this.z );
+	        this.w = Math.floor( this.w );
+
+	        return this;
+
+	    },
+
+	    ceil: function () {
+
+	        this.x = Math.ceil( this.x );
+	        this.y = Math.ceil( this.y );
+	        this.z = Math.ceil( this.z );
+	        this.w = Math.ceil( this.w );
+
+	        return this;
+
+	    },
+
+	    round: function () {
+
+	        this.x = Math.round( this.x );
+	        this.y = Math.round( this.y );
+	        this.z = Math.round( this.z );
+	        this.w = Math.round( this.w );
+
+	        return this;
+
+	    },
+
+	    roundToZero: function () {
+
+	        this.x = ( this.x < 0 ) ? Math.ceil( this.x ) : Math.floor( this.x );
+	        this.y = ( this.y < 0 ) ? Math.ceil( this.y ) : Math.floor( this.y );
+	        this.z = ( this.z < 0 ) ? Math.ceil( this.z ) : Math.floor( this.z );
+	        this.w = ( this.w < 0 ) ? Math.ceil( this.w ) : Math.floor( this.w );
+
+	        return this;
+
+	    },
+
+		negate: function () {
+
+			this.x = - this.x;
+			this.y = - this.y;
+			this.z = - this.z;
+			this.w = - this.w;
+
+			return this;
+
+		},
+
+		dot: function ( v ) {
+
+			return this.x * v.x + this.y * v.y + this.z * v.z + this.w * v.w;
+
+		},
+
+		lengthSq: function () {
+
+			return this.x * this.x + this.y * this.y + this.z * this.z + this.w * this.w;
+
+		},
+
+		length: function () {
+
+			return Math.sqrt( this.x * this.x + this.y * this.y + this.z * this.z + this.w * this.w );
+
+		},
+
+		lengthManhattan: function () {
+
+			return Math.abs( this.x ) + Math.abs( this.y ) + Math.abs( this.z ) + Math.abs( this.w );
+
+		},
+
+		normalize: function () {
+
+			return this.divideScalar( this.length() );
+
+		},
+
+		setLength: function ( l ) {
+
+			var oldLength = this.length();
+
+			if ( oldLength !== 0 && l !== oldLength ) {
+
+				this.multiplyScalar( l / oldLength );
+
+			}
+
+			return this;
+
+		},
+
+		lerp: function ( v, alpha ) {
+
+			this.x += ( v.x - this.x ) * alpha;
+			this.y += ( v.y - this.y ) * alpha;
+			this.z += ( v.z - this.z ) * alpha;
+			this.w += ( v.w - this.w ) * alpha;
+
+			return this;
+
+		},
+
+		equals: function ( v ) {
+
+			return ( ( v.x === this.x ) && ( v.y === this.y ) && ( v.z === this.z ) && ( v.w === this.w ) );
+
+		},
+
+		fromArray: function ( array, offset ) {
+
+			if ( offset === undefined ) offset = 0;
+
+			this.x = array[ offset ];
+			this.y = array[ offset + 1 ];
+			this.z = array[ offset + 2 ];
+			this.w = array[ offset + 3 ];
+
+			return this;
+
+		},
+
+		toArray: function ( array, offset ) {
+
+			if ( array === undefined ) array = [];
+			if ( offset === undefined ) offset = 0;
+
+			array[ offset ] = this.x;
+			array[ offset + 1 ] = this.y;
+			array[ offset + 2 ] = this.z;
+			array[ offset + 3 ] = this.w;
+
+			return array;
+
+		},
+
+		clone: function () {
+
+			return new THREE.Vector4( this.x, this.y, this.z, this.w );
+
+		}
+
+	};
+
+	// File:src/math/Euler.js
+
+	/**
+	 * @author mrdoob / http://mrdoob.com/
+	 * @author WestLangley / http://github.com/WestLangley
+	 * @author bhouston / http://exocortex.com
+	 */
+
+	THREE.Euler = function ( x, y, z, order ) {
+
+		this._x = x || 0;
+		this._y = y || 0;
+		this._z = z || 0;
+		this._order = order || THREE.Euler.DefaultOrder;
+
+	};
+
+	THREE.Euler.RotationOrders = [ 'XYZ', 'YZX', 'ZXY', 'XZY', 'YXZ', 'ZYX' ];
+
+	THREE.Euler.DefaultOrder = 'XYZ';
+
+	THREE.Euler.prototype = {
+
+		constructor: THREE.Euler,
+
+		_x: 0, _y: 0, _z: 0, _order: THREE.Euler.DefaultOrder,
+
+		get x () {
+
+			return this._x;
+
+		},
+
+		set x ( value ) {
+
+			this._x = value;
+			this.onChangeCallback();
+
+		},
+
+		get y () {
+
+			return this._y;
+
+		},
+
+		set y ( value ) {
+
+			this._y = value;
+			this.onChangeCallback();
+
+		},
+
+		get z () {
+
+			return this._z;
+
+		},
+
+		set z ( value ) {
+
+			this._z = value;
+			this.onChangeCallback();
+
+		},
+
+		get order () {
+
+			return this._order;
+
+		},
+
+		set order ( value ) {
+
+			this._order = value;
+			this.onChangeCallback();
+
+		},
+
+		set: function ( x, y, z, order ) {
+
+			this._x = x;
+			this._y = y;
+			this._z = z;
+			this._order = order || this._order;
+
+			this.onChangeCallback();
+
+			return this;
+
+		},
+
+		copy: function ( euler ) {
+
+			this._x = euler._x;
+			this._y = euler._y;
+			this._z = euler._z;
+			this._order = euler._order;
+
+			this.onChangeCallback();
+
+			return this;
+
+		},
+
+		setFromRotationMatrix: function ( m, order ) {
+
+			var clamp = THREE.Math.clamp;
+
+			// assumes the upper 3x3 of m is a pure rotation matrix (i.e, unscaled)
+
+			var te = m.elements;
+			var m11 = te[ 0 ], m12 = te[ 4 ], m13 = te[ 8 ];
+			var m21 = te[ 1 ], m22 = te[ 5 ], m23 = te[ 9 ];
+			var m31 = te[ 2 ], m32 = te[ 6 ], m33 = te[ 10 ];
+
+			order = order || this._order;
+
+			if ( order === 'XYZ' ) {
+
+				this._y = Math.asin( clamp( m13, - 1, 1 ) );
+
+				if ( Math.abs( m13 ) < 0.99999 ) {
+
+					this._x = Math.atan2( - m23, m33 );
+					this._z = Math.atan2( - m12, m11 );
+
+				} else {
+
+					this._x = Math.atan2( m32, m22 );
+					this._z = 0;
+
+				}
+
+			} else if ( order === 'YXZ' ) {
+
+				this._x = Math.asin( - clamp( m23, - 1, 1 ) );
+
+				if ( Math.abs( m23 ) < 0.99999 ) {
+
+					this._y = Math.atan2( m13, m33 );
+					this._z = Math.atan2( m21, m22 );
+
+				} else {
+
+					this._y = Math.atan2( - m31, m11 );
+					this._z = 0;
+
+				}
+
+			} else if ( order === 'ZXY' ) {
+
+				this._x = Math.asin( clamp( m32, - 1, 1 ) );
+
+				if ( Math.abs( m32 ) < 0.99999 ) {
+
+					this._y = Math.atan2( - m31, m33 );
+					this._z = Math.atan2( - m12, m22 );
+
+				} else {
+
+					this._y = 0;
+					this._z = Math.atan2( m21, m11 );
+
+				}
+
+			} else if ( order === 'ZYX' ) {
+
+				this._y = Math.asin( - clamp( m31, - 1, 1 ) );
+
+				if ( Math.abs( m31 ) < 0.99999 ) {
+
+					this._x = Math.atan2( m32, m33 );
+					this._z = Math.atan2( m21, m11 );
+
+				} else {
+
+					this._x = 0;
+					this._z = Math.atan2( - m12, m22 );
+
+				}
+
+			} else if ( order === 'YZX' ) {
+
+				this._z = Math.asin( clamp( m21, - 1, 1 ) );
+
+				if ( Math.abs( m21 ) < 0.99999 ) {
+
+					this._x = Math.atan2( - m23, m22 );
+					this._y = Math.atan2( - m31, m11 );
+
+				} else {
+
+					this._x = 0;
+					this._y = Math.atan2( m13, m33 );
+
+				}
+
+			} else if ( order === 'XZY' ) {
+
+				this._z = Math.asin( - clamp( m12, - 1, 1 ) );
+
+				if ( Math.abs( m12 ) < 0.99999 ) {
+
+					this._x = Math.atan2( m32, m22 );
+					this._y = Math.atan2( m13, m11 );
+
+				} else {
+
+					this._x = Math.atan2( - m23, m33 );
+					this._y = 0;
+
+				}
+
+			} else {
+
+				console.warn( 'THREE.Euler: .setFromRotationMatrix() given unsupported order: ' + order )
+
+			}
+
+			this._order = order;
+
+			this.onChangeCallback();
+
+			return this;
+
+		},
+
+		setFromQuaternion: function ( q, order, update ) {
+
+			var clamp = THREE.Math.clamp;
+
+			// q is assumed to be normalized
+
+			// http://www.mathworks.com/matlabcentral/fileexchange/20696-function-to-convert-between-dcm-euler-angles-quaternions-and-euler-vectors/content/SpinCalc.m
+
+			var sqx = q.x * q.x;
+			var sqy = q.y * q.y;
+			var sqz = q.z * q.z;
+			var sqw = q.w * q.w;
+
+			order = order || this._order;
+
+			if ( order === 'XYZ' ) {
+
+				this._x = Math.atan2( 2 * ( q.x * q.w - q.y * q.z ), ( sqw - sqx - sqy + sqz ) );
+				this._y = Math.asin(  clamp( 2 * ( q.x * q.z + q.y * q.w ), - 1, 1 ) );
+				this._z = Math.atan2( 2 * ( q.z * q.w - q.x * q.y ), ( sqw + sqx - sqy - sqz ) );
+
+			} else if ( order ===  'YXZ' ) {
+
+				this._x = Math.asin(  clamp( 2 * ( q.x * q.w - q.y * q.z ), - 1, 1 ) );
+				this._y = Math.atan2( 2 * ( q.x * q.z + q.y * q.w ), ( sqw - sqx - sqy + sqz ) );
+				this._z = Math.atan2( 2 * ( q.x * q.y + q.z * q.w ), ( sqw - sqx + sqy - sqz ) );
+
+			} else if ( order === 'ZXY' ) {
+
+				this._x = Math.asin(  clamp( 2 * ( q.x * q.w + q.y * q.z ), - 1, 1 ) );
+				this._y = Math.atan2( 2 * ( q.y * q.w - q.z * q.x ), ( sqw - sqx - sqy + sqz ) );
+				this._z = Math.atan2( 2 * ( q.z * q.w - q.x * q.y ), ( sqw - sqx + sqy - sqz ) );
+
+			} else if ( order === 'ZYX' ) {
+
+				this._x = Math.atan2( 2 * ( q.x * q.w + q.z * q.y ), ( sqw - sqx - sqy + sqz ) );
+				this._y = Math.asin(  clamp( 2 * ( q.y * q.w - q.x * q.z ), - 1, 1 ) );
+				this._z = Math.atan2( 2 * ( q.x * q.y + q.z * q.w ), ( sqw + sqx - sqy - sqz ) );
+
+			} else if ( order === 'YZX' ) {
+
+				this._x = Math.atan2( 2 * ( q.x * q.w - q.z * q.y ), ( sqw - sqx + sqy - sqz ) );
+				this._y = Math.atan2( 2 * ( q.y * q.w - q.x * q.z ), ( sqw + sqx - sqy - sqz ) );
+				this._z = Math.asin(  clamp( 2 * ( q.x * q.y + q.z * q.w ), - 1, 1 ) );
+
+			} else if ( order === 'XZY' ) {
+
+				this._x = Math.atan2( 2 * ( q.x * q.w + q.y * q.z ), ( sqw - sqx + sqy - sqz ) );
+				this._y = Math.atan2( 2 * ( q.x * q.z + q.y * q.w ), ( sqw + sqx - sqy - sqz ) );
+				this._z = Math.asin(  clamp( 2 * ( q.z * q.w - q.x * q.y ), - 1, 1 ) );
+
+			} else {
+
+				console.warn( 'THREE.Euler: .setFromQuaternion() given unsupported order: ' + order )
+
+			}
+
+			this._order = order;
+
+			if ( update !== false ) this.onChangeCallback();
+
+			return this;
+
+		},
+
+		reorder: function () {
+
+			// WARNING: this discards revolution information -bhouston
+
+			var q = new THREE.Quaternion();
+
+			return function ( newOrder ) {
+
+				q.setFromEuler( this );
+				this.setFromQuaternion( q, newOrder );
+
+			};
+
+
+		}(),
+
+		equals: function ( euler ) {
+
+			return ( euler._x === this._x ) && ( euler._y === this._y ) && ( euler._z === this._z ) && ( euler._order === this._order );
+
+		},
+
+		fromArray: function ( array ) {
+
+			this._x = array[ 0 ];
+			this._y = array[ 1 ];
+			this._z = array[ 2 ];
+			if ( array[ 3 ] !== undefined ) this._order = array[ 3 ];
+
+			this.onChangeCallback();
+
+			return this;
+
+		},
+
+		toArray: function () {
+
+			return [ this._x, this._y, this._z, this._order ];
+
+		},
+
+		onChange: function ( callback ) {
+
+			this.onChangeCallback = callback;
+
+			return this;
+
+		},
+
+		onChangeCallback: function () {},
+
+		clone: function () {
+
+			return new THREE.Euler( this._x, this._y, this._z, this._order );
+
+		}
+
+	};
+
+	// File:src/math/Line3.js
+
+	/**
+	 * @author bhouston / http://exocortex.com
+	 */
+
+	THREE.Line3 = function ( start, end ) {
+
+		this.start = ( start !== undefined ) ? start : new THREE.Vector3();
+		this.end = ( end !== undefined ) ? end : new THREE.Vector3();
+
+	};
+
+	THREE.Line3.prototype = {
+
+		constructor: THREE.Line3,
+
+		set: function ( start, end ) {
+
+			this.start.copy( start );
+			this.end.copy( end );
+
+			return this;
+
+		},
+
+		copy: function ( line ) {
+
+			this.start.copy( line.start );
+			this.end.copy( line.end );
+
+			return this;
+
+		},
+
+		center: function ( optionalTarget ) {
+
+			var result = optionalTarget || new THREE.Vector3();
+			return result.addVectors( this.start, this.end ).multiplyScalar( 0.5 );
+
+		},
+
+		delta: function ( optionalTarget ) {
+
+			var result = optionalTarget || new THREE.Vector3();
+			return result.subVectors( this.end, this.start );
+
+		},
+
+		distanceSq: function () {
+
+			return this.start.distanceToSquared( this.end );
+
+		},
+
+		distance: function () {
+
+			return this.start.distanceTo( this.end );
+
+		},
+
+		at: function ( t, optionalTarget ) {
+
+			var result = optionalTarget || new THREE.Vector3();
+
+			return this.delta( result ).multiplyScalar( t ).add( this.start );
+
+		},
+
+		closestPointToPointParameter: function () {
+
+			var startP = new THREE.Vector3();
+			var startEnd = new THREE.Vector3();
+
+			return function ( point, clampToLine ) {
+
+				startP.subVectors( point, this.start );
+				startEnd.subVectors( this.end, this.start );
+
+				var startEnd2 = startEnd.dot( startEnd );
+				var startEnd_startP = startEnd.dot( startP );
+
+				var t = startEnd_startP / startEnd2;
+
+				if ( clampToLine ) {
+
+					t = THREE.Math.clamp( t, 0, 1 );
+
+				}
+
+				return t;
+
+			};
+
+		}(),
+
+		closestPointToPoint: function ( point, clampToLine, optionalTarget ) {
+
+			var t = this.closestPointToPointParameter( point, clampToLine );
+
+			var result = optionalTarget || new THREE.Vector3();
+
+			return this.delta( result ).multiplyScalar( t ).add( this.start );
+
+		},
+
+		applyMatrix4: function ( matrix ) {
+
+			this.start.applyMatrix4( matrix );
+			this.end.applyMatrix4( matrix );
+
+			return this;
+
+		},
+
+		equals: function ( line ) {
+
+			return line.start.equals( this.start ) && line.end.equals( this.end );
+
+		},
+
+		clone: function () {
+
+			return new THREE.Line3().copy( this );
+
+		}
+
+	};
+
+	// File:src/math/Box2.js
+
+	/**
+	 * @author bhouston / http://exocortex.com
+	 */
+
+	THREE.Box2 = function ( min, max ) {
+
+		this.min = ( min !== undefined ) ? min : new THREE.Vector2( Infinity, Infinity );
+		this.max = ( max !== undefined ) ? max : new THREE.Vector2( - Infinity, - Infinity );
+
+	};
+
+	THREE.Box2.prototype = {
+
+		constructor: THREE.Box2,
+
+		set: function ( min, max ) {
+
+			this.min.copy( min );
+			this.max.copy( max );
+
+			return this;
+
+		},
+
+		setFromPoints: function ( points ) {
+
+			this.makeEmpty();
+
+			for ( var i = 0, il = points.length; i < il; i ++ ) {
+
+				this.expandByPoint( points[ i ] )
+
+			}
+
+			return this;
+
+		},
+
+		setFromCenterAndSize: function () {
+
+			var v1 = new THREE.Vector2();
+
+			return function ( center, size ) {
+
+				var halfSize = v1.copy( size ).multiplyScalar( 0.5 );
+				this.min.copy( center ).sub( halfSize );
+				this.max.copy( center ).add( halfSize );
+
+				return this;
+
+			};
+
+		}(),
+
+		copy: function ( box ) {
+
+			this.min.copy( box.min );
+			this.max.copy( box.max );
+
+			return this;
+
+		},
+
+		makeEmpty: function () {
+
+			this.min.x = this.min.y = Infinity;
+			this.max.x = this.max.y = - Infinity;
+
+			return this;
+
+		},
+
+		empty: function () {
+
+			// this is a more robust check for empty than ( volume <= 0 ) because volume can get positive with two negative axes
+
+			return ( this.max.x < this.min.x ) || ( this.max.y < this.min.y );
+
+		},
+
+		center: function ( optionalTarget ) {
+
+			var result = optionalTarget || new THREE.Vector2();
+			return result.addVectors( this.min, this.max ).multiplyScalar( 0.5 );
+
+		},
+
+		size: function ( optionalTarget ) {
+
+			var result = optionalTarget || new THREE.Vector2();
+			return result.subVectors( this.max, this.min );
+
+		},
+
+		expandByPoint: function ( point ) {
+
+			this.min.min( point );
+			this.max.max( point );
+
+			return this;
+		},
+
+		expandByVector: function ( vector ) {
+
+			this.min.sub( vector );
+			this.max.add( vector );
+
+			return this;
+		},
+
+		expandByScalar: function ( scalar ) {
+
+			this.min.addScalar( - scalar );
+			this.max.addScalar( scalar );
+
+			return this;
+		},
+
+		containsPoint: function ( point ) {
+
+			if ( point.x < this.min.x || point.x > this.max.x ||
+			     point.y < this.min.y || point.y > this.max.y ) {
+
+				return false;
+
+			}
+
+			return true;
+
+		},
+
+		containsBox: function ( box ) {
+
+			if ( ( this.min.x <= box.min.x ) && ( box.max.x <= this.max.x ) &&
+			     ( this.min.y <= box.min.y ) && ( box.max.y <= this.max.y ) ) {
 
 				return true;
 
 			}
-		};
 
-	})();
+			return false;
 
+		},
 
-	// Include a performance.now polyfill
-	(function () {
-		// In node.js, use process.hrtime.
-		if (this.window === undefined && this.process !== undefined) {
-			TWEEN.now = function () {
-				var time = process.hrtime();
+		getParameter: function ( point, optionalTarget ) {
 
-				// Convert [seconds, microseconds] to milliseconds.
-				return time[0] * 1000 + time[1] / 1000;
-			};
-		}
-		// In a browser, use window.performance.now if it is available.
-		else if (this.window !== undefined &&
-		         window.performance !== undefined &&
-			 window.performance.now !== undefined) {
+			// This can potentially have a divide by zero if the box
+			// has a size dimension of 0.
 
-			// This must be bound, because directly assigning this function
-			// leads to an invocation exception in Chrome.
-			TWEEN.now = window.performance.now.bind(window.performance);
-		}
-		// Use Date.now if it is available.
-		else if (Date.now !== undefined) {
-			TWEEN.now = Date.now;
-		}
-		// Otherwise, use 'new Date().getTime()'.
-		else {
-			TWEEN.now = function () {
-				return new Date().getTime();
-			};
-		}
-	})();
+			var result = optionalTarget || new THREE.Vector2();
 
+			return result.set(
+				( point.x - this.min.x ) / ( this.max.x - this.min.x ),
+				( point.y - this.min.y ) / ( this.max.y - this.min.y )
+			);
 
-	TWEEN.Tween = function (object) {
+		},
 
-		var _object = object;
-		var _valuesStart = {};
-		var _valuesEnd = {};
-		var _valuesStartRepeat = {};
-		var _duration = 1000;
-		var _repeat = 0;
-		var _yoyo = false;
-		var _isPlaying = false;
-		var _reversed = false;
-		var _delayTime = 0;
-		var _startTime = null;
-		var _easingFunction = TWEEN.Easing.Linear.None;
-		var _interpolationFunction = TWEEN.Interpolation.Linear;
-		var _chainedTweens = [];
-		var _onStartCallback = null;
-		var _onStartCallbackFired = false;
-		var _onUpdateCallback = null;
-		var _onCompleteCallback = null;
-		var _onStopCallback = null;
+		isIntersectionBox: function ( box ) {
 
-		// Set all starting values present on the target object
-		for (var field in object) {
-			_valuesStart[field] = parseFloat(object[field], 10);
-		}
+			// using 6 splitting planes to rule out intersections.
 
-		this.to = function (properties, duration) {
+			if ( box.max.x < this.min.x || box.min.x > this.max.x ||
+			     box.max.y < this.min.y || box.min.y > this.max.y ) {
 
-			if (duration !== undefined) {
-				_duration = duration;
+				return false;
+
 			}
 
-			_valuesEnd = properties;
+			return true;
+
+		},
+
+		clampPoint: function ( point, optionalTarget ) {
+
+			var result = optionalTarget || new THREE.Vector2();
+			return result.copy( point ).clamp( this.min, this.max );
+
+		},
+
+		distanceToPoint: function () {
+
+			var v1 = new THREE.Vector2();
+
+			return function ( point ) {
+
+				var clampedPoint = v1.copy( point ).clamp( this.min, this.max );
+				return clampedPoint.sub( point ).length();
+
+			};
+
+		}(),
+
+		intersect: function ( box ) {
+
+			this.min.max( box.min );
+			this.max.min( box.max );
 
 			return this;
 
-		};
+		},
 
-		this.start = function (time) {
+		union: function ( box ) {
 
-			TWEEN.add(this);
+			this.min.min( box.min );
+			this.max.max( box.max );
 
-			_isPlaying = true;
+			return this;
 
-			_onStartCallbackFired = false;
+		},
 
-			_startTime = time !== undefined ? time : TWEEN.now();
-			_startTime += _delayTime;
+		translate: function ( offset ) {
 
-			for (var property in _valuesEnd) {
+			this.min.add( offset );
+			this.max.add( offset );
 
-				// Check if an Array was provided as property value
-				if (_valuesEnd[property] instanceof Array) {
+			return this;
 
-					if (_valuesEnd[property].length === 0) {
-						continue;
+		},
+
+		equals: function ( box ) {
+
+			return box.min.equals( this.min ) && box.max.equals( this.max );
+
+		},
+
+		clone: function () {
+
+			return new THREE.Box2().copy( this );
+
+		}
+
+	};
+
+	// File:src/math/Box3.js
+
+	/**
+	 * @author bhouston / http://exocortex.com
+	 * @author WestLangley / http://github.com/WestLangley
+	 */
+
+	THREE.Box3 = function ( min, max ) {
+
+		this.min = ( min !== undefined ) ? min : new THREE.Vector3( Infinity, Infinity, Infinity );
+		this.max = ( max !== undefined ) ? max : new THREE.Vector3( - Infinity, - Infinity, - Infinity );
+
+	};
+
+	THREE.Box3.prototype = {
+
+		constructor: THREE.Box3,
+
+		set: function ( min, max ) {
+
+			this.min.copy( min );
+			this.max.copy( max );
+
+			return this;
+
+		},
+
+		setFromPoints: function ( points ) {
+
+			this.makeEmpty();
+
+			for ( var i = 0, il = points.length; i < il; i ++ ) {
+
+				this.expandByPoint( points[ i ] )
+
+			}
+
+			return this;
+
+		},
+
+		setFromCenterAndSize: function () {
+
+			var v1 = new THREE.Vector3();
+
+			return function ( center, size ) {
+
+				var halfSize = v1.copy( size ).multiplyScalar( 0.5 );
+
+				this.min.copy( center ).sub( halfSize );
+				this.max.copy( center ).add( halfSize );
+
+				return this;
+
+			};
+
+		}(),
+
+		setFromObject: function () {
+
+			// Computes the world-axis-aligned bounding box of an object (including its children),
+			// accounting for both the object's, and childrens', world transforms
+
+			var v1 = new THREE.Vector3();
+
+			return function ( object ) {
+
+				var scope = this;
+
+				object.updateMatrixWorld( true );
+
+				this.makeEmpty();
+
+				object.traverse( function ( node ) {
+
+					var geometry = node.geometry;
+
+					if ( geometry !== undefined ) {
+
+						if ( geometry instanceof THREE.Geometry ) {
+
+							var vertices = geometry.vertices;
+
+							for ( var i = 0, il = vertices.length; i < il; i ++ ) {
+
+								v1.copy( vertices[ i ] );
+
+								v1.applyMatrix4( node.matrixWorld );
+
+								scope.expandByPoint( v1 );
+
+							}
+
+						} else if ( geometry instanceof THREE.BufferGeometry && geometry.attributes[ 'position' ] !== undefined ) {
+
+							var positions = geometry.attributes[ 'position' ].array;
+
+							for ( var i = 0, il = positions.length; i < il; i += 3 ) {
+
+								v1.set( positions[ i ], positions[ i + 1 ], positions[ i + 2 ] );
+
+								v1.applyMatrix4( node.matrixWorld );
+
+								scope.expandByPoint( v1 );
+
+							}
+
+						}
+
 					}
 
-					// Create a local copy of the Array with the start value at the front
-					_valuesEnd[property] = [_object[property]].concat(_valuesEnd[property]);
+				} );
 
-				}
+				return this;
 
-				// If `to()` specifies a property that doesn't exist in the source object,
-				// we should not set that property in the object
-				if (_valuesStart[property] === undefined) {
-					continue;
-				}
+			};
 
-				_valuesStart[property] = _object[property];
+		}(),
 
-				if ((_valuesStart[property] instanceof Array) === false) {
-					_valuesStart[property] *= 1.0; // Ensures we're using numbers, not strings
-				}
+		copy: function ( box ) {
 
-				_valuesStartRepeat[property] = _valuesStart[property] || 0;
-
-			}
+			this.min.copy( box.min );
+			this.max.copy( box.max );
 
 			return this;
 
-		};
+		},
 
-		this.stop = function () {
+		makeEmpty: function () {
 
-			if (!_isPlaying) {
+			this.min.x = this.min.y = this.min.z = Infinity;
+			this.max.x = this.max.y = this.max.z = - Infinity;
+
+			return this;
+
+		},
+
+		empty: function () {
+
+			// this is a more robust check for empty than ( volume <= 0 ) because volume can get positive with two negative axes
+
+			return ( this.max.x < this.min.x ) || ( this.max.y < this.min.y ) || ( this.max.z < this.min.z );
+
+		},
+
+		center: function ( optionalTarget ) {
+
+			var result = optionalTarget || new THREE.Vector3();
+			return result.addVectors( this.min, this.max ).multiplyScalar( 0.5 );
+
+		},
+
+		size: function ( optionalTarget ) {
+
+			var result = optionalTarget || new THREE.Vector3();
+			return result.subVectors( this.max, this.min );
+
+		},
+
+		expandByPoint: function ( point ) {
+
+			this.min.min( point );
+			this.max.max( point );
+
+			return this;
+
+		},
+
+		expandByVector: function ( vector ) {
+
+			this.min.sub( vector );
+			this.max.add( vector );
+
+			return this;
+
+		},
+
+		expandByScalar: function ( scalar ) {
+
+			this.min.addScalar( - scalar );
+			this.max.addScalar( scalar );
+
+			return this;
+
+		},
+
+		containsPoint: function ( point ) {
+
+			if ( point.x < this.min.x || point.x > this.max.x ||
+			     point.y < this.min.y || point.y > this.max.y ||
+			     point.z < this.min.z || point.z > this.max.z ) {
+
+				return false;
+
+			}
+
+			return true;
+
+		},
+
+		containsBox: function ( box ) {
+
+			if ( ( this.min.x <= box.min.x ) && ( box.max.x <= this.max.x ) &&
+				 ( this.min.y <= box.min.y ) && ( box.max.y <= this.max.y ) &&
+				 ( this.min.z <= box.min.z ) && ( box.max.z <= this.max.z ) ) {
+
+				return true;
+
+			}
+
+			return false;
+
+		},
+
+		getParameter: function ( point, optionalTarget ) {
+
+			// This can potentially have a divide by zero if the box
+			// has a size dimension of 0.
+
+			var result = optionalTarget || new THREE.Vector3();
+
+			return result.set(
+				( point.x - this.min.x ) / ( this.max.x - this.min.x ),
+				( point.y - this.min.y ) / ( this.max.y - this.min.y ),
+				( point.z - this.min.z ) / ( this.max.z - this.min.z )
+			);
+
+		},
+
+		isIntersectionBox: function ( box ) {
+
+			// using 6 splitting planes to rule out intersections.
+
+			if ( box.max.x < this.min.x || box.min.x > this.max.x ||
+			     box.max.y < this.min.y || box.min.y > this.max.y ||
+			     box.max.z < this.min.z || box.min.z > this.max.z ) {
+
+				return false;
+
+			}
+
+			return true;
+
+		},
+
+		clampPoint: function ( point, optionalTarget ) {
+
+			var result = optionalTarget || new THREE.Vector3();
+			return result.copy( point ).clamp( this.min, this.max );
+
+		},
+
+		distanceToPoint: function () {
+
+			var v1 = new THREE.Vector3();
+
+			return function ( point ) {
+
+				var clampedPoint = v1.copy( point ).clamp( this.min, this.max );
+				return clampedPoint.sub( point ).length();
+
+			};
+
+		}(),
+
+		getBoundingSphere: function () {
+
+			var v1 = new THREE.Vector3();
+
+			return function ( optionalTarget ) {
+
+				var result = optionalTarget || new THREE.Sphere();
+
+				result.center = this.center();
+				result.radius = this.size( v1 ).length() * 0.5;
+
+				return result;
+
+			};
+
+		}(),
+
+		intersect: function ( box ) {
+
+			this.min.max( box.min );
+			this.max.min( box.max );
+
+			return this;
+
+		},
+
+		union: function ( box ) {
+
+			this.min.min( box.min );
+			this.max.max( box.max );
+
+			return this;
+
+		},
+
+		applyMatrix4: function () {
+
+			var points = [
+				new THREE.Vector3(),
+				new THREE.Vector3(),
+				new THREE.Vector3(),
+				new THREE.Vector3(),
+				new THREE.Vector3(),
+				new THREE.Vector3(),
+				new THREE.Vector3(),
+				new THREE.Vector3()
+			];
+
+			return function ( matrix ) {
+
+				// NOTE: I am using a binary pattern to specify all 2^3 combinations below
+				points[ 0 ].set( this.min.x, this.min.y, this.min.z ).applyMatrix4( matrix ); // 000
+				points[ 1 ].set( this.min.x, this.min.y, this.max.z ).applyMatrix4( matrix ); // 001
+				points[ 2 ].set( this.min.x, this.max.y, this.min.z ).applyMatrix4( matrix ); // 010
+				points[ 3 ].set( this.min.x, this.max.y, this.max.z ).applyMatrix4( matrix ); // 011
+				points[ 4 ].set( this.max.x, this.min.y, this.min.z ).applyMatrix4( matrix ); // 100
+				points[ 5 ].set( this.max.x, this.min.y, this.max.z ).applyMatrix4( matrix ); // 101
+				points[ 6 ].set( this.max.x, this.max.y, this.min.z ).applyMatrix4( matrix ); // 110
+				points[ 7 ].set( this.max.x, this.max.y, this.max.z ).applyMatrix4( matrix );  // 111
+
+				this.makeEmpty();
+				this.setFromPoints( points );
+
+				return this;
+
+			};
+
+		}(),
+
+		translate: function ( offset ) {
+
+			this.min.add( offset );
+			this.max.add( offset );
+
+			return this;
+
+		},
+
+		equals: function ( box ) {
+
+			return box.min.equals( this.min ) && box.max.equals( this.max );
+
+		},
+
+		clone: function () {
+
+			return new THREE.Box3().copy( this );
+
+		}
+
+	};
+
+	// File:src/math/Matrix3.js
+
+	/**
+	 * @author alteredq / http://alteredqualia.com/
+	 * @author WestLangley / http://github.com/WestLangley
+	 * @author bhouston / http://exocortex.com
+	 */
+
+	THREE.Matrix3 = function () {
+
+		this.elements = new Float32Array( [
+
+			1, 0, 0,
+			0, 1, 0,
+			0, 0, 1
+
+		] );
+
+		if ( arguments.length > 0 ) {
+
+			console.error( 'THREE.Matrix3: the constructor no longer reads arguments. use .set() instead.' );
+
+		}
+
+	};
+
+	THREE.Matrix3.prototype = {
+
+		constructor: THREE.Matrix3,
+
+		set: function ( n11, n12, n13, n21, n22, n23, n31, n32, n33 ) {
+
+			var te = this.elements;
+
+			te[ 0 ] = n11; te[ 3 ] = n12; te[ 6 ] = n13;
+			te[ 1 ] = n21; te[ 4 ] = n22; te[ 7 ] = n23;
+			te[ 2 ] = n31; te[ 5 ] = n32; te[ 8 ] = n33;
+
+			return this;
+
+		},
+
+		identity: function () {
+
+			this.set(
+
+				1, 0, 0,
+				0, 1, 0,
+				0, 0, 1
+
+			);
+
+			return this;
+
+		},
+
+		copy: function ( m ) {
+
+			var me = m.elements;
+
+			this.set(
+
+				me[ 0 ], me[ 3 ], me[ 6 ],
+				me[ 1 ], me[ 4 ], me[ 7 ],
+				me[ 2 ], me[ 5 ], me[ 8 ]
+
+			);
+
+			return this;
+
+		},
+
+		multiplyVector3: function ( vector ) {
+
+			console.warn( 'THREE.Matrix3: .multiplyVector3() has been removed. Use vector.applyMatrix3( matrix ) instead.' );
+			return vector.applyMatrix3( this );
+
+		},
+
+		multiplyVector3Array: function ( a ) {
+
+			console.warn( 'THREE.Matrix3: .multiplyVector3Array() has been renamed. Use matrix.applyToVector3Array( array ) instead.' );
+			return this.applyToVector3Array( a );
+
+		},
+
+		applyToVector3Array: function () {
+
+			var v1 = new THREE.Vector3();
+
+			return function ( array, offset, length ) {
+
+				if ( offset === undefined ) offset = 0;
+				if ( length === undefined ) length = array.length;
+
+				for ( var i = 0, j = offset, il; i < length; i += 3, j += 3 ) {
+
+					v1.x = array[ j ];
+					v1.y = array[ j + 1 ];
+					v1.z = array[ j + 2 ];
+
+					v1.applyMatrix3( this );
+
+					array[ j ]     = v1.x;
+					array[ j + 1 ] = v1.y;
+					array[ j + 2 ] = v1.z;
+
+				}
+
+				return array;
+
+			};
+
+		}(),
+
+		multiplyScalar: function ( s ) {
+
+			var te = this.elements;
+
+			te[ 0 ] *= s; te[ 3 ] *= s; te[ 6 ] *= s;
+			te[ 1 ] *= s; te[ 4 ] *= s; te[ 7 ] *= s;
+			te[ 2 ] *= s; te[ 5 ] *= s; te[ 8 ] *= s;
+
+			return this;
+
+		},
+
+		determinant: function () {
+
+			var te = this.elements;
+
+			var a = te[ 0 ], b = te[ 1 ], c = te[ 2 ],
+				d = te[ 3 ], e = te[ 4 ], f = te[ 5 ],
+				g = te[ 6 ], h = te[ 7 ], i = te[ 8 ];
+
+			return a * e * i - a * f * h - b * d * i + b * f * g + c * d * h - c * e * g;
+
+		},
+
+		getInverse: function ( matrix, throwOnInvertible ) {
+
+			// input: THREE.Matrix4
+			// ( based on http://code.google.com/p/webgl-mjs/ )
+
+			var me = matrix.elements;
+			var te = this.elements;
+
+			te[ 0 ] =   me[ 10 ] * me[ 5 ] - me[ 6 ] * me[ 9 ];
+			te[ 1 ] = - me[ 10 ] * me[ 1 ] + me[ 2 ] * me[ 9 ];
+			te[ 2 ] =   me[ 6 ] * me[ 1 ] - me[ 2 ] * me[ 5 ];
+			te[ 3 ] = - me[ 10 ] * me[ 4 ] + me[ 6 ] * me[ 8 ];
+			te[ 4 ] =   me[ 10 ] * me[ 0 ] - me[ 2 ] * me[ 8 ];
+			te[ 5 ] = - me[ 6 ] * me[ 0 ] + me[ 2 ] * me[ 4 ];
+			te[ 6 ] =   me[ 9 ] * me[ 4 ] - me[ 5 ] * me[ 8 ];
+			te[ 7 ] = - me[ 9 ] * me[ 0 ] + me[ 1 ] * me[ 8 ];
+			te[ 8 ] =   me[ 5 ] * me[ 0 ] - me[ 1 ] * me[ 4 ];
+
+			var det = me[ 0 ] * te[ 0 ] + me[ 1 ] * te[ 3 ] + me[ 2 ] * te[ 6 ];
+
+			// no inverse
+
+			if ( det === 0 ) {
+
+				var msg = "Matrix3.getInverse(): can't invert matrix, determinant is 0";
+
+				if ( throwOnInvertible || false ) {
+
+					throw new Error( msg );
+
+				} else {
+
+					console.warn( msg );
+
+				}
+
+				this.identity();
+
+				return this;
+
+			}
+
+			this.multiplyScalar( 1.0 / det );
+
+			return this;
+
+		},
+
+		transpose: function () {
+
+			var tmp, m = this.elements;
+
+			tmp = m[ 1 ]; m[ 1 ] = m[ 3 ]; m[ 3 ] = tmp;
+			tmp = m[ 2 ]; m[ 2 ] = m[ 6 ]; m[ 6 ] = tmp;
+			tmp = m[ 5 ]; m[ 5 ] = m[ 7 ]; m[ 7 ] = tmp;
+
+			return this;
+
+		},
+
+		flattenToArrayOffset: function ( array, offset ) {
+
+			var te = this.elements;
+
+			array[ offset     ] = te[ 0 ];
+			array[ offset + 1 ] = te[ 1 ];
+			array[ offset + 2 ] = te[ 2 ];
+
+			array[ offset + 3 ] = te[ 3 ];
+			array[ offset + 4 ] = te[ 4 ];
+			array[ offset + 5 ] = te[ 5 ];
+
+			array[ offset + 6 ] = te[ 6 ];
+			array[ offset + 7 ] = te[ 7 ];
+			array[ offset + 8 ]  = te[ 8 ];
+
+			return array;
+
+		},
+
+		getNormalMatrix: function ( m ) {
+
+			// input: THREE.Matrix4
+
+			this.getInverse( m ).transpose();
+
+			return this;
+
+		},
+
+		transposeIntoArray: function ( r ) {
+
+			var m = this.elements;
+
+			r[ 0 ] = m[ 0 ];
+			r[ 1 ] = m[ 3 ];
+			r[ 2 ] = m[ 6 ];
+			r[ 3 ] = m[ 1 ];
+			r[ 4 ] = m[ 4 ];
+			r[ 5 ] = m[ 7 ];
+			r[ 6 ] = m[ 2 ];
+			r[ 7 ] = m[ 5 ];
+			r[ 8 ] = m[ 8 ];
+
+			return this;
+
+		},
+
+		fromArray: function ( array ) {
+
+			this.elements.set( array );
+
+			return this;
+
+		},
+
+		toArray: function () {
+
+			var te = this.elements;
+
+			return [
+				te[ 0 ], te[ 1 ], te[ 2 ],
+				te[ 3 ], te[ 4 ], te[ 5 ],
+				te[ 6 ], te[ 7 ], te[ 8 ]
+			];
+
+		},
+
+		clone: function () {
+
+			return new THREE.Matrix3().fromArray( this.elements );
+
+		}
+
+	};
+
+	// File:src/math/Matrix4.js
+
+	/**
+	 * @author mrdoob / http://mrdoob.com/
+	 * @author supereggbert / http://www.paulbrunt.co.uk/
+	 * @author philogb / http://blog.thejit.org/
+	 * @author jordi_ros / http://plattsoft.com
+	 * @author D1plo1d / http://github.com/D1plo1d
+	 * @author alteredq / http://alteredqualia.com/
+	 * @author mikael emtinger / http://gomo.se/
+	 * @author timknip / http://www.floorplanner.com/
+	 * @author bhouston / http://exocortex.com
+	 * @author WestLangley / http://github.com/WestLangley
+	 */
+
+	THREE.Matrix4 = function () {
+
+		this.elements = new Float32Array( [
+
+			1, 0, 0, 0,
+			0, 1, 0, 0,
+			0, 0, 1, 0,
+			0, 0, 0, 1
+
+		] );
+
+		if ( arguments.length > 0 ) {
+
+			console.error( 'THREE.Matrix4: the constructor no longer reads arguments. use .set() instead.' );
+
+		}
+
+	};
+
+	THREE.Matrix4.prototype = {
+
+		constructor: THREE.Matrix4,
+
+		set: function ( n11, n12, n13, n14, n21, n22, n23, n24, n31, n32, n33, n34, n41, n42, n43, n44 ) {
+
+			var te = this.elements;
+
+			te[ 0 ] = n11; te[ 4 ] = n12; te[ 8 ] = n13; te[ 12 ] = n14;
+			te[ 1 ] = n21; te[ 5 ] = n22; te[ 9 ] = n23; te[ 13 ] = n24;
+			te[ 2 ] = n31; te[ 6 ] = n32; te[ 10 ] = n33; te[ 14 ] = n34;
+			te[ 3 ] = n41; te[ 7 ] = n42; te[ 11 ] = n43; te[ 15 ] = n44;
+
+			return this;
+
+		},
+
+		identity: function () {
+
+			this.set(
+
+				1, 0, 0, 0,
+				0, 1, 0, 0,
+				0, 0, 1, 0,
+				0, 0, 0, 1
+
+			);
+
+			return this;
+
+		},
+
+		copy: function ( m ) {
+
+			this.elements.set( m.elements );
+
+			return this;
+
+		},
+
+		extractPosition: function ( m ) {
+
+			console.warn( 'THREE.Matrix4: .extractPosition() has been renamed to .copyPosition().' );
+			return this.copyPosition( m );
+
+		},
+
+		copyPosition: function ( m ) {
+
+			var te = this.elements;
+			var me = m.elements;
+
+			te[ 12 ] = me[ 12 ];
+			te[ 13 ] = me[ 13 ];
+			te[ 14 ] = me[ 14 ];
+
+			return this;
+
+		},
+
+		extractRotation: function () {
+
+			var v1 = new THREE.Vector3();
+
+			return function ( m ) {
+
+				var te = this.elements;
+				var me = m.elements;
+
+				var scaleX = 1 / v1.set( me[ 0 ], me[ 1 ], me[ 2 ] ).length();
+				var scaleY = 1 / v1.set( me[ 4 ], me[ 5 ], me[ 6 ] ).length();
+				var scaleZ = 1 / v1.set( me[ 8 ], me[ 9 ], me[ 10 ] ).length();
+
+				te[ 0 ] = me[ 0 ] * scaleX;
+				te[ 1 ] = me[ 1 ] * scaleX;
+				te[ 2 ] = me[ 2 ] * scaleX;
+
+				te[ 4 ] = me[ 4 ] * scaleY;
+				te[ 5 ] = me[ 5 ] * scaleY;
+				te[ 6 ] = me[ 6 ] * scaleY;
+
+				te[ 8 ] = me[ 8 ] * scaleZ;
+				te[ 9 ] = me[ 9 ] * scaleZ;
+				te[ 10 ] = me[ 10 ] * scaleZ;
+
+				return this;
+
+			};
+
+		}(),
+
+		makeRotationFromEuler: function ( euler ) {
+
+			if ( euler instanceof THREE.Euler === false ) {
+
+				console.error( 'THREE.Matrix: .makeRotationFromEuler() now expects a Euler rotation rather than a Vector3 and order.' );
+
+			}
+
+			var te = this.elements;
+
+			var x = euler.x, y = euler.y, z = euler.z;
+			var a = Math.cos( x ), b = Math.sin( x );
+			var c = Math.cos( y ), d = Math.sin( y );
+			var e = Math.cos( z ), f = Math.sin( z );
+
+			if ( euler.order === 'XYZ' ) {
+
+				var ae = a * e, af = a * f, be = b * e, bf = b * f;
+
+				te[ 0 ] = c * e;
+				te[ 4 ] = - c * f;
+				te[ 8 ] = d;
+
+				te[ 1 ] = af + be * d;
+				te[ 5 ] = ae - bf * d;
+				te[ 9 ] = - b * c;
+
+				te[ 2 ] = bf - ae * d;
+				te[ 6 ] = be + af * d;
+				te[ 10 ] = a * c;
+
+			} else if ( euler.order === 'YXZ' ) {
+
+				var ce = c * e, cf = c * f, de = d * e, df = d * f;
+
+				te[ 0 ] = ce + df * b;
+				te[ 4 ] = de * b - cf;
+				te[ 8 ] = a * d;
+
+				te[ 1 ] = a * f;
+				te[ 5 ] = a * e;
+				te[ 9 ] = - b;
+
+				te[ 2 ] = cf * b - de;
+				te[ 6 ] = df + ce * b;
+				te[ 10 ] = a * c;
+
+			} else if ( euler.order === 'ZXY' ) {
+
+				var ce = c * e, cf = c * f, de = d * e, df = d * f;
+
+				te[ 0 ] = ce - df * b;
+				te[ 4 ] = - a * f;
+				te[ 8 ] = de + cf * b;
+
+				te[ 1 ] = cf + de * b;
+				te[ 5 ] = a * e;
+				te[ 9 ] = df - ce * b;
+
+				te[ 2 ] = - a * d;
+				te[ 6 ] = b;
+				te[ 10 ] = a * c;
+
+			} else if ( euler.order === 'ZYX' ) {
+
+				var ae = a * e, af = a * f, be = b * e, bf = b * f;
+
+				te[ 0 ] = c * e;
+				te[ 4 ] = be * d - af;
+				te[ 8 ] = ae * d + bf;
+
+				te[ 1 ] = c * f;
+				te[ 5 ] = bf * d + ae;
+				te[ 9 ] = af * d - be;
+
+				te[ 2 ] = - d;
+				te[ 6 ] = b * c;
+				te[ 10 ] = a * c;
+
+			} else if ( euler.order === 'YZX' ) {
+
+				var ac = a * c, ad = a * d, bc = b * c, bd = b * d;
+
+				te[ 0 ] = c * e;
+				te[ 4 ] = bd - ac * f;
+				te[ 8 ] = bc * f + ad;
+
+				te[ 1 ] = f;
+				te[ 5 ] = a * e;
+				te[ 9 ] = - b * e;
+
+				te[ 2 ] = - d * e;
+				te[ 6 ] = ad * f + bc;
+				te[ 10 ] = ac - bd * f;
+
+			} else if ( euler.order === 'XZY' ) {
+
+				var ac = a * c, ad = a * d, bc = b * c, bd = b * d;
+
+				te[ 0 ] = c * e;
+				te[ 4 ] = - f;
+				te[ 8 ] = d * e;
+
+				te[ 1 ] = ac * f + bd;
+				te[ 5 ] = a * e;
+				te[ 9 ] = ad * f - bc;
+
+				te[ 2 ] = bc * f - ad;
+				te[ 6 ] = b * e;
+				te[ 10 ] = bd * f + ac;
+
+			}
+
+			// last column
+			te[ 3 ] = 0;
+			te[ 7 ] = 0;
+			te[ 11 ] = 0;
+
+			// bottom row
+			te[ 12 ] = 0;
+			te[ 13 ] = 0;
+			te[ 14 ] = 0;
+			te[ 15 ] = 1;
+
+			return this;
+
+		},
+
+		setRotationFromQuaternion: function ( q ) {
+
+			console.warn( 'THREE.Matrix4: .setRotationFromQuaternion() has been renamed to .makeRotationFromQuaternion().' );
+
+			return this.makeRotationFromQuaternion( q );
+
+		},
+
+		makeRotationFromQuaternion: function ( q ) {
+
+			var te = this.elements;
+
+			var x = q.x, y = q.y, z = q.z, w = q.w;
+			var x2 = x + x, y2 = y + y, z2 = z + z;
+			var xx = x * x2, xy = x * y2, xz = x * z2;
+			var yy = y * y2, yz = y * z2, zz = z * z2;
+			var wx = w * x2, wy = w * y2, wz = w * z2;
+
+			te[ 0 ] = 1 - ( yy + zz );
+			te[ 4 ] = xy - wz;
+			te[ 8 ] = xz + wy;
+
+			te[ 1 ] = xy + wz;
+			te[ 5 ] = 1 - ( xx + zz );
+			te[ 9 ] = yz - wx;
+
+			te[ 2 ] = xz - wy;
+			te[ 6 ] = yz + wx;
+			te[ 10 ] = 1 - ( xx + yy );
+
+			// last column
+			te[ 3 ] = 0;
+			te[ 7 ] = 0;
+			te[ 11 ] = 0;
+
+			// bottom row
+			te[ 12 ] = 0;
+			te[ 13 ] = 0;
+			te[ 14 ] = 0;
+			te[ 15 ] = 1;
+
+			return this;
+
+		},
+
+		lookAt: function () {
+
+			var x = new THREE.Vector3();
+			var y = new THREE.Vector3();
+			var z = new THREE.Vector3();
+
+			return function ( eye, target, up ) {
+
+				var te = this.elements;
+
+				z.subVectors( eye, target ).normalize();
+
+				if ( z.length() === 0 ) {
+
+					z.z = 1;
+
+				}
+
+				x.crossVectors( up, z ).normalize();
+
+				if ( x.length() === 0 ) {
+
+					z.x += 0.0001;
+					x.crossVectors( up, z ).normalize();
+
+				}
+
+				y.crossVectors( z, x );
+
+
+				te[ 0 ] = x.x; te[ 4 ] = y.x; te[ 8 ] = z.x;
+				te[ 1 ] = x.y; te[ 5 ] = y.y; te[ 9 ] = z.y;
+				te[ 2 ] = x.z; te[ 6 ] = y.z; te[ 10 ] = z.z;
+
+				return this;
+
+			};
+
+		}(),
+
+		multiply: function ( m, n ) {
+
+			if ( n !== undefined ) {
+
+				console.warn( 'THREE.Matrix4: .multiply() now only accepts one argument. Use .multiplyMatrices( a, b ) instead.' );
+				return this.multiplyMatrices( m, n );
+
+			}
+
+			return this.multiplyMatrices( this, m );
+
+		},
+
+		multiplyMatrices: function ( a, b ) {
+
+			var ae = a.elements;
+			var be = b.elements;
+			var te = this.elements;
+
+			var a11 = ae[ 0 ], a12 = ae[ 4 ], a13 = ae[ 8 ], a14 = ae[ 12 ];
+			var a21 = ae[ 1 ], a22 = ae[ 5 ], a23 = ae[ 9 ], a24 = ae[ 13 ];
+			var a31 = ae[ 2 ], a32 = ae[ 6 ], a33 = ae[ 10 ], a34 = ae[ 14 ];
+			var a41 = ae[ 3 ], a42 = ae[ 7 ], a43 = ae[ 11 ], a44 = ae[ 15 ];
+
+			var b11 = be[ 0 ], b12 = be[ 4 ], b13 = be[ 8 ], b14 = be[ 12 ];
+			var b21 = be[ 1 ], b22 = be[ 5 ], b23 = be[ 9 ], b24 = be[ 13 ];
+			var b31 = be[ 2 ], b32 = be[ 6 ], b33 = be[ 10 ], b34 = be[ 14 ];
+			var b41 = be[ 3 ], b42 = be[ 7 ], b43 = be[ 11 ], b44 = be[ 15 ];
+
+			te[ 0 ] = a11 * b11 + a12 * b21 + a13 * b31 + a14 * b41;
+			te[ 4 ] = a11 * b12 + a12 * b22 + a13 * b32 + a14 * b42;
+			te[ 8 ] = a11 * b13 + a12 * b23 + a13 * b33 + a14 * b43;
+			te[ 12 ] = a11 * b14 + a12 * b24 + a13 * b34 + a14 * b44;
+
+			te[ 1 ] = a21 * b11 + a22 * b21 + a23 * b31 + a24 * b41;
+			te[ 5 ] = a21 * b12 + a22 * b22 + a23 * b32 + a24 * b42;
+			te[ 9 ] = a21 * b13 + a22 * b23 + a23 * b33 + a24 * b43;
+			te[ 13 ] = a21 * b14 + a22 * b24 + a23 * b34 + a24 * b44;
+
+			te[ 2 ] = a31 * b11 + a32 * b21 + a33 * b31 + a34 * b41;
+			te[ 6 ] = a31 * b12 + a32 * b22 + a33 * b32 + a34 * b42;
+			te[ 10 ] = a31 * b13 + a32 * b23 + a33 * b33 + a34 * b43;
+			te[ 14 ] = a31 * b14 + a32 * b24 + a33 * b34 + a34 * b44;
+
+			te[ 3 ] = a41 * b11 + a42 * b21 + a43 * b31 + a44 * b41;
+			te[ 7 ] = a41 * b12 + a42 * b22 + a43 * b32 + a44 * b42;
+			te[ 11 ] = a41 * b13 + a42 * b23 + a43 * b33 + a44 * b43;
+			te[ 15 ] = a41 * b14 + a42 * b24 + a43 * b34 + a44 * b44;
+
+			return this;
+
+		},
+
+		multiplyToArray: function ( a, b, r ) {
+
+			var te = this.elements;
+
+			this.multiplyMatrices( a, b );
+
+			r[ 0 ] = te[ 0 ]; r[ 1 ] = te[ 1 ]; r[ 2 ] = te[ 2 ]; r[ 3 ] = te[ 3 ];
+			r[ 4 ] = te[ 4 ]; r[ 5 ] = te[ 5 ]; r[ 6 ] = te[ 6 ]; r[ 7 ] = te[ 7 ];
+			r[ 8 ]  = te[ 8 ]; r[ 9 ]  = te[ 9 ]; r[ 10 ] = te[ 10 ]; r[ 11 ] = te[ 11 ];
+			r[ 12 ] = te[ 12 ]; r[ 13 ] = te[ 13 ]; r[ 14 ] = te[ 14 ]; r[ 15 ] = te[ 15 ];
+
+			return this;
+
+		},
+
+		multiplyScalar: function ( s ) {
+
+			var te = this.elements;
+
+			te[ 0 ] *= s; te[ 4 ] *= s; te[ 8 ] *= s; te[ 12 ] *= s;
+			te[ 1 ] *= s; te[ 5 ] *= s; te[ 9 ] *= s; te[ 13 ] *= s;
+			te[ 2 ] *= s; te[ 6 ] *= s; te[ 10 ] *= s; te[ 14 ] *= s;
+			te[ 3 ] *= s; te[ 7 ] *= s; te[ 11 ] *= s; te[ 15 ] *= s;
+
+			return this;
+
+		},
+
+		multiplyVector3: function ( vector ) {
+
+			console.warn( 'THREE.Matrix4: .multiplyVector3() has been removed. Use vector.applyMatrix4( matrix ) or vector.applyProjection( matrix ) instead.' );
+			return vector.applyProjection( this );
+
+		},
+
+		multiplyVector4: function ( vector ) {
+
+			console.warn( 'THREE.Matrix4: .multiplyVector4() has been removed. Use vector.applyMatrix4( matrix ) instead.' );
+			return vector.applyMatrix4( this );
+
+		},
+
+		multiplyVector3Array: function ( a ) {
+
+			console.warn( 'THREE.Matrix4: .multiplyVector3Array() has been renamed. Use matrix.applyToVector3Array( array ) instead.' );
+			return this.applyToVector3Array( a );
+
+		},
+
+		applyToVector3Array: function () {
+
+			var v1 = new THREE.Vector3();
+
+			return function ( array, offset, length ) {
+
+				if ( offset === undefined ) offset = 0;
+				if ( length === undefined ) length = array.length;
+
+				for ( var i = 0, j = offset, il; i < length; i += 3, j += 3 ) {
+
+					v1.x = array[ j ];
+					v1.y = array[ j + 1 ];
+					v1.z = array[ j + 2 ];
+
+					v1.applyMatrix4( this );
+
+					array[ j ]     = v1.x;
+					array[ j + 1 ] = v1.y;
+					array[ j + 2 ] = v1.z;
+
+				}
+
+				return array;
+
+			};
+
+		}(),
+
+		rotateAxis: function ( v ) {
+
+			console.warn( 'THREE.Matrix4: .rotateAxis() has been removed. Use Vector3.transformDirection( matrix ) instead.' );
+
+			v.transformDirection( this );
+
+		},
+
+		crossVector: function ( vector ) {
+
+			console.warn( 'THREE.Matrix4: .crossVector() has been removed. Use vector.applyMatrix4( matrix ) instead.' );
+			return vector.applyMatrix4( this );
+
+		},
+
+		determinant: function () {
+
+			var te = this.elements;
+
+			var n11 = te[ 0 ], n12 = te[ 4 ], n13 = te[ 8 ], n14 = te[ 12 ];
+			var n21 = te[ 1 ], n22 = te[ 5 ], n23 = te[ 9 ], n24 = te[ 13 ];
+			var n31 = te[ 2 ], n32 = te[ 6 ], n33 = te[ 10 ], n34 = te[ 14 ];
+			var n41 = te[ 3 ], n42 = te[ 7 ], n43 = te[ 11 ], n44 = te[ 15 ];
+
+			//TODO: make this more efficient
+			//( based on http://www.euclideanspace.com/maths/algebra/matrix/functions/inverse/fourD/index.htm )
+
+			return (
+				n41 * (
+					+ n14 * n23 * n32
+					 - n13 * n24 * n32
+					 - n14 * n22 * n33
+					 + n12 * n24 * n33
+					 + n13 * n22 * n34
+					 - n12 * n23 * n34
+				) +
+				n42 * (
+					+ n11 * n23 * n34
+					 - n11 * n24 * n33
+					 + n14 * n21 * n33
+					 - n13 * n21 * n34
+					 + n13 * n24 * n31
+					 - n14 * n23 * n31
+				) +
+				n43 * (
+					+ n11 * n24 * n32
+					 - n11 * n22 * n34
+					 - n14 * n21 * n32
+					 + n12 * n21 * n34
+					 + n14 * n22 * n31
+					 - n12 * n24 * n31
+				) +
+				n44 * (
+					- n13 * n22 * n31
+					 - n11 * n23 * n32
+					 + n11 * n22 * n33
+					 + n13 * n21 * n32
+					 - n12 * n21 * n33
+					 + n12 * n23 * n31
+				)
+
+			);
+
+		},
+
+		transpose: function () {
+
+			var te = this.elements;
+			var tmp;
+
+			tmp = te[ 1 ]; te[ 1 ] = te[ 4 ]; te[ 4 ] = tmp;
+			tmp = te[ 2 ]; te[ 2 ] = te[ 8 ]; te[ 8 ] = tmp;
+			tmp = te[ 6 ]; te[ 6 ] = te[ 9 ]; te[ 9 ] = tmp;
+
+			tmp = te[ 3 ]; te[ 3 ] = te[ 12 ]; te[ 12 ] = tmp;
+			tmp = te[ 7 ]; te[ 7 ] = te[ 13 ]; te[ 13 ] = tmp;
+			tmp = te[ 11 ]; te[ 11 ] = te[ 14 ]; te[ 14 ] = tmp;
+
+			return this;
+
+		},
+
+		flattenToArrayOffset: function ( array, offset ) {
+
+			var te = this.elements;
+
+			array[ offset     ] = te[ 0 ];
+			array[ offset + 1 ] = te[ 1 ];
+			array[ offset + 2 ] = te[ 2 ];
+			array[ offset + 3 ] = te[ 3 ];
+
+			array[ offset + 4 ] = te[ 4 ];
+			array[ offset + 5 ] = te[ 5 ];
+			array[ offset + 6 ] = te[ 6 ];
+			array[ offset + 7 ] = te[ 7 ];
+
+			array[ offset + 8 ]  = te[ 8 ];
+			array[ offset + 9 ]  = te[ 9 ];
+			array[ offset + 10 ] = te[ 10 ];
+			array[ offset + 11 ] = te[ 11 ];
+
+			array[ offset + 12 ] = te[ 12 ];
+			array[ offset + 13 ] = te[ 13 ];
+			array[ offset + 14 ] = te[ 14 ];
+			array[ offset + 15 ] = te[ 15 ];
+
+			return array;
+
+		},
+
+		getPosition: function () {
+
+			var v1 = new THREE.Vector3();
+
+			return function () {
+
+				console.warn( 'THREE.Matrix4: .getPosition() has been removed. Use Vector3.setFromMatrixPosition( matrix ) instead.' );
+
+				var te = this.elements;
+				return v1.set( te[ 12 ], te[ 13 ], te[ 14 ] );
+
+			};
+
+		}(),
+
+		setPosition: function ( v ) {
+
+			var te = this.elements;
+
+			te[ 12 ] = v.x;
+			te[ 13 ] = v.y;
+			te[ 14 ] = v.z;
+
+			return this;
+
+		},
+
+		getInverse: function ( m, throwOnInvertible ) {
+
+			// based on http://www.euclideanspace.com/maths/algebra/matrix/functions/inverse/fourD/index.htm
+			var te = this.elements;
+			var me = m.elements;
+
+			var n11 = me[ 0 ], n12 = me[ 4 ], n13 = me[ 8 ], n14 = me[ 12 ];
+			var n21 = me[ 1 ], n22 = me[ 5 ], n23 = me[ 9 ], n24 = me[ 13 ];
+			var n31 = me[ 2 ], n32 = me[ 6 ], n33 = me[ 10 ], n34 = me[ 14 ];
+			var n41 = me[ 3 ], n42 = me[ 7 ], n43 = me[ 11 ], n44 = me[ 15 ];
+
+			te[ 0 ] = n23 * n34 * n42 - n24 * n33 * n42 + n24 * n32 * n43 - n22 * n34 * n43 - n23 * n32 * n44 + n22 * n33 * n44;
+			te[ 4 ] = n14 * n33 * n42 - n13 * n34 * n42 - n14 * n32 * n43 + n12 * n34 * n43 + n13 * n32 * n44 - n12 * n33 * n44;
+			te[ 8 ] = n13 * n24 * n42 - n14 * n23 * n42 + n14 * n22 * n43 - n12 * n24 * n43 - n13 * n22 * n44 + n12 * n23 * n44;
+			te[ 12 ] = n14 * n23 * n32 - n13 * n24 * n32 - n14 * n22 * n33 + n12 * n24 * n33 + n13 * n22 * n34 - n12 * n23 * n34;
+			te[ 1 ] = n24 * n33 * n41 - n23 * n34 * n41 - n24 * n31 * n43 + n21 * n34 * n43 + n23 * n31 * n44 - n21 * n33 * n44;
+			te[ 5 ] = n13 * n34 * n41 - n14 * n33 * n41 + n14 * n31 * n43 - n11 * n34 * n43 - n13 * n31 * n44 + n11 * n33 * n44;
+			te[ 9 ] = n14 * n23 * n41 - n13 * n24 * n41 - n14 * n21 * n43 + n11 * n24 * n43 + n13 * n21 * n44 - n11 * n23 * n44;
+			te[ 13 ] = n13 * n24 * n31 - n14 * n23 * n31 + n14 * n21 * n33 - n11 * n24 * n33 - n13 * n21 * n34 + n11 * n23 * n34;
+			te[ 2 ] = n22 * n34 * n41 - n24 * n32 * n41 + n24 * n31 * n42 - n21 * n34 * n42 - n22 * n31 * n44 + n21 * n32 * n44;
+			te[ 6 ] = n14 * n32 * n41 - n12 * n34 * n41 - n14 * n31 * n42 + n11 * n34 * n42 + n12 * n31 * n44 - n11 * n32 * n44;
+			te[ 10 ] = n12 * n24 * n41 - n14 * n22 * n41 + n14 * n21 * n42 - n11 * n24 * n42 - n12 * n21 * n44 + n11 * n22 * n44;
+			te[ 14 ] = n14 * n22 * n31 - n12 * n24 * n31 - n14 * n21 * n32 + n11 * n24 * n32 + n12 * n21 * n34 - n11 * n22 * n34;
+			te[ 3 ] = n23 * n32 * n41 - n22 * n33 * n41 - n23 * n31 * n42 + n21 * n33 * n42 + n22 * n31 * n43 - n21 * n32 * n43;
+			te[ 7 ] = n12 * n33 * n41 - n13 * n32 * n41 + n13 * n31 * n42 - n11 * n33 * n42 - n12 * n31 * n43 + n11 * n32 * n43;
+			te[ 11 ] = n13 * n22 * n41 - n12 * n23 * n41 - n13 * n21 * n42 + n11 * n23 * n42 + n12 * n21 * n43 - n11 * n22 * n43;
+			te[ 15 ] = n12 * n23 * n31 - n13 * n22 * n31 + n13 * n21 * n32 - n11 * n23 * n32 - n12 * n21 * n33 + n11 * n22 * n33;
+
+			var det = n11 * te[ 0 ] + n21 * te[ 4 ] + n31 * te[ 8 ] + n41 * te[ 12 ];
+
+			if ( det == 0 ) {
+
+				var msg = "Matrix4.getInverse(): can't invert matrix, determinant is 0";
+
+				if ( throwOnInvertible || false ) {
+
+					throw new Error( msg );
+
+				} else {
+
+					console.warn( msg );
+
+				}
+
+				this.identity();
+
 				return this;
 			}
 
-			TWEEN.remove(this);
-			_isPlaying = false;
+			this.multiplyScalar( 1 / det );
 
-			if (_onStopCallback !== null) {
-				_onStopCallback.call(_object);
-			}
-
-			this.stopChainedTweens();
 			return this;
 
-		};
+		},
 
-		this.stopChainedTweens = function () {
+		translate: function ( v ) {
 
-			for (var i = 0, numChainedTweens = _chainedTweens.length; i < numChainedTweens; i++) {
-				_chainedTweens[i].stop();
-			}
+			console.warn( 'THREE.Matrix4: .translate() has been removed.' );
 
-		};
+		},
 
-		this.delay = function (amount) {
+		rotateX: function ( angle ) {
 
-			_delayTime = amount;
+			console.warn( 'THREE.Matrix4: .rotateX() has been removed.' );
+
+		},
+
+		rotateY: function ( angle ) {
+
+			console.warn( 'THREE.Matrix4: .rotateY() has been removed.' );
+
+		},
+
+		rotateZ: function ( angle ) {
+
+			console.warn( 'THREE.Matrix4: .rotateZ() has been removed.' );
+
+		},
+
+		rotateByAxis: function ( axis, angle ) {
+
+			console.warn( 'THREE.Matrix4: .rotateByAxis() has been removed.' );
+
+		},
+
+		scale: function ( v ) {
+
+			var te = this.elements;
+			var x = v.x, y = v.y, z = v.z;
+
+			te[ 0 ] *= x; te[ 4 ] *= y; te[ 8 ] *= z;
+			te[ 1 ] *= x; te[ 5 ] *= y; te[ 9 ] *= z;
+			te[ 2 ] *= x; te[ 6 ] *= y; te[ 10 ] *= z;
+			te[ 3 ] *= x; te[ 7 ] *= y; te[ 11 ] *= z;
+
 			return this;
 
-		};
+		},
 
-		this.repeat = function (times) {
+		getMaxScaleOnAxis: function () {
 
-			_repeat = times;
+			var te = this.elements;
+
+			var scaleXSq = te[ 0 ] * te[ 0 ] + te[ 1 ] * te[ 1 ] + te[ 2 ] * te[ 2 ];
+			var scaleYSq = te[ 4 ] * te[ 4 ] + te[ 5 ] * te[ 5 ] + te[ 6 ] * te[ 6 ];
+			var scaleZSq = te[ 8 ] * te[ 8 ] + te[ 9 ] * te[ 9 ] + te[ 10 ] * te[ 10 ];
+
+			return Math.sqrt( Math.max( scaleXSq, Math.max( scaleYSq, scaleZSq ) ) );
+
+		},
+
+		makeTranslation: function ( x, y, z ) {
+
+			this.set(
+
+				1, 0, 0, x,
+				0, 1, 0, y,
+				0, 0, 1, z,
+				0, 0, 0, 1
+
+			);
+
 			return this;
 
-		};
+		},
 
-		this.yoyo = function (yoyo) {
+		makeRotationX: function ( theta ) {
 
-			_yoyo = yoyo;
+			var c = Math.cos( theta ), s = Math.sin( theta );
+
+			this.set(
+
+				1, 0,  0, 0,
+				0, c, - s, 0,
+				0, s,  c, 0,
+				0, 0,  0, 1
+
+			);
+
 			return this;
 
-		};
+		},
 
+		makeRotationY: function ( theta ) {
 
-		this.easing = function (easing) {
+			var c = Math.cos( theta ), s = Math.sin( theta );
 
-			_easingFunction = easing;
+			this.set(
+
+				 c, 0, s, 0,
+				 0, 1, 0, 0,
+				- s, 0, c, 0,
+				 0, 0, 0, 1
+
+			);
+
 			return this;
 
-		};
+		},
 
-		this.interpolation = function (interpolation) {
+		makeRotationZ: function ( theta ) {
 
-			_interpolationFunction = interpolation;
+			var c = Math.cos( theta ), s = Math.sin( theta );
+
+			this.set(
+
+				c, - s, 0, 0,
+				s,  c, 0, 0,
+				0,  0, 1, 0,
+				0,  0, 0, 1
+
+			);
+
 			return this;
 
-		};
+		},
 
-		this.chain = function () {
+		makeRotationAxis: function ( axis, angle ) {
 
-			_chainedTweens = arguments;
+			// Based on http://www.gamedev.net/reference/articles/article1199.asp
+
+			var c = Math.cos( angle );
+			var s = Math.sin( angle );
+			var t = 1 - c;
+			var x = axis.x, y = axis.y, z = axis.z;
+			var tx = t * x, ty = t * y;
+
+			this.set(
+
+				tx * x + c, tx * y - s * z, tx * z + s * y, 0,
+				tx * y + s * z, ty * y + c, ty * z - s * x, 0,
+				tx * z - s * y, ty * z + s * x, t * z * z + c, 0,
+				0, 0, 0, 1
+
+			);
+
+			 return this;
+
+		},
+
+		makeScale: function ( x, y, z ) {
+
+			this.set(
+
+				x, 0, 0, 0,
+				0, y, 0, 0,
+				0, 0, z, 0,
+				0, 0, 0, 1
+
+			);
+
 			return this;
 
-		};
+		},
 
-		this.onStart = function (callback) {
+		compose: function ( position, quaternion, scale ) {
 
-			_onStartCallback = callback;
+			this.makeRotationFromQuaternion( quaternion );
+			this.scale( scale );
+			this.setPosition( position );
+
 			return this;
 
-		};
+		},
 
-		this.onUpdate = function (callback) {
+		decompose: function () {
 
-			_onUpdateCallback = callback;
-			return this;
+			var vector = new THREE.Vector3();
+			var matrix = new THREE.Matrix4();
 
-		};
+			return function ( position, quaternion, scale ) {
 
-		this.onComplete = function (callback) {
+				var te = this.elements;
 
-			_onCompleteCallback = callback;
-			return this;
+				var sx = vector.set( te[ 0 ], te[ 1 ], te[ 2 ] ).length();
+				var sy = vector.set( te[ 4 ], te[ 5 ], te[ 6 ] ).length();
+				var sz = vector.set( te[ 8 ], te[ 9 ], te[ 10 ] ).length();
 
-		};
-
-		this.onStop = function (callback) {
-
-			_onStopCallback = callback;
-			return this;
-
-		};
-
-		this.update = function (time) {
-
-			var property;
-			var elapsed;
-			var value;
-
-			if (time < _startTime) {
-				return true;
-			}
-
-			if (_onStartCallbackFired === false) {
-
-				if (_onStartCallback !== null) {
-					_onStartCallback.call(_object);
+				// if determine is negative, we need to invert one scale
+				var det = this.determinant();
+				if ( det < 0 ) {
+					sx = - sx;
 				}
 
-				_onStartCallbackFired = true;
+				position.x = te[ 12 ];
+				position.y = te[ 13 ];
+				position.z = te[ 14 ];
+
+				// scale the rotation part
+
+				matrix.elements.set( this.elements ); // at this point matrix is incomplete so we can't use .copy()
+
+				var invSX = 1 / sx;
+				var invSY = 1 / sy;
+				var invSZ = 1 / sz;
+
+				matrix.elements[ 0 ] *= invSX;
+				matrix.elements[ 1 ] *= invSX;
+				matrix.elements[ 2 ] *= invSX;
+
+				matrix.elements[ 4 ] *= invSY;
+				matrix.elements[ 5 ] *= invSY;
+				matrix.elements[ 6 ] *= invSY;
+
+				matrix.elements[ 8 ] *= invSZ;
+				matrix.elements[ 9 ] *= invSZ;
+				matrix.elements[ 10 ] *= invSZ;
+
+				quaternion.setFromRotationMatrix( matrix );
+
+				scale.x = sx;
+				scale.y = sy;
+				scale.z = sz;
+
+				return this;
+
+			};
+
+		}(),
+
+		makeFrustum: function ( left, right, bottom, top, near, far ) {
+
+			var te = this.elements;
+			var x = 2 * near / ( right - left );
+			var y = 2 * near / ( top - bottom );
+
+			var a = ( right + left ) / ( right - left );
+			var b = ( top + bottom ) / ( top - bottom );
+			var c = - ( far + near ) / ( far - near );
+			var d = - 2 * far * near / ( far - near );
+
+			te[ 0 ] = x;	te[ 4 ] = 0;	te[ 8 ] = a;	te[ 12 ] = 0;
+			te[ 1 ] = 0;	te[ 5 ] = y;	te[ 9 ] = b;	te[ 13 ] = 0;
+			te[ 2 ] = 0;	te[ 6 ] = 0;	te[ 10 ] = c;	te[ 14 ] = d;
+			te[ 3 ] = 0;	te[ 7 ] = 0;	te[ 11 ] = - 1;	te[ 15 ] = 0;
+
+			return this;
+
+		},
+
+		makePerspective: function ( fov, aspect, near, far ) {
+
+			var ymax = near * Math.tan( THREE.Math.degToRad( fov * 0.5 ) );
+			var ymin = - ymax;
+			var xmin = ymin * aspect;
+			var xmax = ymax * aspect;
+
+			return this.makeFrustum( xmin, xmax, ymin, ymax, near, far );
+
+		},
+
+		makeOrthographic: function ( left, right, top, bottom, near, far ) {
+
+			var te = this.elements;
+			var w = right - left;
+			var h = top - bottom;
+			var p = far - near;
+
+			var x = ( right + left ) / w;
+			var y = ( top + bottom ) / h;
+			var z = ( far + near ) / p;
+
+			te[ 0 ] = 2 / w;	te[ 4 ] = 0;	te[ 8 ] = 0;	te[ 12 ] = - x;
+			te[ 1 ] = 0;	te[ 5 ] = 2 / h;	te[ 9 ] = 0;	te[ 13 ] = - y;
+			te[ 2 ] = 0;	te[ 6 ] = 0;	te[ 10 ] = - 2 / p;	te[ 14 ] = - z;
+			te[ 3 ] = 0;	te[ 7 ] = 0;	te[ 11 ] = 0;	te[ 15 ] = 1;
+
+			return this;
+
+		},
+
+		fromArray: function ( array ) {
+
+			this.elements.set( array );
+
+			return this;
+
+		},
+
+		toArray: function () {
+
+			var te = this.elements;
+
+			return [
+				te[ 0 ], te[ 1 ], te[ 2 ], te[ 3 ],
+				te[ 4 ], te[ 5 ], te[ 6 ], te[ 7 ],
+				te[ 8 ], te[ 9 ], te[ 10 ], te[ 11 ],
+				te[ 12 ], te[ 13 ], te[ 14 ], te[ 15 ]
+			];
+
+		},
+
+		clone: function () {
+
+			return new THREE.Matrix4().fromArray( this.elements );
+
+		}
+
+	};
+
+	// File:src/math/Ray.js
+
+	/**
+	 * @author bhouston / http://exocortex.com
+	 */
+
+	THREE.Ray = function ( origin, direction ) {
+
+		this.origin = ( origin !== undefined ) ? origin : new THREE.Vector3();
+		this.direction = ( direction !== undefined ) ? direction : new THREE.Vector3();
+
+	};
+
+	THREE.Ray.prototype = {
+
+		constructor: THREE.Ray,
+
+		set: function ( origin, direction ) {
+
+			this.origin.copy( origin );
+			this.direction.copy( direction );
+
+			return this;
+
+		},
+
+		copy: function ( ray ) {
+
+			this.origin.copy( ray.origin );
+			this.direction.copy( ray.direction );
+
+			return this;
+
+		},
+
+		at: function ( t, optionalTarget ) {
+
+			var result = optionalTarget || new THREE.Vector3();
+
+			return result.copy( this.direction ).multiplyScalar( t ).add( this.origin );
+
+		},
+
+		recast: function () {
+
+			var v1 = new THREE.Vector3();
+
+			return function ( t ) {
+
+				this.origin.copy( this.at( t, v1 ) );
+
+				return this;
+
+			};
+
+		}(),
+
+		closestPointToPoint: function ( point, optionalTarget ) {
+
+			var result = optionalTarget || new THREE.Vector3();
+			result.subVectors( point, this.origin );
+			var directionDistance = result.dot( this.direction );
+
+			if ( directionDistance < 0 ) {
+
+				return result.copy( this.origin );
 
 			}
 
-			elapsed = (time - _startTime) / _duration;
-			elapsed = elapsed > 1 ? 1 : elapsed;
+			return result.copy( this.direction ).multiplyScalar( directionDistance ).add( this.origin );
 
-			value = _easingFunction(elapsed);
+		},
 
-			for (property in _valuesEnd) {
+		distanceToPoint: function () {
 
-				// Don't update properties that do not exist in the source object
-				if (_valuesStart[property] === undefined) {
-					continue;
+			var v1 = new THREE.Vector3();
+
+			return function ( point ) {
+
+				var directionDistance = v1.subVectors( point, this.origin ).dot( this.direction );
+
+				// point behind the ray
+
+				if ( directionDistance < 0 ) {
+
+					return this.origin.distanceTo( point );
+
 				}
 
-				var start = _valuesStart[property] || 0;
-				var end = _valuesEnd[property];
+				v1.copy( this.direction ).multiplyScalar( directionDistance ).add( this.origin );
 
-				if (end instanceof Array) {
+				return v1.distanceTo( point );
 
-					_object[property] = _interpolationFunction(end, value);
+			};
 
-				} else {
+		}(),
 
-					// Parses relative end values with start as base (e.g.: +10, -3)
-					if (typeof (end) === 'string') {
+		distanceSqToSegment: function ( v0, v1, optionalPointOnRay, optionalPointOnSegment ) {
 
-						if (end.charAt(0) === '+' || end.charAt(0) === '-') {
-							end = start + parseFloat(end, 10);
+			// from http://www.geometrictools.com/LibMathematics/Distance/Wm5DistRay3Segment3.cpp
+			// It returns the min distance between the ray and the segment
+			// defined by v0 and v1
+			// It can also set two optional targets :
+			// - The closest point on the ray
+			// - The closest point on the segment
+
+			var segCenter = v0.clone().add( v1 ).multiplyScalar( 0.5 );
+			var segDir = v1.clone().sub( v0 ).normalize();
+			var segExtent = v0.distanceTo( v1 ) * 0.5;
+			var diff = this.origin.clone().sub( segCenter );
+			var a01 = - this.direction.dot( segDir );
+			var b0 = diff.dot( this.direction );
+			var b1 = - diff.dot( segDir );
+			var c = diff.lengthSq();
+			var det = Math.abs( 1 - a01 * a01 );
+			var s0, s1, sqrDist, extDet;
+
+			if ( det >= 0 ) {
+
+				// The ray and segment are not parallel.
+
+				s0 = a01 * b1 - b0;
+				s1 = a01 * b0 - b1;
+				extDet = segExtent * det;
+
+				if ( s0 >= 0 ) {
+
+					if ( s1 >= - extDet ) {
+
+						if ( s1 <= extDet ) {
+
+							// region 0
+							// Minimum at interior points of ray and segment.
+
+							var invDet = 1 / det;
+							s0 *= invDet;
+							s1 *= invDet;
+							sqrDist = s0 * ( s0 + a01 * s1 + 2 * b0 ) + s1 * ( a01 * s0 + s1 + 2 * b1 ) + c;
+
 						} else {
-							end = parseFloat(end, 10);
+
+							// region 1
+
+							s1 = segExtent;
+							s0 = Math.max( 0, - ( a01 * s1 + b0 ) );
+							sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
+
 						}
+
+					} else {
+
+						// region 5
+
+						s1 = - segExtent;
+						s0 = Math.max( 0, - ( a01 * s1 + b0 ) );
+						sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
+
 					}
 
-					// Protect against non numeric properties.
-					if (typeof (end) === 'number') {
-						_object[property] = start + (end - start) * value;
+				} else {
+
+					if ( s1 <= - extDet ) {
+
+						// region 4
+
+						s0 = Math.max( 0, - ( - a01 * segExtent + b0 ) );
+						s1 = ( s0 > 0 ) ? - segExtent : Math.min( Math.max( - segExtent, - b1 ), segExtent );
+						sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
+
+					} else if ( s1 <= extDet ) {
+
+						// region 3
+
+						s0 = 0;
+						s1 = Math.min( Math.max( - segExtent, - b1 ), segExtent );
+						sqrDist = s1 * ( s1 + 2 * b1 ) + c;
+
+					} else {
+
+						// region 2
+
+						s0 = Math.max( 0, - ( a01 * segExtent + b0 ) );
+						s1 = ( s0 > 0 ) ? segExtent : Math.min( Math.max( - segExtent, - b1 ), segExtent );
+						sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
+
 					}
 
 				}
 
+			} else {
+
+				// Ray and segment are parallel.
+
+				s1 = ( a01 > 0 ) ? - segExtent : segExtent;
+				s0 = Math.max( 0, - ( a01 * s1 + b0 ) );
+				sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
+
 			}
 
-			if (_onUpdateCallback !== null) {
-				_onUpdateCallback.call(_object, value);
+			if ( optionalPointOnRay ) {
+
+				optionalPointOnRay.copy( this.direction.clone().multiplyScalar( s0 ).add( this.origin ) );
+
 			}
 
-			if (elapsed === 1) {
+			if ( optionalPointOnSegment ) {
 
-				if (_repeat > 0) {
+				optionalPointOnSegment.copy( segDir.clone().multiplyScalar( s1 ).add( segCenter ) );
 
-					if (isFinite(_repeat)) {
-						_repeat--;
-					}
+			}
 
-					// Reassign starting values, restart by making startTime = now
-					for (property in _valuesStartRepeat) {
+			return sqrDist;
 
-						if (typeof (_valuesEnd[property]) === 'string') {
-							_valuesStartRepeat[property] = _valuesStartRepeat[property] + parseFloat(_valuesEnd[property], 10);
-						}
+		},
 
-						if (_yoyo) {
-							var tmp = _valuesStartRepeat[property];
+		isIntersectionSphere: function ( sphere ) {
 
-							_valuesStartRepeat[property] = _valuesEnd[property];
-							_valuesEnd[property] = tmp;
-						}
+			return this.distanceToPoint( sphere.center ) <= sphere.radius;
 
-						_valuesStart[property] = _valuesStartRepeat[property];
+		},
 
-					}
+		intersectSphere: function () {
 
-					if (_yoyo) {
-						_reversed = !_reversed;
-					}
+			// from http://www.scratchapixel.com/lessons/3d-basic-lessons/lesson-7-intersecting-simple-shapes/ray-sphere-intersection/
 
-					_startTime = time + _delayTime;
+			var v1 = new THREE.Vector3();
 
-					return true;
+			return function ( sphere, optionalTarget ) {
+
+				v1.subVectors( sphere.center, this.origin );
+
+				var tca = v1.dot( this.direction );
+
+				var d2 = v1.dot( v1 ) - tca * tca;
+
+				var radius2 = sphere.radius * sphere.radius;
+
+				if ( d2 > radius2 ) return null;
+
+				var thc = Math.sqrt( radius2 - d2 );
+
+				// t0 = first intersect point - entrance on front of sphere
+				var t0 = tca - thc;
+
+				// t1 = second intersect point - exit point on back of sphere
+				var t1 = tca + thc;
+
+				// test to see if both t0 and t1 are behind the ray - if so, return null
+				if ( t0 < 0 && t1 < 0 ) return null;
+
+				// test to see if t0 is behind the ray:
+				// if it is, the ray is inside the sphere, so return the second exit point scaled by t1,
+				// in order to always return an intersect point that is in front of the ray.
+				if ( t0 < 0 ) return this.at( t1, optionalTarget );
+
+				// else t0 is in front of the ray, so return the first collision point scaled by t0 
+				return this.at( t0, optionalTarget );
+
+			}
+
+		}(),
+
+		isIntersectionPlane: function ( plane ) {
+
+			// check if the ray lies on the plane first
+
+			var distToPoint = plane.distanceToPoint( this.origin );
+
+			if ( distToPoint === 0 ) {
+
+				return true;
+
+			}
+
+			var denominator = plane.normal.dot( this.direction );
+
+			if ( denominator * distToPoint < 0 ) {
+
+				return true;
+
+			}
+
+			// ray origin is behind the plane (and is pointing behind it)
+
+			return false;
+
+		},
+
+		distanceToPlane: function ( plane ) {
+
+			var denominator = plane.normal.dot( this.direction );
+			if ( denominator == 0 ) {
+
+				// line is coplanar, return origin
+				if ( plane.distanceToPoint( this.origin ) == 0 ) {
+
+					return 0;
+
+				}
+
+				// Null is preferable to undefined since undefined means.... it is undefined
+
+				return null;
+
+			}
+
+			var t = - ( this.origin.dot( plane.normal ) + plane.constant ) / denominator;
+
+			// Return if the ray never intersects the plane
+
+			return t >= 0 ? t :  null;
+
+		},
+
+		intersectPlane: function ( plane, optionalTarget ) {
+
+			var t = this.distanceToPlane( plane );
+
+			if ( t === null ) {
+
+				return null;
+			}
+
+			return this.at( t, optionalTarget );
+
+		},
+
+		isIntersectionBox: function () {
+
+			var v = new THREE.Vector3();
+
+			return function ( box ) {
+
+				return this.intersectBox( box, v ) !== null;
+
+			};
+
+		}(),
+
+		intersectBox: function ( box , optionalTarget ) {
+
+			// http://www.scratchapixel.com/lessons/3d-basic-lessons/lesson-7-intersecting-simple-shapes/ray-box-intersection/
+
+			var tmin,tmax,tymin,tymax,tzmin,tzmax;
+
+			var invdirx = 1 / this.direction.x,
+				invdiry = 1 / this.direction.y,
+				invdirz = 1 / this.direction.z;
+
+			var origin = this.origin;
+
+			if ( invdirx >= 0 ) {
+
+				tmin = ( box.min.x - origin.x ) * invdirx;
+				tmax = ( box.max.x - origin.x ) * invdirx;
+
+			} else {
+
+				tmin = ( box.max.x - origin.x ) * invdirx;
+				tmax = ( box.min.x - origin.x ) * invdirx;
+			}
+
+			if ( invdiry >= 0 ) {
+
+				tymin = ( box.min.y - origin.y ) * invdiry;
+				tymax = ( box.max.y - origin.y ) * invdiry;
+
+			} else {
+
+				tymin = ( box.max.y - origin.y ) * invdiry;
+				tymax = ( box.min.y - origin.y ) * invdiry;
+			}
+
+			if ( ( tmin > tymax ) || ( tymin > tmax ) ) return null;
+
+			// These lines also handle the case where tmin or tmax is NaN
+			// (result of 0 * Infinity). x !== x returns true if x is NaN
+
+			if ( tymin > tmin || tmin !== tmin ) tmin = tymin;
+
+			if ( tymax < tmax || tmax !== tmax ) tmax = tymax;
+
+			if ( invdirz >= 0 ) {
+
+				tzmin = ( box.min.z - origin.z ) * invdirz;
+				tzmax = ( box.max.z - origin.z ) * invdirz;
+
+			} else {
+
+				tzmin = ( box.max.z - origin.z ) * invdirz;
+				tzmax = ( box.min.z - origin.z ) * invdirz;
+			}
+
+			if ( ( tmin > tzmax ) || ( tzmin > tmax ) ) return null;
+
+			if ( tzmin > tmin || tmin !== tmin ) tmin = tzmin;
+
+			if ( tzmax < tmax || tmax !== tmax ) tmax = tzmax;
+
+			//return point closest to the ray (positive side)
+
+			if ( tmax < 0 ) return null;
+
+			return this.at( tmin >= 0 ? tmin : tmax, optionalTarget );
+
+		},
+
+		intersectTriangle: function () {
+
+			// Compute the offset origin, edges, and normal.
+			var diff = new THREE.Vector3();
+			var edge1 = new THREE.Vector3();
+			var edge2 = new THREE.Vector3();
+			var normal = new THREE.Vector3();
+
+			return function ( a, b, c, backfaceCulling, optionalTarget ) {
+
+				// from http://www.geometrictools.com/LibMathematics/Intersection/Wm5IntrRay3Triangle3.cpp
+
+				edge1.subVectors( b, a );
+				edge2.subVectors( c, a );
+				normal.crossVectors( edge1, edge2 );
+
+				// Solve Q + t*D = b1*E1 + b2*E2 (Q = kDiff, D = ray direction,
+				// E1 = kEdge1, E2 = kEdge2, N = Cross(E1,E2)) by
+				//   |Dot(D,N)|*b1 = sign(Dot(D,N))*Dot(D,Cross(Q,E2))
+				//   |Dot(D,N)|*b2 = sign(Dot(D,N))*Dot(D,Cross(E1,Q))
+				//   |Dot(D,N)|*t = -sign(Dot(D,N))*Dot(Q,N)
+				var DdN = this.direction.dot( normal );
+				var sign;
+
+				if ( DdN > 0 ) {
+
+					if ( backfaceCulling ) return null;
+					sign = 1;
+
+				} else if ( DdN < 0 ) {
+
+					sign = - 1;
+					DdN = - DdN;
 
 				} else {
 
-					if (_onCompleteCallback !== null) {
-						_onCompleteCallback.call(_object);
-					}
+					return null;
 
-					for (var i = 0, numChainedTweens = _chainedTweens.length; i < numChainedTweens; i++) {
-						// Make the chained tweens start exactly at the time they should,
-						// even if the `update()` method was called way past the duration of the tween
-						_chainedTweens[i].start(_startTime + _duration);
-					}
+				}
+
+				diff.subVectors( this.origin, a );
+				var DdQxE2 = sign * this.direction.dot( edge2.crossVectors( diff, edge2 ) );
+
+				// b1 < 0, no intersection
+				if ( DdQxE2 < 0 ) {
+
+					return null;
+
+				}
+
+				var DdE1xQ = sign * this.direction.dot( edge1.cross( diff ) );
+
+				// b2 < 0, no intersection
+				if ( DdE1xQ < 0 ) {
+
+					return null;
+
+				}
+
+				// b1+b2 > 1, no intersection
+				if ( DdQxE2 + DdE1xQ > DdN ) {
+
+					return null;
+
+				}
+
+				// Line intersects triangle, check if ray does.
+				var QdN = - sign * diff.dot( normal );
+
+				// t < 0, no intersection
+				if ( QdN < 0 ) {
+
+					return null;
+
+				}
+
+				// Ray intersects triangle.
+				return this.at( QdN / DdN, optionalTarget );
+
+			};
+
+		}(),
+
+		applyMatrix4: function ( matrix4 ) {
+
+			this.direction.add( this.origin ).applyMatrix4( matrix4 );
+			this.origin.applyMatrix4( matrix4 );
+			this.direction.sub( this.origin );
+			this.direction.normalize();
+
+			return this;
+		},
+
+		equals: function ( ray ) {
+
+			return ray.origin.equals( this.origin ) && ray.direction.equals( this.direction );
+
+		},
+
+		clone: function () {
+
+			return new THREE.Ray().copy( this );
+
+		}
+
+	};
+
+	// File:src/math/Sphere.js
+
+	/**
+	 * @author bhouston / http://exocortex.com
+	 * @author mrdoob / http://mrdoob.com/
+	 */
+
+	THREE.Sphere = function ( center, radius ) {
+
+		this.center = ( center !== undefined ) ? center : new THREE.Vector3();
+		this.radius = ( radius !== undefined ) ? radius : 0;
+
+	};
+
+	THREE.Sphere.prototype = {
+
+		constructor: THREE.Sphere,
+
+		set: function ( center, radius ) {
+
+			this.center.copy( center );
+			this.radius = radius;
+
+			return this;
+		},
+
+		setFromPoints: function () {
+
+			var box = new THREE.Box3();
+
+			return function ( points, optionalCenter )  {
+
+				var center = this.center;
+
+				if ( optionalCenter !== undefined ) {
+
+					center.copy( optionalCenter );
+
+				} else {
+
+					box.setFromPoints( points ).center( center );
+
+				}
+
+				var maxRadiusSq = 0;
+
+				for ( var i = 0, il = points.length; i < il; i ++ ) {
+
+					maxRadiusSq = Math.max( maxRadiusSq, center.distanceToSquared( points[ i ] ) );
+
+				}
+
+				this.radius = Math.sqrt( maxRadiusSq );
+
+				return this;
+
+	 		};
+
+		}(),
+
+		copy: function ( sphere ) {
+
+			this.center.copy( sphere.center );
+			this.radius = sphere.radius;
+
+			return this;
+
+		},
+
+		empty: function () {
+
+			return ( this.radius <= 0 );
+
+		},
+
+		containsPoint: function ( point ) {
+
+			return ( point.distanceToSquared( this.center ) <= ( this.radius * this.radius ) );
+
+		},
+
+		distanceToPoint: function ( point ) {
+
+			return ( point.distanceTo( this.center ) - this.radius );
+
+		},
+
+		intersectsSphere: function ( sphere ) {
+
+			var radiusSum = this.radius + sphere.radius;
+
+			return sphere.center.distanceToSquared( this.center ) <= ( radiusSum * radiusSum );
+
+		},
+
+		clampPoint: function ( point, optionalTarget ) {
+
+			var deltaLengthSq = this.center.distanceToSquared( point );
+
+			var result = optionalTarget || new THREE.Vector3();
+			result.copy( point );
+
+			if ( deltaLengthSq > ( this.radius * this.radius ) ) {
+
+				result.sub( this.center ).normalize();
+				result.multiplyScalar( this.radius ).add( this.center );
+
+			}
+
+			return result;
+
+		},
+
+		getBoundingBox: function ( optionalTarget ) {
+
+			var box = optionalTarget || new THREE.Box3();
+
+			box.set( this.center, this.center );
+			box.expandByScalar( this.radius );
+
+			return box;
+
+		},
+
+		applyMatrix4: function ( matrix ) {
+
+			this.center.applyMatrix4( matrix );
+			this.radius = this.radius * matrix.getMaxScaleOnAxis();
+
+			return this;
+
+		},
+
+		translate: function ( offset ) {
+
+			this.center.add( offset );
+
+			return this;
+
+		},
+
+		equals: function ( sphere ) {
+
+			return sphere.center.equals( this.center ) && ( sphere.radius === this.radius );
+
+		},
+
+		clone: function () {
+
+			return new THREE.Sphere().copy( this );
+
+		}
+
+	};
+
+	// File:src/math/Frustum.js
+
+	/**
+	 * @author mrdoob / http://mrdoob.com/
+	 * @author alteredq / http://alteredqualia.com/
+	 * @author bhouston / http://exocortex.com
+	 */
+
+	THREE.Frustum = function ( p0, p1, p2, p3, p4, p5 ) {
+
+		this.planes = [
+
+			( p0 !== undefined ) ? p0 : new THREE.Plane(),
+			( p1 !== undefined ) ? p1 : new THREE.Plane(),
+			( p2 !== undefined ) ? p2 : new THREE.Plane(),
+			( p3 !== undefined ) ? p3 : new THREE.Plane(),
+			( p4 !== undefined ) ? p4 : new THREE.Plane(),
+			( p5 !== undefined ) ? p5 : new THREE.Plane()
+
+		];
+
+	};
+
+	THREE.Frustum.prototype = {
+
+		constructor: THREE.Frustum,
+
+		set: function ( p0, p1, p2, p3, p4, p5 ) {
+
+			var planes = this.planes;
+
+			planes[ 0 ].copy( p0 );
+			planes[ 1 ].copy( p1 );
+			planes[ 2 ].copy( p2 );
+			planes[ 3 ].copy( p3 );
+			planes[ 4 ].copy( p4 );
+			planes[ 5 ].copy( p5 );
+
+			return this;
+
+		},
+
+		copy: function ( frustum ) {
+
+			var planes = this.planes;
+
+			for ( var i = 0; i < 6; i ++ ) {
+
+				planes[ i ].copy( frustum.planes[ i ] );
+
+			}
+
+			return this;
+
+		},
+
+		setFromMatrix: function ( m ) {
+
+			var planes = this.planes;
+			var me = m.elements;
+			var me0 = me[ 0 ], me1 = me[ 1 ], me2 = me[ 2 ], me3 = me[ 3 ];
+			var me4 = me[ 4 ], me5 = me[ 5 ], me6 = me[ 6 ], me7 = me[ 7 ];
+			var me8 = me[ 8 ], me9 = me[ 9 ], me10 = me[ 10 ], me11 = me[ 11 ];
+			var me12 = me[ 12 ], me13 = me[ 13 ], me14 = me[ 14 ], me15 = me[ 15 ];
+
+			planes[ 0 ].setComponents( me3 - me0, me7 - me4, me11 - me8, me15 - me12 ).normalize();
+			planes[ 1 ].setComponents( me3 + me0, me7 + me4, me11 + me8, me15 + me12 ).normalize();
+			planes[ 2 ].setComponents( me3 + me1, me7 + me5, me11 + me9, me15 + me13 ).normalize();
+			planes[ 3 ].setComponents( me3 - me1, me7 - me5, me11 - me9, me15 - me13 ).normalize();
+			planes[ 4 ].setComponents( me3 - me2, me7 - me6, me11 - me10, me15 - me14 ).normalize();
+			planes[ 5 ].setComponents( me3 + me2, me7 + me6, me11 + me10, me15 + me14 ).normalize();
+
+			return this;
+
+		},
+
+		intersectsObject: function () {
+
+			var sphere = new THREE.Sphere();
+
+			return function ( object ) {
+
+				var geometry = object.geometry;
+
+				if ( geometry.boundingSphere === null ) geometry.computeBoundingSphere();
+
+				sphere.copy( geometry.boundingSphere );
+				sphere.applyMatrix4( object.matrixWorld );
+
+				return this.intersectsSphere( sphere );
+
+			};
+
+		}(),
+
+		intersectsSphere: function ( sphere ) {
+
+			var planes = this.planes;
+			var center = sphere.center;
+			var negRadius = - sphere.radius;
+
+			for ( var i = 0; i < 6; i ++ ) {
+
+				var distance = planes[ i ].distanceToPoint( center );
+
+				if ( distance < negRadius ) {
 
 					return false;
 
@@ -895,664 +6923,857 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 			return true;
 
+		},
+
+		intersectsBox: function () {
+
+			var p1 = new THREE.Vector3(),
+				p2 = new THREE.Vector3();
+
+			return function ( box ) {
+
+				var planes = this.planes;
+
+				for ( var i = 0; i < 6 ; i ++ ) {
+
+					var plane = planes[ i ];
+
+					p1.x = plane.normal.x > 0 ? box.min.x : box.max.x;
+					p2.x = plane.normal.x > 0 ? box.max.x : box.min.x;
+					p1.y = plane.normal.y > 0 ? box.min.y : box.max.y;
+					p2.y = plane.normal.y > 0 ? box.max.y : box.min.y;
+					p1.z = plane.normal.z > 0 ? box.min.z : box.max.z;
+					p2.z = plane.normal.z > 0 ? box.max.z : box.min.z;
+
+					var d1 = plane.distanceToPoint( p1 );
+					var d2 = plane.distanceToPoint( p2 );
+
+					// if both outside plane, no intersection
+
+					if ( d1 < 0 && d2 < 0 ) {
+
+						return false;
+
+					}
+				}
+
+				return true;
+			};
+
+		}(),
+
+
+		containsPoint: function ( point ) {
+
+			var planes = this.planes;
+
+			for ( var i = 0; i < 6; i ++ ) {
+
+				if ( planes[ i ].distanceToPoint( point ) < 0 ) {
+
+					return false;
+
+				}
+
+			}
+
+			return true;
+
+		},
+
+		clone: function () {
+
+			return new THREE.Frustum().copy( this );
+
+		}
+
+	};
+
+	// File:src/math/Plane.js
+
+	/**
+	 * @author bhouston / http://exocortex.com
+	 */
+
+	THREE.Plane = function ( normal, constant ) {
+
+		this.normal = ( normal !== undefined ) ? normal : new THREE.Vector3( 1, 0, 0 );
+		this.constant = ( constant !== undefined ) ? constant : 0;
+
+	};
+
+	THREE.Plane.prototype = {
+
+		constructor: THREE.Plane,
+
+		set: function ( normal, constant ) {
+
+			this.normal.copy( normal );
+			this.constant = constant;
+
+			return this;
+
+		},
+
+		setComponents: function ( x, y, z, w ) {
+
+			this.normal.set( x, y, z );
+			this.constant = w;
+
+			return this;
+
+		},
+
+		setFromNormalAndCoplanarPoint: function ( normal, point ) {
+
+			this.normal.copy( normal );
+			this.constant = - point.dot( this.normal );	// must be this.normal, not normal, as this.normal is normalized
+
+			return this;
+
+		},
+
+		setFromCoplanarPoints: function () {
+
+			var v1 = new THREE.Vector3();
+			var v2 = new THREE.Vector3();
+
+			return function ( a, b, c ) {
+
+				var normal = v1.subVectors( c, b ).cross( v2.subVectors( a, b ) ).normalize();
+
+				// Q: should an error be thrown if normal is zero (e.g. degenerate plane)?
+
+				this.setFromNormalAndCoplanarPoint( normal, a );
+
+				return this;
+
+			};
+
+		}(),
+
+
+		copy: function ( plane ) {
+
+			this.normal.copy( plane.normal );
+			this.constant = plane.constant;
+
+			return this;
+
+		},
+
+		normalize: function () {
+
+			// Note: will lead to a divide by zero if the plane is invalid.
+
+			var inverseNormalLength = 1.0 / this.normal.length();
+			this.normal.multiplyScalar( inverseNormalLength );
+			this.constant *= inverseNormalLength;
+
+			return this;
+
+		},
+
+		negate: function () {
+
+			this.constant *= - 1;
+			this.normal.negate();
+
+			return this;
+
+		},
+
+		distanceToPoint: function ( point ) {
+
+			return this.normal.dot( point ) + this.constant;
+
+		},
+
+		distanceToSphere: function ( sphere ) {
+
+			return this.distanceToPoint( sphere.center ) - sphere.radius;
+
+		},
+
+		projectPoint: function ( point, optionalTarget ) {
+
+			return this.orthoPoint( point, optionalTarget ).sub( point ).negate();
+
+		},
+
+		orthoPoint: function ( point, optionalTarget ) {
+
+			var perpendicularMagnitude = this.distanceToPoint( point );
+
+			var result = optionalTarget || new THREE.Vector3();
+			return result.copy( this.normal ).multiplyScalar( perpendicularMagnitude );
+
+		},
+
+		isIntersectionLine: function ( line ) {
+
+			// Note: this tests if a line intersects the plane, not whether it (or its end-points) are coplanar with it.
+
+			var startSign = this.distanceToPoint( line.start );
+			var endSign = this.distanceToPoint( line.end );
+
+			return ( startSign < 0 && endSign > 0 ) || ( endSign < 0 && startSign > 0 );
+
+		},
+
+		intersectLine: function () {
+
+			var v1 = new THREE.Vector3();
+
+			return function ( line, optionalTarget ) {
+
+				var result = optionalTarget || new THREE.Vector3();
+
+				var direction = line.delta( v1 );
+
+				var denominator = this.normal.dot( direction );
+
+				if ( denominator == 0 ) {
+
+					// line is coplanar, return origin
+					if ( this.distanceToPoint( line.start ) == 0 ) {
+
+						return result.copy( line.start );
+
+					}
+
+					// Unsure if this is the correct method to handle this case.
+					return undefined;
+
+				}
+
+				var t = - ( line.start.dot( this.normal ) + this.constant ) / denominator;
+
+				if ( t < 0 || t > 1 ) {
+
+					return undefined;
+
+				}
+
+				return result.copy( direction ).multiplyScalar( t ).add( line.start );
+
+			};
+
+		}(),
+
+
+		coplanarPoint: function ( optionalTarget ) {
+
+			var result = optionalTarget || new THREE.Vector3();
+			return result.copy( this.normal ).multiplyScalar( - this.constant );
+
+		},
+
+		applyMatrix4: function () {
+
+			var v1 = new THREE.Vector3();
+			var v2 = new THREE.Vector3();
+			var m1 = new THREE.Matrix3();
+
+			return function ( matrix, optionalNormalMatrix ) {
+
+				// compute new normal based on theory here:
+				// http://www.songho.ca/opengl/gl_normaltransform.html
+				var normalMatrix = optionalNormalMatrix || m1.getNormalMatrix( matrix );
+				var newNormal = v1.copy( this.normal ).applyMatrix3( normalMatrix );
+
+				var newCoplanarPoint = this.coplanarPoint( v2 );
+				newCoplanarPoint.applyMatrix4( matrix );
+
+				this.setFromNormalAndCoplanarPoint( newNormal, newCoplanarPoint );
+
+				return this;
+
+			};
+
+		}(),
+
+		translate: function ( offset ) {
+
+			this.constant = this.constant - offset.dot( this.normal );
+
+			return this;
+
+		},
+
+		equals: function ( plane ) {
+
+			return plane.normal.equals( this.normal ) && ( plane.constant == this.constant );
+
+		},
+
+		clone: function () {
+
+			return new THREE.Plane().copy( this );
+
+		}
+
+	};
+
+	// File:src/math/Math.js
+
+	/**
+	 * @author alteredq / http://alteredqualia.com/
+	 * @author mrdoob / http://mrdoob.com/
+	 */
+
+	THREE.Math = {
+
+		generateUUID: function () {
+
+			// http://www.broofa.com/Tools/Math.uuid.htm
+
+			var chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'.split( '' );
+			var uuid = new Array( 36 );
+			var rnd = 0, r;
+
+			return function () {
+
+				for ( var i = 0; i < 36; i ++ ) {
+
+					if ( i == 8 || i == 13 || i == 18 || i == 23 ) {
+
+						uuid[ i ] = '-';
+
+					} else if ( i == 14 ) {
+
+						uuid[ i ] = '4';
+
+					} else {
+
+						if ( rnd <= 0x02 ) rnd = 0x2000000 + ( Math.random() * 0x1000000 ) | 0;
+						r = rnd & 0xf;
+						rnd = rnd >> 4;
+						uuid[ i ] = chars[ ( i == 19 ) ? ( r & 0x3 ) | 0x8 : r ];
+
+					}
+				}
+
+				return uuid.join( '' );
+
+			};
+
+		}(),
+
+		// Clamp value to range <a, b>
+
+		clamp: function ( x, a, b ) {
+
+			return ( x < a ) ? a : ( ( x > b ) ? b : x );
+
+		},
+
+		// Clamp value to range <a, inf)
+
+		clampBottom: function ( x, a ) {
+
+			return x < a ? a : x;
+
+		},
+
+		// Linear mapping from range <a1, a2> to range <b1, b2>
+
+		mapLinear: function ( x, a1, a2, b1, b2 ) {
+
+			return b1 + ( x - a1 ) * ( b2 - b1 ) / ( a2 - a1 );
+
+		},
+
+		// http://en.wikipedia.org/wiki/Smoothstep
+
+		smoothstep: function ( x, min, max ) {
+
+			if ( x <= min ) return 0;
+			if ( x >= max ) return 1;
+
+			x = ( x - min ) / ( max - min );
+
+			return x * x * ( 3 - 2 * x );
+
+		},
+
+		smootherstep: function ( x, min, max ) {
+
+			if ( x <= min ) return 0;
+			if ( x >= max ) return 1;
+
+			x = ( x - min ) / ( max - min );
+
+			return x * x * x * ( x * ( x * 6 - 15 ) + 10 );
+
+		},
+
+		// Random float from <0, 1> with 16 bits of randomness
+		// (standard Math.random() creates repetitive patterns when applied over larger space)
+
+		random16: function () {
+
+			return ( 65280 * Math.random() + 255 * Math.random() ) / 65535;
+
+		},
+
+		// Random integer from <low, high> interval
+
+		randInt: function ( low, high ) {
+
+			return low + Math.floor( Math.random() * ( high - low + 1 ) );
+
+		},
+
+		// Random float from <low, high> interval
+
+		randFloat: function ( low, high ) {
+
+			return low + Math.random() * ( high - low );
+
+		},
+
+		// Random float from <-range/2, range/2> interval
+
+		randFloatSpread: function ( range ) {
+
+			return range * ( 0.5 - Math.random() );
+
+		},
+
+		degToRad: function () {
+
+			var degreeToRadiansFactor = Math.PI / 180;
+
+			return function ( degrees ) {
+
+				return degrees * degreeToRadiansFactor;
+
+			};
+
+		}(),
+
+		radToDeg: function () {
+
+			var radianToDegreesFactor = 180 / Math.PI;
+
+			return function ( radians ) {
+
+				return radians * radianToDegreesFactor;
+
+			};
+
+		}(),
+
+		isPowerOfTwo: function ( value ) {
+
+			return ( value & ( value - 1 ) ) === 0 && value !== 0;
+
+		}
+
+	};
+
+	// File:src/math/Spline.js
+
+	/**
+	 * Spline from Tween.js, slightly optimized (and trashed)
+	 * http://sole.github.com/tween.js/examples/05_spline.html
+	 *
+	 * @author mrdoob / http://mrdoob.com/
+	 * @author alteredq / http://alteredqualia.com/
+	 */
+
+	THREE.Spline = function ( points ) {
+
+		this.points = points;
+
+		var c = [], v3 = { x: 0, y: 0, z: 0 },
+		point, intPoint, weight, w2, w3,
+		pa, pb, pc, pd;
+
+		this.initFromArray = function ( a ) {
+
+			this.points = [];
+
+			for ( var i = 0; i < a.length; i ++ ) {
+
+				this.points[ i ] = { x: a[ i ][ 0 ], y: a[ i ][ 1 ], z: a[ i ][ 2 ] };
+
+			}
+
+		};
+
+		this.getPoint = function ( k ) {
+
+			point = ( this.points.length - 1 ) * k;
+			intPoint = Math.floor( point );
+			weight = point - intPoint;
+
+			c[ 0 ] = intPoint === 0 ? intPoint : intPoint - 1;
+			c[ 1 ] = intPoint;
+			c[ 2 ] = intPoint  > this.points.length - 2 ? this.points.length - 1 : intPoint + 1;
+			c[ 3 ] = intPoint  > this.points.length - 3 ? this.points.length - 1 : intPoint + 2;
+
+			pa = this.points[ c[ 0 ] ];
+			pb = this.points[ c[ 1 ] ];
+			pc = this.points[ c[ 2 ] ];
+			pd = this.points[ c[ 3 ] ];
+
+			w2 = weight * weight;
+			w3 = weight * w2;
+
+			v3.x = interpolate( pa.x, pb.x, pc.x, pd.x, weight, w2, w3 );
+			v3.y = interpolate( pa.y, pb.y, pc.y, pd.y, weight, w2, w3 );
+			v3.z = interpolate( pa.z, pb.z, pc.z, pd.z, weight, w2, w3 );
+
+			return v3;
+
+		};
+
+		this.getControlPointsArray = function () {
+
+			var i, p, l = this.points.length,
+				coords = [];
+
+			for ( i = 0; i < l; i ++ ) {
+
+				p = this.points[ i ];
+				coords[ i ] = [ p.x, p.y, p.z ];
+
+			}
+
+			return coords;
+
+		};
+
+		// approximate length by summing linear segments
+
+		this.getLength = function ( nSubDivisions ) {
+
+			var i, index, nSamples, position,
+				point = 0, intPoint = 0, oldIntPoint = 0,
+				oldPosition = new THREE.Vector3(),
+				tmpVec = new THREE.Vector3(),
+				chunkLengths = [],
+				totalLength = 0;
+
+			// first point has 0 length
+
+			chunkLengths[ 0 ] = 0;
+
+			if ( ! nSubDivisions ) nSubDivisions = 100;
+
+			nSamples = this.points.length * nSubDivisions;
+
+			oldPosition.copy( this.points[ 0 ] );
+
+			for ( i = 1; i < nSamples; i ++ ) {
+
+				index = i / nSamples;
+
+				position = this.getPoint( index );
+				tmpVec.copy( position );
+
+				totalLength += tmpVec.distanceTo( oldPosition );
+
+				oldPosition.copy( position );
+
+				point = ( this.points.length - 1 ) * index;
+				intPoint = Math.floor( point );
+
+				if ( intPoint != oldIntPoint ) {
+
+					chunkLengths[ intPoint ] = totalLength;
+					oldIntPoint = intPoint;
+
+				}
+
+			}
+
+			// last point ends with total length
+
+			chunkLengths[ chunkLengths.length ] = totalLength;
+
+			return { chunks: chunkLengths, total: totalLength };
+
+		};
+
+		this.reparametrizeByArcLength = function ( samplingCoef ) {
+
+			var i, j,
+				index, indexCurrent, indexNext,
+				linearDistance, realDistance,
+				sampling, position,
+				newpoints = [],
+				tmpVec = new THREE.Vector3(),
+				sl = this.getLength();
+
+			newpoints.push( tmpVec.copy( this.points[ 0 ] ).clone() );
+
+			for ( i = 1; i < this.points.length; i ++ ) {
+
+				//tmpVec.copy( this.points[ i - 1 ] );
+				//linearDistance = tmpVec.distanceTo( this.points[ i ] );
+
+				realDistance = sl.chunks[ i ] - sl.chunks[ i - 1 ];
+
+				sampling = Math.ceil( samplingCoef * realDistance / sl.total );
+
+				indexCurrent = ( i - 1 ) / ( this.points.length - 1 );
+				indexNext = i / ( this.points.length - 1 );
+
+				for ( j = 1; j < sampling - 1; j ++ ) {
+
+					index = indexCurrent + j * ( 1 / sampling ) * ( indexNext - indexCurrent );
+
+					position = this.getPoint( index );
+					newpoints.push( tmpVec.copy( position ).clone() );
+
+				}
+
+				newpoints.push( tmpVec.copy( this.points[ i ] ).clone() );
+
+			}
+
+			this.points = newpoints;
+
+		};
+
+		// Catmull-Rom
+
+		function interpolate( p0, p1, p2, p3, t, t2, t3 ) {
+
+			var v0 = ( p2 - p0 ) * 0.5,
+				v1 = ( p3 - p1 ) * 0.5;
+
+			return ( 2 * ( p1 - p2 ) + v0 + v1 ) * t3 + ( - 3 * ( p1 - p2 ) - 2 * v0 - v1 ) * t2 + v0 * t + p1;
+
 		};
 
 	};
 
+	// File:src/math/Triangle.js
 
-	TWEEN.Easing = {
+	/**
+	 * @author bhouston / http://exocortex.com
+	 * @author mrdoob / http://mrdoob.com/
+	 */
 
-		Linear: {
+	THREE.Triangle = function ( a, b, c ) {
 
-			None: function (k) {
+		this.a = ( a !== undefined ) ? a : new THREE.Vector3();
+		this.b = ( b !== undefined ) ? b : new THREE.Vector3();
+		this.c = ( c !== undefined ) ? c : new THREE.Vector3();
 
-				return k;
+	};
+
+	THREE.Triangle.normal = function () {
+
+		var v0 = new THREE.Vector3();
+
+		return function ( a, b, c, optionalTarget ) {
+
+			var result = optionalTarget || new THREE.Vector3();
+
+			result.subVectors( c, b );
+			v0.subVectors( a, b );
+			result.cross( v0 );
+
+			var resultLengthSq = result.lengthSq();
+			if ( resultLengthSq > 0 ) {
+
+				return result.multiplyScalar( 1 / Math.sqrt( resultLengthSq ) );
 
 			}
+
+			return result.set( 0, 0, 0 );
+
+		};
+
+	}();
+
+	// static/instance method to calculate barycoordinates
+	// based on: http://www.blackpawn.com/texts/pointinpoly/default.html
+	THREE.Triangle.barycoordFromPoint = function () {
+
+		var v0 = new THREE.Vector3();
+		var v1 = new THREE.Vector3();
+		var v2 = new THREE.Vector3();
+
+		return function ( point, a, b, c, optionalTarget ) {
+
+			v0.subVectors( c, a );
+			v1.subVectors( b, a );
+			v2.subVectors( point, a );
+
+			var dot00 = v0.dot( v0 );
+			var dot01 = v0.dot( v1 );
+			var dot02 = v0.dot( v2 );
+			var dot11 = v1.dot( v1 );
+			var dot12 = v1.dot( v2 );
+
+			var denom = ( dot00 * dot11 - dot01 * dot01 );
+
+			var result = optionalTarget || new THREE.Vector3();
+
+			// colinear or singular triangle
+			if ( denom == 0 ) {
+				// arbitrary location outside of triangle?
+				// not sure if this is the best idea, maybe should be returning undefined
+				return result.set( - 2, - 1, - 1 );
+			}
+
+			var invDenom = 1 / denom;
+			var u = ( dot11 * dot02 - dot01 * dot12 ) * invDenom;
+			var v = ( dot00 * dot12 - dot01 * dot02 ) * invDenom;
+
+			// barycoordinates must always sum to 1
+			return result.set( 1 - u - v, v, u );
+
+		};
+
+	}();
+
+	THREE.Triangle.containsPoint = function () {
+
+		var v1 = new THREE.Vector3();
+
+		return function ( point, a, b, c ) {
+
+			var result = THREE.Triangle.barycoordFromPoint( point, a, b, c, v1 );
+
+			return ( result.x >= 0 ) && ( result.y >= 0 ) && ( ( result.x + result.y ) <= 1 );
+
+		};
+
+	}();
+
+	THREE.Triangle.prototype = {
+
+		constructor: THREE.Triangle,
+
+		set: function ( a, b, c ) {
+
+			this.a.copy( a );
+			this.b.copy( b );
+			this.c.copy( c );
+
+			return this;
 
 		},
 
-		Quadratic: {
+		setFromPointsAndIndices: function ( points, i0, i1, i2 ) {
 
-			In: function (k) {
+			this.a.copy( points[ i0 ] );
+			this.b.copy( points[ i1 ] );
+			this.c.copy( points[ i2 ] );
 
-				return k * k;
-
-			},
-
-			Out: function (k) {
-
-				return k * (2 - k);
-
-			},
-
-			InOut: function (k) {
-
-				if ((k *= 2) < 1) {
-					return 0.5 * k * k;
-				}
-
-				return - 0.5 * (--k * (k - 2) - 1);
-
-			}
+			return this;
 
 		},
 
-		Cubic: {
+		copy: function ( triangle ) {
 
-			In: function (k) {
+			this.a.copy( triangle.a );
+			this.b.copy( triangle.b );
+			this.c.copy( triangle.c );
 
-				return k * k * k;
-
-			},
-
-			Out: function (k) {
-
-				return --k * k * k + 1;
-
-			},
-
-			InOut: function (k) {
-
-				if ((k *= 2) < 1) {
-					return 0.5 * k * k * k;
-				}
-
-				return 0.5 * ((k -= 2) * k * k + 2);
-
-			}
+			return this;
 
 		},
 
-		Quartic: {
+		area: function () {
 
-			In: function (k) {
+			var v0 = new THREE.Vector3();
+			var v1 = new THREE.Vector3();
 
-				return k * k * k * k;
+			return function () {
 
-			},
+				v0.subVectors( this.c, this.b );
+				v1.subVectors( this.a, this.b );
 
-			Out: function (k) {
+				return v0.cross( v1 ).length() * 0.5;
 
-				return 1 - (--k * k * k * k);
+			};
 
-			},
+		}(),
 
-			InOut: function (k) {
+		midpoint: function ( optionalTarget ) {
 
-				if ((k *= 2) < 1) {
-					return 0.5 * k * k * k * k;
-				}
-
-				return - 0.5 * ((k -= 2) * k * k * k - 2);
-
-			}
+			var result = optionalTarget || new THREE.Vector3();
+			return result.addVectors( this.a, this.b ).add( this.c ).multiplyScalar( 1 / 3 );
 
 		},
 
-		Quintic: {
+		normal: function ( optionalTarget ) {
 
-			In: function (k) {
-
-				return k * k * k * k * k;
-
-			},
-
-			Out: function (k) {
-
-				return --k * k * k * k * k + 1;
-
-			},
-
-			InOut: function (k) {
-
-				if ((k *= 2) < 1) {
-					return 0.5 * k * k * k * k * k;
-				}
-
-				return 0.5 * ((k -= 2) * k * k * k * k + 2);
-
-			}
+			return THREE.Triangle.normal( this.a, this.b, this.c, optionalTarget );
 
 		},
 
-		Sinusoidal: {
+		plane: function ( optionalTarget ) {
 
-			In: function (k) {
+			var result = optionalTarget || new THREE.Plane();
 
-				return 1 - Math.cos(k * Math.PI / 2);
-
-			},
-
-			Out: function (k) {
-
-				return Math.sin(k * Math.PI / 2);
-
-			},
-
-			InOut: function (k) {
-
-				return 0.5 * (1 - Math.cos(Math.PI * k));
-
-			}
+			return result.setFromCoplanarPoints( this.a, this.b, this.c );
 
 		},
 
-		Exponential: {
+		barycoordFromPoint: function ( point, optionalTarget ) {
 
-			In: function (k) {
-
-				return k === 0 ? 0 : Math.pow(1024, k - 1);
-
-			},
-
-			Out: function (k) {
-
-				return k === 1 ? 1 : 1 - Math.pow(2, - 10 * k);
-
-			},
-
-			InOut: function (k) {
-
-				if (k === 0) {
-					return 0;
-				}
-
-				if (k === 1) {
-					return 1;
-				}
-
-				if ((k *= 2) < 1) {
-					return 0.5 * Math.pow(1024, k - 1);
-				}
-
-				return 0.5 * (- Math.pow(2, - 10 * (k - 1)) + 2);
-
-			}
+			return THREE.Triangle.barycoordFromPoint( point, this.a, this.b, this.c, optionalTarget );
 
 		},
 
-		Circular: {
+		containsPoint: function ( point ) {
 
-			In: function (k) {
-
-				return 1 - Math.sqrt(1 - k * k);
-
-			},
-
-			Out: function (k) {
-
-				return Math.sqrt(1 - (--k * k));
-
-			},
-
-			InOut: function (k) {
-
-				if ((k *= 2) < 1) {
-					return - 0.5 * (Math.sqrt(1 - k * k) - 1);
-				}
-
-				return 0.5 * (Math.sqrt(1 - (k -= 2) * k) + 1);
-
-			}
+			return THREE.Triangle.containsPoint( point, this.a, this.b, this.c );
 
 		},
 
-		Elastic: {
+		equals: function ( triangle ) {
 
-			In: function (k) {
-
-				if (k === 0) {
-					return 0;
-				}
-
-				if (k === 1) {
-					return 1;
-				}
-
-				return -Math.pow(2, 10 * (k - 1)) * Math.sin((k - 1.1) * 5 * Math.PI);
-
-			},
-
-			Out: function (k) {
-
-				if (k === 0) {
-					return 0;
-				}
-
-				if (k === 1) {
-					return 1;
-				}
-
-				return Math.pow(2, -10 * k) * Math.sin((k - 0.1) * 5 * Math.PI) + 1;
-
-			},
-
-			InOut: function (k) {
-
-				if (k === 0) {
-					return 0;
-				}
-
-				if (k === 1) {
-					return 1;
-				}
-
-				k *= 2;
-
-				if (k < 1) {
-					return -0.5 * Math.pow(2, 10 * (k - 1)) * Math.sin((k - 1.1) * 5 * Math.PI);
-				}
-
-				return 0.5 * Math.pow(2, -10 * (k - 1)) * Math.sin((k - 1.1) * 5 * Math.PI) + 1;
-
-			}
+			return triangle.a.equals( this.a ) && triangle.b.equals( this.b ) && triangle.c.equals( this.c );
 
 		},
 
-		Back: {
+		clone: function () {
 
-			In: function (k) {
-
-				var s = 1.70158;
-
-				return k * k * ((s + 1) * k - s);
-
-			},
-
-			Out: function (k) {
-
-				var s = 1.70158;
-
-				return --k * k * ((s + 1) * k + s) + 1;
-
-			},
-
-			InOut: function (k) {
-
-				var s = 1.70158 * 1.525;
-
-				if ((k *= 2) < 1) {
-					return 0.5 * (k * k * ((s + 1) * k - s));
-				}
-
-				return 0.5 * ((k -= 2) * k * ((s + 1) * k + s) + 2);
-
-			}
-
-		},
-
-		Bounce: {
-
-			In: function (k) {
-
-				return 1 - TWEEN.Easing.Bounce.Out(1 - k);
-
-			},
-
-			Out: function (k) {
-
-				if (k < (1 / 2.75)) {
-					return 7.5625 * k * k;
-				} else if (k < (2 / 2.75)) {
-					return 7.5625 * (k -= (1.5 / 2.75)) * k + 0.75;
-				} else if (k < (2.5 / 2.75)) {
-					return 7.5625 * (k -= (2.25 / 2.75)) * k + 0.9375;
-				} else {
-					return 7.5625 * (k -= (2.625 / 2.75)) * k + 0.984375;
-				}
-
-			},
-
-			InOut: function (k) {
-
-				if (k < 0.5) {
-					return TWEEN.Easing.Bounce.In(k * 2) * 0.5;
-				}
-
-				return TWEEN.Easing.Bounce.Out(k * 2 - 1) * 0.5 + 0.5;
-
-			}
+			return new THREE.Triangle().copy( this );
 
 		}
 
 	};
 
-	TWEEN.Interpolation = {
 
-		Linear: function (v, k) {
+	// Export the THREE object for **Node.js**, with
+	// backwards-compatibility for the old `require()` API. If we're in
+	// the browser, add `_` as a global object via a string identifier,
+	// for Closure Compiler "advanced" mode.
+	if (true) {
+	  if (typeof module !== 'undefined' && module.exports) {
+	    exports = module.exports = THREE;
+	  }
+	  exports.THREE = THREE;
+	} else {
+	  this['THREE'] = THREE;
+	}
 
-			var m = v.length - 1;
-			var f = m * k;
-			var i = Math.floor(f);
-			var fn = TWEEN.Interpolation.Utils.Linear;
-
-			if (k < 0) {
-				return fn(v[0], v[1], f);
-			}
-
-			if (k > 1) {
-				return fn(v[m], v[m - 1], m - f);
-			}
-
-			return fn(v[i], v[i + 1 > m ? m : i + 1], f - i);
-
-		},
-
-		Bezier: function (v, k) {
-
-			var b = 0;
-			var n = v.length - 1;
-			var pw = Math.pow;
-			var bn = TWEEN.Interpolation.Utils.Bernstein;
-
-			for (var i = 0; i <= n; i++) {
-				b += pw(1 - k, n - i) * pw(k, i) * v[i] * bn(n, i);
-			}
-
-			return b;
-
-		},
-
-		CatmullRom: function (v, k) {
-
-			var m = v.length - 1;
-			var f = m * k;
-			var i = Math.floor(f);
-			var fn = TWEEN.Interpolation.Utils.CatmullRom;
-
-			if (v[0] === v[m]) {
-
-				if (k < 0) {
-					i = Math.floor(f = m * (1 + k));
-				}
-
-				return fn(v[(i - 1 + m) % m], v[i], v[(i + 1) % m], v[(i + 2) % m], f - i);
-
-			} else {
-
-				if (k < 0) {
-					return v[0] - (fn(v[0], v[0], v[1], v[1], -f) - v[0]);
-				}
-
-				if (k > 1) {
-					return v[m] - (fn(v[m], v[m], v[m - 1], v[m - 1], f - m) - v[m]);
-				}
-
-				return fn(v[i ? i - 1 : 0], v[i], v[m < i + 1 ? m : i + 1], v[m < i + 2 ? m : i + 2], f - i);
-
-			}
-
-		},
-
-		Utils: {
-
-			Linear: function (p0, p1, t) {
-
-				return (p1 - p0) * t + p0;
-
-			},
-
-			Bernstein: function (n, i) {
-
-				var fc = TWEEN.Interpolation.Utils.Factorial;
-
-				return fc(n) / fc(i) / fc(n - i);
-
-			},
-
-			Factorial: (function () {
-
-				var a = [1];
-
-				return function (n) {
-
-					var s = 1;
-
-					if (a[n]) {
-						return a[n];
-					}
-
-					for (var i = n; i > 1; i--) {
-						s *= i;
-					}
-
-					a[n] = s;
-					return s;
-
-				};
-
-			})(),
-
-			CatmullRom: function (p0, p1, p2, p3, t) {
-
-				var v0 = (p2 - p0) * 0.5;
-				var v1 = (p3 - p1) * 0.5;
-				var t2 = t * t;
-				var t3 = t * t2;
-
-				return (2 * p1 - 2 * p2 + v0 + v1) * t3 + (- 3 * p1 + 3 * p2 - 2 * v0 - v1) * t2 + v0 * t + p1;
-
-			}
-
-		}
-
-	};
-
-	// UMD (Universal Module Definition)
-	(function (root) {
-
-		if (true) {
-
-			// AMD
-			!(__WEBPACK_AMD_DEFINE_ARRAY__ = [], __WEBPACK_AMD_DEFINE_RESULT__ = function () {
-				return TWEEN;
-			}.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-		} else if (typeof module !== 'undefined' && typeof exports === 'object') {
-
-			// Node.js
-			module.exports = TWEEN;
-
-		} else if (root !== undefined) {
-
-			// Global variable
-			root.TWEEN = TWEEN;
-
-		}
-
-	})(this);
-
-	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(2)))
 
 /***/ },
 /* 2 */
 /***/ function(module, exports) {
 
-	// shim for using process in browser
-	var process = module.exports = {};
-
-	// cached from whatever global is present so that test runners that stub it
-	// don't break things.  But we need to wrap it in a try catch in case it is
-	// wrapped in strict mode code which doesn't define any globals.  It's inside a
-	// function because try/catches deoptimize in certain engines.
-
-	var cachedSetTimeout;
-	var cachedClearTimeout;
-
-	function defaultSetTimout() {
-	    throw new Error('setTimeout has not been defined');
-	}
-	function defaultClearTimeout () {
-	    throw new Error('clearTimeout has not been defined');
-	}
-	(function () {
-	    try {
-	        if (typeof setTimeout === 'function') {
-	            cachedSetTimeout = setTimeout;
-	        } else {
-	            cachedSetTimeout = defaultSetTimout;
-	        }
-	    } catch (e) {
-	        cachedSetTimeout = defaultSetTimout;
-	    }
-	    try {
-	        if (typeof clearTimeout === 'function') {
-	            cachedClearTimeout = clearTimeout;
-	        } else {
-	            cachedClearTimeout = defaultClearTimeout;
-	        }
-	    } catch (e) {
-	        cachedClearTimeout = defaultClearTimeout;
-	    }
-	} ())
-	function runTimeout(fun) {
-	    if (cachedSetTimeout === setTimeout) {
-	        //normal enviroments in sane situations
-	        return setTimeout(fun, 0);
-	    }
-	    // if setTimeout wasn't available but was latter defined
-	    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
-	        cachedSetTimeout = setTimeout;
-	        return setTimeout(fun, 0);
-	    }
-	    try {
-	        // when when somebody has screwed with setTimeout but no I.E. maddness
-	        return cachedSetTimeout(fun, 0);
-	    } catch(e){
-	        try {
-	            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
-	            return cachedSetTimeout.call(null, fun, 0);
-	        } catch(e){
-	            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
-	            return cachedSetTimeout.call(this, fun, 0);
-	        }
-	    }
-
-
-	}
-	function runClearTimeout(marker) {
-	    if (cachedClearTimeout === clearTimeout) {
-	        //normal enviroments in sane situations
-	        return clearTimeout(marker);
-	    }
-	    // if clearTimeout wasn't available but was latter defined
-	    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
-	        cachedClearTimeout = clearTimeout;
-	        return clearTimeout(marker);
-	    }
-	    try {
-	        // when when somebody has screwed with setTimeout but no I.E. maddness
-	        return cachedClearTimeout(marker);
-	    } catch (e){
-	        try {
-	            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
-	            return cachedClearTimeout.call(null, marker);
-	        } catch (e){
-	            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
-	            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
-	            return cachedClearTimeout.call(this, marker);
-	        }
-	    }
-
-
-
-	}
-	var queue = [];
-	var draining = false;
-	var currentQueue;
-	var queueIndex = -1;
-
-	function cleanUpNextTick() {
-	    if (!draining || !currentQueue) {
-	        return;
-	    }
-	    draining = false;
-	    if (currentQueue.length) {
-	        queue = currentQueue.concat(queue);
-	    } else {
-	        queueIndex = -1;
-	    }
-	    if (queue.length) {
-	        drainQueue();
-	    }
-	}
-
-	function drainQueue() {
-	    if (draining) {
-	        return;
-	    }
-	    var timeout = runTimeout(cleanUpNextTick);
-	    draining = true;
-
-	    var len = queue.length;
-	    while(len) {
-	        currentQueue = queue;
-	        queue = [];
-	        while (++queueIndex < len) {
-	            if (currentQueue) {
-	                currentQueue[queueIndex].run();
-	            }
-	        }
-	        queueIndex = -1;
-	        len = queue.length;
-	    }
-	    currentQueue = null;
-	    draining = false;
-	    runClearTimeout(timeout);
-	}
-
-	process.nextTick = function (fun) {
-	    var args = new Array(arguments.length - 1);
-	    if (arguments.length > 1) {
-	        for (var i = 1; i < arguments.length; i++) {
-	            args[i - 1] = arguments[i];
-	        }
-	    }
-	    queue.push(new Item(fun, args));
-	    if (queue.length === 1 && !draining) {
-	        runTimeout(drainQueue);
-	    }
-	};
-
-	// v8 likes predictible objects
-	function Item(fun, array) {
-	    this.fun = fun;
-	    this.array = array;
-	}
-	Item.prototype.run = function () {
-	    this.fun.apply(null, this.array);
-	};
-	process.title = 'browser';
-	process.browser = true;
-	process.env = {};
-	process.argv = [];
-	process.version = ''; // empty string to avoid regexp issues
-	process.versions = {};
-
-	function noop() {}
-
-	process.on = noop;
-	process.addListener = noop;
-	process.once = noop;
-	process.off = noop;
-	process.removeListener = noop;
-	process.removeAllListeners = noop;
-	process.emit = noop;
-
-	process.binding = function (name) {
-	    throw new Error('process.binding is not supported');
-	};
-
-	process.cwd = function () { return '/' };
-	process.chdir = function (dir) {
-	    throw new Error('process.chdir is not supported');
-	};
-	process.umask = function() { return 0; };
-
+	module.exports = __WEBPACK_EXTERNAL_MODULE_2__;
 
 /***/ },
 /* 3 */
+/***/ function(module, exports) {
+
+	module.exports = __WEBPACK_EXTERNAL_MODULE_3__;
+
+/***/ },
+/* 4 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;/*!
@@ -11372,19 +17593,1573 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 4 */
-/***/ function(module, exports) {
-
-	module.exports = __WEBPACK_EXTERNAL_MODULE_4__;
-
-/***/ },
 /* 5 */
-/***/ function(module, exports) {
+/***/ function(module, exports, __webpack_require__) {
 
-	module.exports = __WEBPACK_EXTERNAL_MODULE_5__;
+	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;//     Underscore.js 1.8.3
+	//     http://underscorejs.org
+	//     (c) 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+	//     Underscore may be freely distributed under the MIT license.
+
+	(function() {
+
+	  // Baseline setup
+	  // --------------
+
+	  // Establish the root object, `window` in the browser, or `exports` on the server.
+	  var root = this;
+
+	  // Save the previous value of the `_` variable.
+	  var previousUnderscore = root._;
+
+	  // Save bytes in the minified (but not gzipped) version:
+	  var ArrayProto = Array.prototype, ObjProto = Object.prototype, FuncProto = Function.prototype;
+
+	  // Create quick reference variables for speed access to core prototypes.
+	  var
+	    push             = ArrayProto.push,
+	    slice            = ArrayProto.slice,
+	    toString         = ObjProto.toString,
+	    hasOwnProperty   = ObjProto.hasOwnProperty;
+
+	  // All **ECMAScript 5** native function implementations that we hope to use
+	  // are declared here.
+	  var
+	    nativeIsArray      = Array.isArray,
+	    nativeKeys         = Object.keys,
+	    nativeBind         = FuncProto.bind,
+	    nativeCreate       = Object.create;
+
+	  // Naked function reference for surrogate-prototype-swapping.
+	  var Ctor = function(){};
+
+	  // Create a safe reference to the Underscore object for use below.
+	  var _ = function(obj) {
+	    if (obj instanceof _) return obj;
+	    if (!(this instanceof _)) return new _(obj);
+	    this._wrapped = obj;
+	  };
+
+	  // Export the Underscore object for **Node.js**, with
+	  // backwards-compatibility for the old `require()` API. If we're in
+	  // the browser, add `_` as a global object.
+	  if (true) {
+	    if (typeof module !== 'undefined' && module.exports) {
+	      exports = module.exports = _;
+	    }
+	    exports._ = _;
+	  } else {
+	    root._ = _;
+	  }
+
+	  // Current version.
+	  _.VERSION = '1.8.3';
+
+	  // Internal function that returns an efficient (for current engines) version
+	  // of the passed-in callback, to be repeatedly applied in other Underscore
+	  // functions.
+	  var optimizeCb = function(func, context, argCount) {
+	    if (context === void 0) return func;
+	    switch (argCount == null ? 3 : argCount) {
+	      case 1: return function(value) {
+	        return func.call(context, value);
+	      };
+	      case 2: return function(value, other) {
+	        return func.call(context, value, other);
+	      };
+	      case 3: return function(value, index, collection) {
+	        return func.call(context, value, index, collection);
+	      };
+	      case 4: return function(accumulator, value, index, collection) {
+	        return func.call(context, accumulator, value, index, collection);
+	      };
+	    }
+	    return function() {
+	      return func.apply(context, arguments);
+	    };
+	  };
+
+	  // A mostly-internal function to generate callbacks that can be applied
+	  // to each element in a collection, returning the desired result — either
+	  // identity, an arbitrary callback, a property matcher, or a property accessor.
+	  var cb = function(value, context, argCount) {
+	    if (value == null) return _.identity;
+	    if (_.isFunction(value)) return optimizeCb(value, context, argCount);
+	    if (_.isObject(value)) return _.matcher(value);
+	    return _.property(value);
+	  };
+	  _.iteratee = function(value, context) {
+	    return cb(value, context, Infinity);
+	  };
+
+	  // An internal function for creating assigner functions.
+	  var createAssigner = function(keysFunc, undefinedOnly) {
+	    return function(obj) {
+	      var length = arguments.length;
+	      if (length < 2 || obj == null) return obj;
+	      for (var index = 1; index < length; index++) {
+	        var source = arguments[index],
+	            keys = keysFunc(source),
+	            l = keys.length;
+	        for (var i = 0; i < l; i++) {
+	          var key = keys[i];
+	          if (!undefinedOnly || obj[key] === void 0) obj[key] = source[key];
+	        }
+	      }
+	      return obj;
+	    };
+	  };
+
+	  // An internal function for creating a new object that inherits from another.
+	  var baseCreate = function(prototype) {
+	    if (!_.isObject(prototype)) return {};
+	    if (nativeCreate) return nativeCreate(prototype);
+	    Ctor.prototype = prototype;
+	    var result = new Ctor;
+	    Ctor.prototype = null;
+	    return result;
+	  };
+
+	  var property = function(key) {
+	    return function(obj) {
+	      return obj == null ? void 0 : obj[key];
+	    };
+	  };
+
+	  // Helper for collection methods to determine whether a collection
+	  // should be iterated as an array or as an object
+	  // Related: http://people.mozilla.org/~jorendorff/es6-draft.html#sec-tolength
+	  // Avoids a very nasty iOS 8 JIT bug on ARM-64. #2094
+	  var MAX_ARRAY_INDEX = Math.pow(2, 53) - 1;
+	  var getLength = property('length');
+	  var isArrayLike = function(collection) {
+	    var length = getLength(collection);
+	    return typeof length == 'number' && length >= 0 && length <= MAX_ARRAY_INDEX;
+	  };
+
+	  // Collection Functions
+	  // --------------------
+
+	  // The cornerstone, an `each` implementation, aka `forEach`.
+	  // Handles raw objects in addition to array-likes. Treats all
+	  // sparse array-likes as if they were dense.
+	  _.each = _.forEach = function(obj, iteratee, context) {
+	    iteratee = optimizeCb(iteratee, context);
+	    var i, length;
+	    if (isArrayLike(obj)) {
+	      for (i = 0, length = obj.length; i < length; i++) {
+	        iteratee(obj[i], i, obj);
+	      }
+	    } else {
+	      var keys = _.keys(obj);
+	      for (i = 0, length = keys.length; i < length; i++) {
+	        iteratee(obj[keys[i]], keys[i], obj);
+	      }
+	    }
+	    return obj;
+	  };
+
+	  // Return the results of applying the iteratee to each element.
+	  _.map = _.collect = function(obj, iteratee, context) {
+	    iteratee = cb(iteratee, context);
+	    var keys = !isArrayLike(obj) && _.keys(obj),
+	        length = (keys || obj).length,
+	        results = Array(length);
+	    for (var index = 0; index < length; index++) {
+	      var currentKey = keys ? keys[index] : index;
+	      results[index] = iteratee(obj[currentKey], currentKey, obj);
+	    }
+	    return results;
+	  };
+
+	  // Create a reducing function iterating left or right.
+	  function createReduce(dir) {
+	    // Optimized iterator function as using arguments.length
+	    // in the main function will deoptimize the, see #1991.
+	    function iterator(obj, iteratee, memo, keys, index, length) {
+	      for (; index >= 0 && index < length; index += dir) {
+	        var currentKey = keys ? keys[index] : index;
+	        memo = iteratee(memo, obj[currentKey], currentKey, obj);
+	      }
+	      return memo;
+	    }
+
+	    return function(obj, iteratee, memo, context) {
+	      iteratee = optimizeCb(iteratee, context, 4);
+	      var keys = !isArrayLike(obj) && _.keys(obj),
+	          length = (keys || obj).length,
+	          index = dir > 0 ? 0 : length - 1;
+	      // Determine the initial value if none is provided.
+	      if (arguments.length < 3) {
+	        memo = obj[keys ? keys[index] : index];
+	        index += dir;
+	      }
+	      return iterator(obj, iteratee, memo, keys, index, length);
+	    };
+	  }
+
+	  // **Reduce** builds up a single result from a list of values, aka `inject`,
+	  // or `foldl`.
+	  _.reduce = _.foldl = _.inject = createReduce(1);
+
+	  // The right-associative version of reduce, also known as `foldr`.
+	  _.reduceRight = _.foldr = createReduce(-1);
+
+	  // Return the first value which passes a truth test. Aliased as `detect`.
+	  _.find = _.detect = function(obj, predicate, context) {
+	    var key;
+	    if (isArrayLike(obj)) {
+	      key = _.findIndex(obj, predicate, context);
+	    } else {
+	      key = _.findKey(obj, predicate, context);
+	    }
+	    if (key !== void 0 && key !== -1) return obj[key];
+	  };
+
+	  // Return all the elements that pass a truth test.
+	  // Aliased as `select`.
+	  _.filter = _.select = function(obj, predicate, context) {
+	    var results = [];
+	    predicate = cb(predicate, context);
+	    _.each(obj, function(value, index, list) {
+	      if (predicate(value, index, list)) results.push(value);
+	    });
+	    return results;
+	  };
+
+	  // Return all the elements for which a truth test fails.
+	  _.reject = function(obj, predicate, context) {
+	    return _.filter(obj, _.negate(cb(predicate)), context);
+	  };
+
+	  // Determine whether all of the elements match a truth test.
+	  // Aliased as `all`.
+	  _.every = _.all = function(obj, predicate, context) {
+	    predicate = cb(predicate, context);
+	    var keys = !isArrayLike(obj) && _.keys(obj),
+	        length = (keys || obj).length;
+	    for (var index = 0; index < length; index++) {
+	      var currentKey = keys ? keys[index] : index;
+	      if (!predicate(obj[currentKey], currentKey, obj)) return false;
+	    }
+	    return true;
+	  };
+
+	  // Determine if at least one element in the object matches a truth test.
+	  // Aliased as `any`.
+	  _.some = _.any = function(obj, predicate, context) {
+	    predicate = cb(predicate, context);
+	    var keys = !isArrayLike(obj) && _.keys(obj),
+	        length = (keys || obj).length;
+	    for (var index = 0; index < length; index++) {
+	      var currentKey = keys ? keys[index] : index;
+	      if (predicate(obj[currentKey], currentKey, obj)) return true;
+	    }
+	    return false;
+	  };
+
+	  // Determine if the array or object contains a given item (using `===`).
+	  // Aliased as `includes` and `include`.
+	  _.contains = _.includes = _.include = function(obj, item, fromIndex, guard) {
+	    if (!isArrayLike(obj)) obj = _.values(obj);
+	    if (typeof fromIndex != 'number' || guard) fromIndex = 0;
+	    return _.indexOf(obj, item, fromIndex) >= 0;
+	  };
+
+	  // Invoke a method (with arguments) on every item in a collection.
+	  _.invoke = function(obj, method) {
+	    var args = slice.call(arguments, 2);
+	    var isFunc = _.isFunction(method);
+	    return _.map(obj, function(value) {
+	      var func = isFunc ? method : value[method];
+	      return func == null ? func : func.apply(value, args);
+	    });
+	  };
+
+	  // Convenience version of a common use case of `map`: fetching a property.
+	  _.pluck = function(obj, key) {
+	    return _.map(obj, _.property(key));
+	  };
+
+	  // Convenience version of a common use case of `filter`: selecting only objects
+	  // containing specific `key:value` pairs.
+	  _.where = function(obj, attrs) {
+	    return _.filter(obj, _.matcher(attrs));
+	  };
+
+	  // Convenience version of a common use case of `find`: getting the first object
+	  // containing specific `key:value` pairs.
+	  _.findWhere = function(obj, attrs) {
+	    return _.find(obj, _.matcher(attrs));
+	  };
+
+	  // Return the maximum element (or element-based computation).
+	  _.max = function(obj, iteratee, context) {
+	    var result = -Infinity, lastComputed = -Infinity,
+	        value, computed;
+	    if (iteratee == null && obj != null) {
+	      obj = isArrayLike(obj) ? obj : _.values(obj);
+	      for (var i = 0, length = obj.length; i < length; i++) {
+	        value = obj[i];
+	        if (value > result) {
+	          result = value;
+	        }
+	      }
+	    } else {
+	      iteratee = cb(iteratee, context);
+	      _.each(obj, function(value, index, list) {
+	        computed = iteratee(value, index, list);
+	        if (computed > lastComputed || computed === -Infinity && result === -Infinity) {
+	          result = value;
+	          lastComputed = computed;
+	        }
+	      });
+	    }
+	    return result;
+	  };
+
+	  // Return the minimum element (or element-based computation).
+	  _.min = function(obj, iteratee, context) {
+	    var result = Infinity, lastComputed = Infinity,
+	        value, computed;
+	    if (iteratee == null && obj != null) {
+	      obj = isArrayLike(obj) ? obj : _.values(obj);
+	      for (var i = 0, length = obj.length; i < length; i++) {
+	        value = obj[i];
+	        if (value < result) {
+	          result = value;
+	        }
+	      }
+	    } else {
+	      iteratee = cb(iteratee, context);
+	      _.each(obj, function(value, index, list) {
+	        computed = iteratee(value, index, list);
+	        if (computed < lastComputed || computed === Infinity && result === Infinity) {
+	          result = value;
+	          lastComputed = computed;
+	        }
+	      });
+	    }
+	    return result;
+	  };
+
+	  // Shuffle a collection, using the modern version of the
+	  // [Fisher-Yates shuffle](http://en.wikipedia.org/wiki/Fisher–Yates_shuffle).
+	  _.shuffle = function(obj) {
+	    var set = isArrayLike(obj) ? obj : _.values(obj);
+	    var length = set.length;
+	    var shuffled = Array(length);
+	    for (var index = 0, rand; index < length; index++) {
+	      rand = _.random(0, index);
+	      if (rand !== index) shuffled[index] = shuffled[rand];
+	      shuffled[rand] = set[index];
+	    }
+	    return shuffled;
+	  };
+
+	  // Sample **n** random values from a collection.
+	  // If **n** is not specified, returns a single random element.
+	  // The internal `guard` argument allows it to work with `map`.
+	  _.sample = function(obj, n, guard) {
+	    if (n == null || guard) {
+	      if (!isArrayLike(obj)) obj = _.values(obj);
+	      return obj[_.random(obj.length - 1)];
+	    }
+	    return _.shuffle(obj).slice(0, Math.max(0, n));
+	  };
+
+	  // Sort the object's values by a criterion produced by an iteratee.
+	  _.sortBy = function(obj, iteratee, context) {
+	    iteratee = cb(iteratee, context);
+	    return _.pluck(_.map(obj, function(value, index, list) {
+	      return {
+	        value: value,
+	        index: index,
+	        criteria: iteratee(value, index, list)
+	      };
+	    }).sort(function(left, right) {
+	      var a = left.criteria;
+	      var b = right.criteria;
+	      if (a !== b) {
+	        if (a > b || a === void 0) return 1;
+	        if (a < b || b === void 0) return -1;
+	      }
+	      return left.index - right.index;
+	    }), 'value');
+	  };
+
+	  // An internal function used for aggregate "group by" operations.
+	  var group = function(behavior) {
+	    return function(obj, iteratee, context) {
+	      var result = {};
+	      iteratee = cb(iteratee, context);
+	      _.each(obj, function(value, index) {
+	        var key = iteratee(value, index, obj);
+	        behavior(result, value, key);
+	      });
+	      return result;
+	    };
+	  };
+
+	  // Groups the object's values by a criterion. Pass either a string attribute
+	  // to group by, or a function that returns the criterion.
+	  _.groupBy = group(function(result, value, key) {
+	    if (_.has(result, key)) result[key].push(value); else result[key] = [value];
+	  });
+
+	  // Indexes the object's values by a criterion, similar to `groupBy`, but for
+	  // when you know that your index values will be unique.
+	  _.indexBy = group(function(result, value, key) {
+	    result[key] = value;
+	  });
+
+	  // Counts instances of an object that group by a certain criterion. Pass
+	  // either a string attribute to count by, or a function that returns the
+	  // criterion.
+	  _.countBy = group(function(result, value, key) {
+	    if (_.has(result, key)) result[key]++; else result[key] = 1;
+	  });
+
+	  // Safely create a real, live array from anything iterable.
+	  _.toArray = function(obj) {
+	    if (!obj) return [];
+	    if (_.isArray(obj)) return slice.call(obj);
+	    if (isArrayLike(obj)) return _.map(obj, _.identity);
+	    return _.values(obj);
+	  };
+
+	  // Return the number of elements in an object.
+	  _.size = function(obj) {
+	    if (obj == null) return 0;
+	    return isArrayLike(obj) ? obj.length : _.keys(obj).length;
+	  };
+
+	  // Split a collection into two arrays: one whose elements all satisfy the given
+	  // predicate, and one whose elements all do not satisfy the predicate.
+	  _.partition = function(obj, predicate, context) {
+	    predicate = cb(predicate, context);
+	    var pass = [], fail = [];
+	    _.each(obj, function(value, key, obj) {
+	      (predicate(value, key, obj) ? pass : fail).push(value);
+	    });
+	    return [pass, fail];
+	  };
+
+	  // Array Functions
+	  // ---------------
+
+	  // Get the first element of an array. Passing **n** will return the first N
+	  // values in the array. Aliased as `head` and `take`. The **guard** check
+	  // allows it to work with `_.map`.
+	  _.first = _.head = _.take = function(array, n, guard) {
+	    if (array == null) return void 0;
+	    if (n == null || guard) return array[0];
+	    return _.initial(array, array.length - n);
+	  };
+
+	  // Returns everything but the last entry of the array. Especially useful on
+	  // the arguments object. Passing **n** will return all the values in
+	  // the array, excluding the last N.
+	  _.initial = function(array, n, guard) {
+	    return slice.call(array, 0, Math.max(0, array.length - (n == null || guard ? 1 : n)));
+	  };
+
+	  // Get the last element of an array. Passing **n** will return the last N
+	  // values in the array.
+	  _.last = function(array, n, guard) {
+	    if (array == null) return void 0;
+	    if (n == null || guard) return array[array.length - 1];
+	    return _.rest(array, Math.max(0, array.length - n));
+	  };
+
+	  // Returns everything but the first entry of the array. Aliased as `tail` and `drop`.
+	  // Especially useful on the arguments object. Passing an **n** will return
+	  // the rest N values in the array.
+	  _.rest = _.tail = _.drop = function(array, n, guard) {
+	    return slice.call(array, n == null || guard ? 1 : n);
+	  };
+
+	  // Trim out all falsy values from an array.
+	  _.compact = function(array) {
+	    return _.filter(array, _.identity);
+	  };
+
+	  // Internal implementation of a recursive `flatten` function.
+	  var flatten = function(input, shallow, strict, startIndex) {
+	    var output = [], idx = 0;
+	    for (var i = startIndex || 0, length = getLength(input); i < length; i++) {
+	      var value = input[i];
+	      if (isArrayLike(value) && (_.isArray(value) || _.isArguments(value))) {
+	        //flatten current level of array or arguments object
+	        if (!shallow) value = flatten(value, shallow, strict);
+	        var j = 0, len = value.length;
+	        output.length += len;
+	        while (j < len) {
+	          output[idx++] = value[j++];
+	        }
+	      } else if (!strict) {
+	        output[idx++] = value;
+	      }
+	    }
+	    return output;
+	  };
+
+	  // Flatten out an array, either recursively (by default), or just one level.
+	  _.flatten = function(array, shallow) {
+	    return flatten(array, shallow, false);
+	  };
+
+	  // Return a version of the array that does not contain the specified value(s).
+	  _.without = function(array) {
+	    return _.difference(array, slice.call(arguments, 1));
+	  };
+
+	  // Produce a duplicate-free version of the array. If the array has already
+	  // been sorted, you have the option of using a faster algorithm.
+	  // Aliased as `unique`.
+	  _.uniq = _.unique = function(array, isSorted, iteratee, context) {
+	    if (!_.isBoolean(isSorted)) {
+	      context = iteratee;
+	      iteratee = isSorted;
+	      isSorted = false;
+	    }
+	    if (iteratee != null) iteratee = cb(iteratee, context);
+	    var result = [];
+	    var seen = [];
+	    for (var i = 0, length = getLength(array); i < length; i++) {
+	      var value = array[i],
+	          computed = iteratee ? iteratee(value, i, array) : value;
+	      if (isSorted) {
+	        if (!i || seen !== computed) result.push(value);
+	        seen = computed;
+	      } else if (iteratee) {
+	        if (!_.contains(seen, computed)) {
+	          seen.push(computed);
+	          result.push(value);
+	        }
+	      } else if (!_.contains(result, value)) {
+	        result.push(value);
+	      }
+	    }
+	    return result;
+	  };
+
+	  // Produce an array that contains the union: each distinct element from all of
+	  // the passed-in arrays.
+	  _.union = function() {
+	    return _.uniq(flatten(arguments, true, true));
+	  };
+
+	  // Produce an array that contains every item shared between all the
+	  // passed-in arrays.
+	  _.intersection = function(array) {
+	    var result = [];
+	    var argsLength = arguments.length;
+	    for (var i = 0, length = getLength(array); i < length; i++) {
+	      var item = array[i];
+	      if (_.contains(result, item)) continue;
+	      for (var j = 1; j < argsLength; j++) {
+	        if (!_.contains(arguments[j], item)) break;
+	      }
+	      if (j === argsLength) result.push(item);
+	    }
+	    return result;
+	  };
+
+	  // Take the difference between one array and a number of other arrays.
+	  // Only the elements present in just the first array will remain.
+	  _.difference = function(array) {
+	    var rest = flatten(arguments, true, true, 1);
+	    return _.filter(array, function(value){
+	      return !_.contains(rest, value);
+	    });
+	  };
+
+	  // Zip together multiple lists into a single array -- elements that share
+	  // an index go together.
+	  _.zip = function() {
+	    return _.unzip(arguments);
+	  };
+
+	  // Complement of _.zip. Unzip accepts an array of arrays and groups
+	  // each array's elements on shared indices
+	  _.unzip = function(array) {
+	    var length = array && _.max(array, getLength).length || 0;
+	    var result = Array(length);
+
+	    for (var index = 0; index < length; index++) {
+	      result[index] = _.pluck(array, index);
+	    }
+	    return result;
+	  };
+
+	  // Converts lists into objects. Pass either a single array of `[key, value]`
+	  // pairs, or two parallel arrays of the same length -- one of keys, and one of
+	  // the corresponding values.
+	  _.object = function(list, values) {
+	    var result = {};
+	    for (var i = 0, length = getLength(list); i < length; i++) {
+	      if (values) {
+	        result[list[i]] = values[i];
+	      } else {
+	        result[list[i][0]] = list[i][1];
+	      }
+	    }
+	    return result;
+	  };
+
+	  // Generator function to create the findIndex and findLastIndex functions
+	  function createPredicateIndexFinder(dir) {
+	    return function(array, predicate, context) {
+	      predicate = cb(predicate, context);
+	      var length = getLength(array);
+	      var index = dir > 0 ? 0 : length - 1;
+	      for (; index >= 0 && index < length; index += dir) {
+	        if (predicate(array[index], index, array)) return index;
+	      }
+	      return -1;
+	    };
+	  }
+
+	  // Returns the first index on an array-like that passes a predicate test
+	  _.findIndex = createPredicateIndexFinder(1);
+	  _.findLastIndex = createPredicateIndexFinder(-1);
+
+	  // Use a comparator function to figure out the smallest index at which
+	  // an object should be inserted so as to maintain order. Uses binary search.
+	  _.sortedIndex = function(array, obj, iteratee, context) {
+	    iteratee = cb(iteratee, context, 1);
+	    var value = iteratee(obj);
+	    var low = 0, high = getLength(array);
+	    while (low < high) {
+	      var mid = Math.floor((low + high) / 2);
+	      if (iteratee(array[mid]) < value) low = mid + 1; else high = mid;
+	    }
+	    return low;
+	  };
+
+	  // Generator function to create the indexOf and lastIndexOf functions
+	  function createIndexFinder(dir, predicateFind, sortedIndex) {
+	    return function(array, item, idx) {
+	      var i = 0, length = getLength(array);
+	      if (typeof idx == 'number') {
+	        if (dir > 0) {
+	            i = idx >= 0 ? idx : Math.max(idx + length, i);
+	        } else {
+	            length = idx >= 0 ? Math.min(idx + 1, length) : idx + length + 1;
+	        }
+	      } else if (sortedIndex && idx && length) {
+	        idx = sortedIndex(array, item);
+	        return array[idx] === item ? idx : -1;
+	      }
+	      if (item !== item) {
+	        idx = predicateFind(slice.call(array, i, length), _.isNaN);
+	        return idx >= 0 ? idx + i : -1;
+	      }
+	      for (idx = dir > 0 ? i : length - 1; idx >= 0 && idx < length; idx += dir) {
+	        if (array[idx] === item) return idx;
+	      }
+	      return -1;
+	    };
+	  }
+
+	  // Return the position of the first occurrence of an item in an array,
+	  // or -1 if the item is not included in the array.
+	  // If the array is large and already in sort order, pass `true`
+	  // for **isSorted** to use binary search.
+	  _.indexOf = createIndexFinder(1, _.findIndex, _.sortedIndex);
+	  _.lastIndexOf = createIndexFinder(-1, _.findLastIndex);
+
+	  // Generate an integer Array containing an arithmetic progression. A port of
+	  // the native Python `range()` function. See
+	  // [the Python documentation](http://docs.python.org/library/functions.html#range).
+	  _.range = function(start, stop, step) {
+	    if (stop == null) {
+	      stop = start || 0;
+	      start = 0;
+	    }
+	    step = step || 1;
+
+	    var length = Math.max(Math.ceil((stop - start) / step), 0);
+	    var range = Array(length);
+
+	    for (var idx = 0; idx < length; idx++, start += step) {
+	      range[idx] = start;
+	    }
+
+	    return range;
+	  };
+
+	  // Function (ahem) Functions
+	  // ------------------
+
+	  // Determines whether to execute a function as a constructor
+	  // or a normal function with the provided arguments
+	  var executeBound = function(sourceFunc, boundFunc, context, callingContext, args) {
+	    if (!(callingContext instanceof boundFunc)) return sourceFunc.apply(context, args);
+	    var self = baseCreate(sourceFunc.prototype);
+	    var result = sourceFunc.apply(self, args);
+	    if (_.isObject(result)) return result;
+	    return self;
+	  };
+
+	  // Create a function bound to a given object (assigning `this`, and arguments,
+	  // optionally). Delegates to **ECMAScript 5**'s native `Function.bind` if
+	  // available.
+	  _.bind = function(func, context) {
+	    if (nativeBind && func.bind === nativeBind) return nativeBind.apply(func, slice.call(arguments, 1));
+	    if (!_.isFunction(func)) throw new TypeError('Bind must be called on a function');
+	    var args = slice.call(arguments, 2);
+	    var bound = function() {
+	      return executeBound(func, bound, context, this, args.concat(slice.call(arguments)));
+	    };
+	    return bound;
+	  };
+
+	  // Partially apply a function by creating a version that has had some of its
+	  // arguments pre-filled, without changing its dynamic `this` context. _ acts
+	  // as a placeholder, allowing any combination of arguments to be pre-filled.
+	  _.partial = function(func) {
+	    var boundArgs = slice.call(arguments, 1);
+	    var bound = function() {
+	      var position = 0, length = boundArgs.length;
+	      var args = Array(length);
+	      for (var i = 0; i < length; i++) {
+	        args[i] = boundArgs[i] === _ ? arguments[position++] : boundArgs[i];
+	      }
+	      while (position < arguments.length) args.push(arguments[position++]);
+	      return executeBound(func, bound, this, this, args);
+	    };
+	    return bound;
+	  };
+
+	  // Bind a number of an object's methods to that object. Remaining arguments
+	  // are the method names to be bound. Useful for ensuring that all callbacks
+	  // defined on an object belong to it.
+	  _.bindAll = function(obj) {
+	    var i, length = arguments.length, key;
+	    if (length <= 1) throw new Error('bindAll must be passed function names');
+	    for (i = 1; i < length; i++) {
+	      key = arguments[i];
+	      obj[key] = _.bind(obj[key], obj);
+	    }
+	    return obj;
+	  };
+
+	  // Memoize an expensive function by storing its results.
+	  _.memoize = function(func, hasher) {
+	    var memoize = function(key) {
+	      var cache = memoize.cache;
+	      var address = '' + (hasher ? hasher.apply(this, arguments) : key);
+	      if (!_.has(cache, address)) cache[address] = func.apply(this, arguments);
+	      return cache[address];
+	    };
+	    memoize.cache = {};
+	    return memoize;
+	  };
+
+	  // Delays a function for the given number of milliseconds, and then calls
+	  // it with the arguments supplied.
+	  _.delay = function(func, wait) {
+	    var args = slice.call(arguments, 2);
+	    return setTimeout(function(){
+	      return func.apply(null, args);
+	    }, wait);
+	  };
+
+	  // Defers a function, scheduling it to run after the current call stack has
+	  // cleared.
+	  _.defer = _.partial(_.delay, _, 1);
+
+	  // Returns a function, that, when invoked, will only be triggered at most once
+	  // during a given window of time. Normally, the throttled function will run
+	  // as much as it can, without ever going more than once per `wait` duration;
+	  // but if you'd like to disable the execution on the leading edge, pass
+	  // `{leading: false}`. To disable execution on the trailing edge, ditto.
+	  _.throttle = function(func, wait, options) {
+	    var context, args, result;
+	    var timeout = null;
+	    var previous = 0;
+	    if (!options) options = {};
+	    var later = function() {
+	      previous = options.leading === false ? 0 : _.now();
+	      timeout = null;
+	      result = func.apply(context, args);
+	      if (!timeout) context = args = null;
+	    };
+	    return function() {
+	      var now = _.now();
+	      if (!previous && options.leading === false) previous = now;
+	      var remaining = wait - (now - previous);
+	      context = this;
+	      args = arguments;
+	      if (remaining <= 0 || remaining > wait) {
+	        if (timeout) {
+	          clearTimeout(timeout);
+	          timeout = null;
+	        }
+	        previous = now;
+	        result = func.apply(context, args);
+	        if (!timeout) context = args = null;
+	      } else if (!timeout && options.trailing !== false) {
+	        timeout = setTimeout(later, remaining);
+	      }
+	      return result;
+	    };
+	  };
+
+	  // Returns a function, that, as long as it continues to be invoked, will not
+	  // be triggered. The function will be called after it stops being called for
+	  // N milliseconds. If `immediate` is passed, trigger the function on the
+	  // leading edge, instead of the trailing.
+	  _.debounce = function(func, wait, immediate) {
+	    var timeout, args, context, timestamp, result;
+
+	    var later = function() {
+	      var last = _.now() - timestamp;
+
+	      if (last < wait && last >= 0) {
+	        timeout = setTimeout(later, wait - last);
+	      } else {
+	        timeout = null;
+	        if (!immediate) {
+	          result = func.apply(context, args);
+	          if (!timeout) context = args = null;
+	        }
+	      }
+	    };
+
+	    return function() {
+	      context = this;
+	      args = arguments;
+	      timestamp = _.now();
+	      var callNow = immediate && !timeout;
+	      if (!timeout) timeout = setTimeout(later, wait);
+	      if (callNow) {
+	        result = func.apply(context, args);
+	        context = args = null;
+	      }
+
+	      return result;
+	    };
+	  };
+
+	  // Returns the first function passed as an argument to the second,
+	  // allowing you to adjust arguments, run code before and after, and
+	  // conditionally execute the original function.
+	  _.wrap = function(func, wrapper) {
+	    return _.partial(wrapper, func);
+	  };
+
+	  // Returns a negated version of the passed-in predicate.
+	  _.negate = function(predicate) {
+	    return function() {
+	      return !predicate.apply(this, arguments);
+	    };
+	  };
+
+	  // Returns a function that is the composition of a list of functions, each
+	  // consuming the return value of the function that follows.
+	  _.compose = function() {
+	    var args = arguments;
+	    var start = args.length - 1;
+	    return function() {
+	      var i = start;
+	      var result = args[start].apply(this, arguments);
+	      while (i--) result = args[i].call(this, result);
+	      return result;
+	    };
+	  };
+
+	  // Returns a function that will only be executed on and after the Nth call.
+	  _.after = function(times, func) {
+	    return function() {
+	      if (--times < 1) {
+	        return func.apply(this, arguments);
+	      }
+	    };
+	  };
+
+	  // Returns a function that will only be executed up to (but not including) the Nth call.
+	  _.before = function(times, func) {
+	    var memo;
+	    return function() {
+	      if (--times > 0) {
+	        memo = func.apply(this, arguments);
+	      }
+	      if (times <= 1) func = null;
+	      return memo;
+	    };
+	  };
+
+	  // Returns a function that will be executed at most one time, no matter how
+	  // often you call it. Useful for lazy initialization.
+	  _.once = _.partial(_.before, 2);
+
+	  // Object Functions
+	  // ----------------
+
+	  // Keys in IE < 9 that won't be iterated by `for key in ...` and thus missed.
+	  var hasEnumBug = !{toString: null}.propertyIsEnumerable('toString');
+	  var nonEnumerableProps = ['valueOf', 'isPrototypeOf', 'toString',
+	                      'propertyIsEnumerable', 'hasOwnProperty', 'toLocaleString'];
+
+	  function collectNonEnumProps(obj, keys) {
+	    var nonEnumIdx = nonEnumerableProps.length;
+	    var constructor = obj.constructor;
+	    var proto = (_.isFunction(constructor) && constructor.prototype) || ObjProto;
+
+	    // Constructor is a special case.
+	    var prop = 'constructor';
+	    if (_.has(obj, prop) && !_.contains(keys, prop)) keys.push(prop);
+
+	    while (nonEnumIdx--) {
+	      prop = nonEnumerableProps[nonEnumIdx];
+	      if (prop in obj && obj[prop] !== proto[prop] && !_.contains(keys, prop)) {
+	        keys.push(prop);
+	      }
+	    }
+	  }
+
+	  // Retrieve the names of an object's own properties.
+	  // Delegates to **ECMAScript 5**'s native `Object.keys`
+	  _.keys = function(obj) {
+	    if (!_.isObject(obj)) return [];
+	    if (nativeKeys) return nativeKeys(obj);
+	    var keys = [];
+	    for (var key in obj) if (_.has(obj, key)) keys.push(key);
+	    // Ahem, IE < 9.
+	    if (hasEnumBug) collectNonEnumProps(obj, keys);
+	    return keys;
+	  };
+
+	  // Retrieve all the property names of an object.
+	  _.allKeys = function(obj) {
+	    if (!_.isObject(obj)) return [];
+	    var keys = [];
+	    for (var key in obj) keys.push(key);
+	    // Ahem, IE < 9.
+	    if (hasEnumBug) collectNonEnumProps(obj, keys);
+	    return keys;
+	  };
+
+	  // Retrieve the values of an object's properties.
+	  _.values = function(obj) {
+	    var keys = _.keys(obj);
+	    var length = keys.length;
+	    var values = Array(length);
+	    for (var i = 0; i < length; i++) {
+	      values[i] = obj[keys[i]];
+	    }
+	    return values;
+	  };
+
+	  // Returns the results of applying the iteratee to each element of the object
+	  // In contrast to _.map it returns an object
+	  _.mapObject = function(obj, iteratee, context) {
+	    iteratee = cb(iteratee, context);
+	    var keys =  _.keys(obj),
+	          length = keys.length,
+	          results = {},
+	          currentKey;
+	      for (var index = 0; index < length; index++) {
+	        currentKey = keys[index];
+	        results[currentKey] = iteratee(obj[currentKey], currentKey, obj);
+	      }
+	      return results;
+	  };
+
+	  // Convert an object into a list of `[key, value]` pairs.
+	  _.pairs = function(obj) {
+	    var keys = _.keys(obj);
+	    var length = keys.length;
+	    var pairs = Array(length);
+	    for (var i = 0; i < length; i++) {
+	      pairs[i] = [keys[i], obj[keys[i]]];
+	    }
+	    return pairs;
+	  };
+
+	  // Invert the keys and values of an object. The values must be serializable.
+	  _.invert = function(obj) {
+	    var result = {};
+	    var keys = _.keys(obj);
+	    for (var i = 0, length = keys.length; i < length; i++) {
+	      result[obj[keys[i]]] = keys[i];
+	    }
+	    return result;
+	  };
+
+	  // Return a sorted list of the function names available on the object.
+	  // Aliased as `methods`
+	  _.functions = _.methods = function(obj) {
+	    var names = [];
+	    for (var key in obj) {
+	      if (_.isFunction(obj[key])) names.push(key);
+	    }
+	    return names.sort();
+	  };
+
+	  // Extend a given object with all the properties in passed-in object(s).
+	  _.extend = createAssigner(_.allKeys);
+
+	  // Assigns a given object with all the own properties in the passed-in object(s)
+	  // (https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/assign)
+	  _.extendOwn = _.assign = createAssigner(_.keys);
+
+	  // Returns the first key on an object that passes a predicate test
+	  _.findKey = function(obj, predicate, context) {
+	    predicate = cb(predicate, context);
+	    var keys = _.keys(obj), key;
+	    for (var i = 0, length = keys.length; i < length; i++) {
+	      key = keys[i];
+	      if (predicate(obj[key], key, obj)) return key;
+	    }
+	  };
+
+	  // Return a copy of the object only containing the whitelisted properties.
+	  _.pick = function(object, oiteratee, context) {
+	    var result = {}, obj = object, iteratee, keys;
+	    if (obj == null) return result;
+	    if (_.isFunction(oiteratee)) {
+	      keys = _.allKeys(obj);
+	      iteratee = optimizeCb(oiteratee, context);
+	    } else {
+	      keys = flatten(arguments, false, false, 1);
+	      iteratee = function(value, key, obj) { return key in obj; };
+	      obj = Object(obj);
+	    }
+	    for (var i = 0, length = keys.length; i < length; i++) {
+	      var key = keys[i];
+	      var value = obj[key];
+	      if (iteratee(value, key, obj)) result[key] = value;
+	    }
+	    return result;
+	  };
+
+	   // Return a copy of the object without the blacklisted properties.
+	  _.omit = function(obj, iteratee, context) {
+	    if (_.isFunction(iteratee)) {
+	      iteratee = _.negate(iteratee);
+	    } else {
+	      var keys = _.map(flatten(arguments, false, false, 1), String);
+	      iteratee = function(value, key) {
+	        return !_.contains(keys, key);
+	      };
+	    }
+	    return _.pick(obj, iteratee, context);
+	  };
+
+	  // Fill in a given object with default properties.
+	  _.defaults = createAssigner(_.allKeys, true);
+
+	  // Creates an object that inherits from the given prototype object.
+	  // If additional properties are provided then they will be added to the
+	  // created object.
+	  _.create = function(prototype, props) {
+	    var result = baseCreate(prototype);
+	    if (props) _.extendOwn(result, props);
+	    return result;
+	  };
+
+	  // Create a (shallow-cloned) duplicate of an object.
+	  _.clone = function(obj) {
+	    if (!_.isObject(obj)) return obj;
+	    return _.isArray(obj) ? obj.slice() : _.extend({}, obj);
+	  };
+
+	  // Invokes interceptor with the obj, and then returns obj.
+	  // The primary purpose of this method is to "tap into" a method chain, in
+	  // order to perform operations on intermediate results within the chain.
+	  _.tap = function(obj, interceptor) {
+	    interceptor(obj);
+	    return obj;
+	  };
+
+	  // Returns whether an object has a given set of `key:value` pairs.
+	  _.isMatch = function(object, attrs) {
+	    var keys = _.keys(attrs), length = keys.length;
+	    if (object == null) return !length;
+	    var obj = Object(object);
+	    for (var i = 0; i < length; i++) {
+	      var key = keys[i];
+	      if (attrs[key] !== obj[key] || !(key in obj)) return false;
+	    }
+	    return true;
+	  };
+
+
+	  // Internal recursive comparison function for `isEqual`.
+	  var eq = function(a, b, aStack, bStack) {
+	    // Identical objects are equal. `0 === -0`, but they aren't identical.
+	    // See the [Harmony `egal` proposal](http://wiki.ecmascript.org/doku.php?id=harmony:egal).
+	    if (a === b) return a !== 0 || 1 / a === 1 / b;
+	    // A strict comparison is necessary because `null == undefined`.
+	    if (a == null || b == null) return a === b;
+	    // Unwrap any wrapped objects.
+	    if (a instanceof _) a = a._wrapped;
+	    if (b instanceof _) b = b._wrapped;
+	    // Compare `[[Class]]` names.
+	    var className = toString.call(a);
+	    if (className !== toString.call(b)) return false;
+	    switch (className) {
+	      // Strings, numbers, regular expressions, dates, and booleans are compared by value.
+	      case '[object RegExp]':
+	      // RegExps are coerced to strings for comparison (Note: '' + /a/i === '/a/i')
+	      case '[object String]':
+	        // Primitives and their corresponding object wrappers are equivalent; thus, `"5"` is
+	        // equivalent to `new String("5")`.
+	        return '' + a === '' + b;
+	      case '[object Number]':
+	        // `NaN`s are equivalent, but non-reflexive.
+	        // Object(NaN) is equivalent to NaN
+	        if (+a !== +a) return +b !== +b;
+	        // An `egal` comparison is performed for other numeric values.
+	        return +a === 0 ? 1 / +a === 1 / b : +a === +b;
+	      case '[object Date]':
+	      case '[object Boolean]':
+	        // Coerce dates and booleans to numeric primitive values. Dates are compared by their
+	        // millisecond representations. Note that invalid dates with millisecond representations
+	        // of `NaN` are not equivalent.
+	        return +a === +b;
+	    }
+
+	    var areArrays = className === '[object Array]';
+	    if (!areArrays) {
+	      if (typeof a != 'object' || typeof b != 'object') return false;
+
+	      // Objects with different constructors are not equivalent, but `Object`s or `Array`s
+	      // from different frames are.
+	      var aCtor = a.constructor, bCtor = b.constructor;
+	      if (aCtor !== bCtor && !(_.isFunction(aCtor) && aCtor instanceof aCtor &&
+	                               _.isFunction(bCtor) && bCtor instanceof bCtor)
+	                          && ('constructor' in a && 'constructor' in b)) {
+	        return false;
+	      }
+	    }
+	    // Assume equality for cyclic structures. The algorithm for detecting cyclic
+	    // structures is adapted from ES 5.1 section 15.12.3, abstract operation `JO`.
+
+	    // Initializing stack of traversed objects.
+	    // It's done here since we only need them for objects and arrays comparison.
+	    aStack = aStack || [];
+	    bStack = bStack || [];
+	    var length = aStack.length;
+	    while (length--) {
+	      // Linear search. Performance is inversely proportional to the number of
+	      // unique nested structures.
+	      if (aStack[length] === a) return bStack[length] === b;
+	    }
+
+	    // Add the first object to the stack of traversed objects.
+	    aStack.push(a);
+	    bStack.push(b);
+
+	    // Recursively compare objects and arrays.
+	    if (areArrays) {
+	      // Compare array lengths to determine if a deep comparison is necessary.
+	      length = a.length;
+	      if (length !== b.length) return false;
+	      // Deep compare the contents, ignoring non-numeric properties.
+	      while (length--) {
+	        if (!eq(a[length], b[length], aStack, bStack)) return false;
+	      }
+	    } else {
+	      // Deep compare objects.
+	      var keys = _.keys(a), key;
+	      length = keys.length;
+	      // Ensure that both objects contain the same number of properties before comparing deep equality.
+	      if (_.keys(b).length !== length) return false;
+	      while (length--) {
+	        // Deep compare each member
+	        key = keys[length];
+	        if (!(_.has(b, key) && eq(a[key], b[key], aStack, bStack))) return false;
+	      }
+	    }
+	    // Remove the first object from the stack of traversed objects.
+	    aStack.pop();
+	    bStack.pop();
+	    return true;
+	  };
+
+	  // Perform a deep comparison to check if two objects are equal.
+	  _.isEqual = function(a, b) {
+	    return eq(a, b);
+	  };
+
+	  // Is a given array, string, or object empty?
+	  // An "empty" object has no enumerable own-properties.
+	  _.isEmpty = function(obj) {
+	    if (obj == null) return true;
+	    if (isArrayLike(obj) && (_.isArray(obj) || _.isString(obj) || _.isArguments(obj))) return obj.length === 0;
+	    return _.keys(obj).length === 0;
+	  };
+
+	  // Is a given value a DOM element?
+	  _.isElement = function(obj) {
+	    return !!(obj && obj.nodeType === 1);
+	  };
+
+	  // Is a given value an array?
+	  // Delegates to ECMA5's native Array.isArray
+	  _.isArray = nativeIsArray || function(obj) {
+	    return toString.call(obj) === '[object Array]';
+	  };
+
+	  // Is a given variable an object?
+	  _.isObject = function(obj) {
+	    var type = typeof obj;
+	    return type === 'function' || type === 'object' && !!obj;
+	  };
+
+	  // Add some isType methods: isArguments, isFunction, isString, isNumber, isDate, isRegExp, isError.
+	  _.each(['Arguments', 'Function', 'String', 'Number', 'Date', 'RegExp', 'Error'], function(name) {
+	    _['is' + name] = function(obj) {
+	      return toString.call(obj) === '[object ' + name + ']';
+	    };
+	  });
+
+	  // Define a fallback version of the method in browsers (ahem, IE < 9), where
+	  // there isn't any inspectable "Arguments" type.
+	  if (!_.isArguments(arguments)) {
+	    _.isArguments = function(obj) {
+	      return _.has(obj, 'callee');
+	    };
+	  }
+
+	  // Optimize `isFunction` if appropriate. Work around some typeof bugs in old v8,
+	  // IE 11 (#1621), and in Safari 8 (#1929).
+	  if (typeof /./ != 'function' && typeof Int8Array != 'object') {
+	    _.isFunction = function(obj) {
+	      return typeof obj == 'function' || false;
+	    };
+	  }
+
+	  // Is a given object a finite number?
+	  _.isFinite = function(obj) {
+	    return isFinite(obj) && !isNaN(parseFloat(obj));
+	  };
+
+	  // Is the given value `NaN`? (NaN is the only number which does not equal itself).
+	  _.isNaN = function(obj) {
+	    return _.isNumber(obj) && obj !== +obj;
+	  };
+
+	  // Is a given value a boolean?
+	  _.isBoolean = function(obj) {
+	    return obj === true || obj === false || toString.call(obj) === '[object Boolean]';
+	  };
+
+	  // Is a given value equal to null?
+	  _.isNull = function(obj) {
+	    return obj === null;
+	  };
+
+	  // Is a given variable undefined?
+	  _.isUndefined = function(obj) {
+	    return obj === void 0;
+	  };
+
+	  // Shortcut function for checking if an object has a given property directly
+	  // on itself (in other words, not on a prototype).
+	  _.has = function(obj, key) {
+	    return obj != null && hasOwnProperty.call(obj, key);
+	  };
+
+	  // Utility Functions
+	  // -----------------
+
+	  // Run Underscore.js in *noConflict* mode, returning the `_` variable to its
+	  // previous owner. Returns a reference to the Underscore object.
+	  _.noConflict = function() {
+	    root._ = previousUnderscore;
+	    return this;
+	  };
+
+	  // Keep the identity function around for default iteratees.
+	  _.identity = function(value) {
+	    return value;
+	  };
+
+	  // Predicate-generating functions. Often useful outside of Underscore.
+	  _.constant = function(value) {
+	    return function() {
+	      return value;
+	    };
+	  };
+
+	  _.noop = function(){};
+
+	  _.property = property;
+
+	  // Generates a function for a given object that returns a given property.
+	  _.propertyOf = function(obj) {
+	    return obj == null ? function(){} : function(key) {
+	      return obj[key];
+	    };
+	  };
+
+	  // Returns a predicate for checking whether an object has a given set of
+	  // `key:value` pairs.
+	  _.matcher = _.matches = function(attrs) {
+	    attrs = _.extendOwn({}, attrs);
+	    return function(obj) {
+	      return _.isMatch(obj, attrs);
+	    };
+	  };
+
+	  // Run a function **n** times.
+	  _.times = function(n, iteratee, context) {
+	    var accum = Array(Math.max(0, n));
+	    iteratee = optimizeCb(iteratee, context, 1);
+	    for (var i = 0; i < n; i++) accum[i] = iteratee(i);
+	    return accum;
+	  };
+
+	  // Return a random integer between min and max (inclusive).
+	  _.random = function(min, max) {
+	    if (max == null) {
+	      max = min;
+	      min = 0;
+	    }
+	    return min + Math.floor(Math.random() * (max - min + 1));
+	  };
+
+	  // A (possibly faster) way to get the current timestamp as an integer.
+	  _.now = Date.now || function() {
+	    return new Date().getTime();
+	  };
+
+	   // List of HTML entities for escaping.
+	  var escapeMap = {
+	    '&': '&amp;',
+	    '<': '&lt;',
+	    '>': '&gt;',
+	    '"': '&quot;',
+	    "'": '&#x27;',
+	    '`': '&#x60;'
+	  };
+	  var unescapeMap = _.invert(escapeMap);
+
+	  // Functions for escaping and unescaping strings to/from HTML interpolation.
+	  var createEscaper = function(map) {
+	    var escaper = function(match) {
+	      return map[match];
+	    };
+	    // Regexes for identifying a key that needs to be escaped
+	    var source = '(?:' + _.keys(map).join('|') + ')';
+	    var testRegexp = RegExp(source);
+	    var replaceRegexp = RegExp(source, 'g');
+	    return function(string) {
+	      string = string == null ? '' : '' + string;
+	      return testRegexp.test(string) ? string.replace(replaceRegexp, escaper) : string;
+	    };
+	  };
+	  _.escape = createEscaper(escapeMap);
+	  _.unescape = createEscaper(unescapeMap);
+
+	  // If the value of the named `property` is a function then invoke it with the
+	  // `object` as context; otherwise, return it.
+	  _.result = function(object, property, fallback) {
+	    var value = object == null ? void 0 : object[property];
+	    if (value === void 0) {
+	      value = fallback;
+	    }
+	    return _.isFunction(value) ? value.call(object) : value;
+	  };
+
+	  // Generate a unique integer id (unique within the entire client session).
+	  // Useful for temporary DOM ids.
+	  var idCounter = 0;
+	  _.uniqueId = function(prefix) {
+	    var id = ++idCounter + '';
+	    return prefix ? prefix + id : id;
+	  };
+
+	  // By default, Underscore uses ERB-style template delimiters, change the
+	  // following template settings to use alternative delimiters.
+	  _.templateSettings = {
+	    evaluate    : /<%([\s\S]+?)%>/g,
+	    interpolate : /<%=([\s\S]+?)%>/g,
+	    escape      : /<%-([\s\S]+?)%>/g
+	  };
+
+	  // When customizing `templateSettings`, if you don't want to define an
+	  // interpolation, evaluation or escaping regex, we need one that is
+	  // guaranteed not to match.
+	  var noMatch = /(.)^/;
+
+	  // Certain characters need to be escaped so that they can be put into a
+	  // string literal.
+	  var escapes = {
+	    "'":      "'",
+	    '\\':     '\\',
+	    '\r':     'r',
+	    '\n':     'n',
+	    '\u2028': 'u2028',
+	    '\u2029': 'u2029'
+	  };
+
+	  var escaper = /\\|'|\r|\n|\u2028|\u2029/g;
+
+	  var escapeChar = function(match) {
+	    return '\\' + escapes[match];
+	  };
+
+	  // JavaScript micro-templating, similar to John Resig's implementation.
+	  // Underscore templating handles arbitrary delimiters, preserves whitespace,
+	  // and correctly escapes quotes within interpolated code.
+	  // NB: `oldSettings` only exists for backwards compatibility.
+	  _.template = function(text, settings, oldSettings) {
+	    if (!settings && oldSettings) settings = oldSettings;
+	    settings = _.defaults({}, settings, _.templateSettings);
+
+	    // Combine delimiters into one regular expression via alternation.
+	    var matcher = RegExp([
+	      (settings.escape || noMatch).source,
+	      (settings.interpolate || noMatch).source,
+	      (settings.evaluate || noMatch).source
+	    ].join('|') + '|$', 'g');
+
+	    // Compile the template source, escaping string literals appropriately.
+	    var index = 0;
+	    var source = "__p+='";
+	    text.replace(matcher, function(match, escape, interpolate, evaluate, offset) {
+	      source += text.slice(index, offset).replace(escaper, escapeChar);
+	      index = offset + match.length;
+
+	      if (escape) {
+	        source += "'+\n((__t=(" + escape + "))==null?'':_.escape(__t))+\n'";
+	      } else if (interpolate) {
+	        source += "'+\n((__t=(" + interpolate + "))==null?'':__t)+\n'";
+	      } else if (evaluate) {
+	        source += "';\n" + evaluate + "\n__p+='";
+	      }
+
+	      // Adobe VMs need the match returned to produce the correct offest.
+	      return match;
+	    });
+	    source += "';\n";
+
+	    // If a variable is not specified, place data values in local scope.
+	    if (!settings.variable) source = 'with(obj||{}){\n' + source + '}\n';
+
+	    source = "var __t,__p='',__j=Array.prototype.join," +
+	      "print=function(){__p+=__j.call(arguments,'');};\n" +
+	      source + 'return __p;\n';
+
+	    try {
+	      var render = new Function(settings.variable || 'obj', '_', source);
+	    } catch (e) {
+	      e.source = source;
+	      throw e;
+	    }
+
+	    var template = function(data) {
+	      return render.call(this, data, _);
+	    };
+
+	    // Provide the compiled source as a convenience for precompilation.
+	    var argument = settings.variable || 'obj';
+	    template.source = 'function(' + argument + '){\n' + source + '}';
+
+	    return template;
+	  };
+
+	  // Add a "chain" function. Start chaining a wrapped Underscore object.
+	  _.chain = function(obj) {
+	    var instance = _(obj);
+	    instance._chain = true;
+	    return instance;
+	  };
+
+	  // OOP
+	  // ---------------
+	  // If Underscore is called as a function, it returns a wrapped object that
+	  // can be used OO-style. This wrapper holds altered versions of all the
+	  // underscore functions. Wrapped objects may be chained.
+
+	  // Helper function to continue chaining intermediate results.
+	  var result = function(instance, obj) {
+	    return instance._chain ? _(obj).chain() : obj;
+	  };
+
+	  // Add your own custom functions to the Underscore object.
+	  _.mixin = function(obj) {
+	    _.each(_.functions(obj), function(name) {
+	      var func = _[name] = obj[name];
+	      _.prototype[name] = function() {
+	        var args = [this._wrapped];
+	        push.apply(args, arguments);
+	        return result(this, func.apply(_, args));
+	      };
+	    });
+	  };
+
+	  // Add all of the Underscore functions to the wrapper object.
+	  _.mixin(_);
+
+	  // Add all mutator Array functions to the wrapper.
+	  _.each(['pop', 'push', 'reverse', 'shift', 'sort', 'splice', 'unshift'], function(name) {
+	    var method = ArrayProto[name];
+	    _.prototype[name] = function() {
+	      var obj = this._wrapped;
+	      method.apply(obj, arguments);
+	      if ((name === 'shift' || name === 'splice') && obj.length === 0) delete obj[0];
+	      return result(this, obj);
+	    };
+	  });
+
+	  // Add all accessor Array functions to the wrapper.
+	  _.each(['concat', 'join', 'slice'], function(name) {
+	    var method = ArrayProto[name];
+	    _.prototype[name] = function() {
+	      return result(this, method.apply(this._wrapped, arguments));
+	    };
+	  });
+
+	  // Extracts the result from a wrapped and chained object.
+	  _.prototype.value = function() {
+	    return this._wrapped;
+	  };
+
+	  // Provide unwrapping proxy for some methods used in engine operations
+	  // such as arithmetic and JSON stringification.
+	  _.prototype.valueOf = _.prototype.toJSON = _.prototype.value;
+
+	  _.prototype.toString = function() {
+	    return '' + this._wrapped;
+	  };
+
+	  // AMD registration happens at the end for compatibility with AMD loaders
+	  // that may not enforce next-turn semantics on modules. Even though general
+	  // practice for AMD registration is to be anonymous, underscore registers
+	  // as a named module because, like jQuery, it is a base library that is
+	  // popular enough to be bundled in a third party lib, but not be part of
+	  // an AMD load request. Those cases could generate an error when an
+	  // anonymous define() is called outside of a loader request.
+	  if (true) {
+	    !(__WEBPACK_AMD_DEFINE_ARRAY__ = [], __WEBPACK_AMD_DEFINE_RESULT__ = function() {
+	      return _;
+	    }.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+	  }
+	}.call(this));
+
 
 /***/ },
 /* 6 */
+/***/ function(module, exports) {
+
+	module.exports = __WEBPACK_EXTERNAL_MODULE_6__;
+
+/***/ },
+/* 7 */
+/***/ function(module, exports) {
+
+	module.exports = __WEBPACK_EXTERNAL_MODULE_7__;
+
+/***/ },
+/* 8 */
 /***/ function(module, exports, __webpack_require__) {
 
 	(function (global, factory) {
@@ -53687,8512 +61462,1079 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 7 */
+/* 9 */
+/***/ function(module, exports) {
+
+	module.exports = __WEBPACK_EXTERNAL_MODULE_9__;
+
+/***/ },
+/* 10 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var self = self || {};// File:src/Three.js
-
-	/**
-	 * @author mrdoob / http://mrdoob.com/
+	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;/* WEBPACK VAR INJECTION */(function(process) {/**
+	 * Tween.js - Licensed under the MIT license
+	 * https://github.com/tweenjs/tween.js
+	 * ----------------------------------------------
+	 *
+	 * See https://github.com/tweenjs/tween.js/graphs/contributors for the full list of contributors.
+	 * Thank you all, you're awesome!
 	 */
 
-	var THREE = { REVISION: '69' };
+	var TWEEN = TWEEN || (function () {
 
-	// browserify support
+		var _tweens = [];
 
-	if ( true ) {
+		return {
 
-		module.exports = THREE;
+			getAll: function () {
 
-	}
+				return _tweens;
 
-	// polyfills
+			},
 
-	if ( Math.sign === undefined ) {
+			removeAll: function () {
 
-		Math.sign = function ( x ) {
+				_tweens = [];
 
-			return ( x < 0 ) ? - 1 : ( x > 0 ) ? 1 : 0;
+			},
+
+			add: function (tween) {
+
+				_tweens.push(tween);
+
+			},
+
+			remove: function (tween) {
+
+				var i = _tweens.indexOf(tween);
+
+				if (i !== -1) {
+					_tweens.splice(i, 1);
+				}
+
+			},
+
+			update: function (time, preserve) {
+
+				if (_tweens.length === 0) {
+					return false;
+				}
+
+				var i = 0;
+
+				time = time !== undefined ? time : TWEEN.now();
+
+				while (i < _tweens.length) {
+
+					if (_tweens[i].update(time) || preserve) {
+						i++;
+					} else {
+						_tweens.splice(i, 1);
+					}
+
+				}
+
+				return true;
+
+			}
+		};
+
+	})();
+
+
+	// Include a performance.now polyfill
+	(function () {
+		// In node.js, use process.hrtime.
+		if (this.window === undefined && this.process !== undefined) {
+			TWEEN.now = function () {
+				var time = process.hrtime();
+
+				// Convert [seconds, microseconds] to milliseconds.
+				return time[0] * 1000 + time[1] / 1000;
+			};
+		}
+		// In a browser, use window.performance.now if it is available.
+		else if (this.window !== undefined &&
+		         window.performance !== undefined &&
+			 window.performance.now !== undefined) {
+
+			// This must be bound, because directly assigning this function
+			// leads to an invocation exception in Chrome.
+			TWEEN.now = window.performance.now.bind(window.performance);
+		}
+		// Use Date.now if it is available.
+		else if (Date.now !== undefined) {
+			TWEEN.now = Date.now;
+		}
+		// Otherwise, use 'new Date().getTime()'.
+		else {
+			TWEEN.now = function () {
+				return new Date().getTime();
+			};
+		}
+	})();
+
+
+	TWEEN.Tween = function (object) {
+
+		var _object = object;
+		var _valuesStart = {};
+		var _valuesEnd = {};
+		var _valuesStartRepeat = {};
+		var _duration = 1000;
+		var _repeat = 0;
+		var _yoyo = false;
+		var _isPlaying = false;
+		var _reversed = false;
+		var _delayTime = 0;
+		var _startTime = null;
+		var _easingFunction = TWEEN.Easing.Linear.None;
+		var _interpolationFunction = TWEEN.Interpolation.Linear;
+		var _chainedTweens = [];
+		var _onStartCallback = null;
+		var _onStartCallbackFired = false;
+		var _onUpdateCallback = null;
+		var _onCompleteCallback = null;
+		var _onStopCallback = null;
+
+		// Set all starting values present on the target object
+		for (var field in object) {
+			_valuesStart[field] = parseFloat(object[field], 10);
+		}
+
+		this.to = function (properties, duration) {
+
+			if (duration !== undefined) {
+				_duration = duration;
+			}
+
+			_valuesEnd = properties;
+
+			return this;
 
 		};
 
-	}
+		this.start = function (time) {
 
-	// https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent.button
+			TWEEN.add(this);
 
-	THREE.MOUSE = { LEFT: 0, MIDDLE: 1, RIGHT: 2 };
+			_isPlaying = true;
 
-	// GL STATE CONSTANTS
+			_onStartCallbackFired = false;
 
-	THREE.CullFaceNone = 0;
-	THREE.CullFaceBack = 1;
-	THREE.CullFaceFront = 2;
-	THREE.CullFaceFrontBack = 3;
+			_startTime = time !== undefined ? time : TWEEN.now();
+			_startTime += _delayTime;
 
-	THREE.FrontFaceDirectionCW = 0;
-	THREE.FrontFaceDirectionCCW = 1;
+			for (var property in _valuesEnd) {
 
-	// SHADOWING TYPES
+				// Check if an Array was provided as property value
+				if (_valuesEnd[property] instanceof Array) {
 
-	THREE.BasicShadowMap = 0;
-	THREE.PCFShadowMap = 1;
-	THREE.PCFSoftShadowMap = 2;
+					if (_valuesEnd[property].length === 0) {
+						continue;
+					}
 
-	// MATERIAL CONSTANTS
+					// Create a local copy of the Array with the start value at the front
+					_valuesEnd[property] = [_object[property]].concat(_valuesEnd[property]);
 
-	// side
+				}
 
-	THREE.FrontSide = 0;
-	THREE.BackSide = 1;
-	THREE.DoubleSide = 2;
+				// If `to()` specifies a property that doesn't exist in the source object,
+				// we should not set that property in the object
+				if (_valuesStart[property] === undefined) {
+					continue;
+				}
 
-	// shading
+				_valuesStart[property] = _object[property];
 
-	THREE.NoShading = 0;
-	THREE.FlatShading = 1;
-	THREE.SmoothShading = 2;
+				if ((_valuesStart[property] instanceof Array) === false) {
+					_valuesStart[property] *= 1.0; // Ensures we're using numbers, not strings
+				}
 
-	// colors
-
-	THREE.NoColors = 0;
-	THREE.FaceColors = 1;
-	THREE.VertexColors = 2;
-
-	// blending modes
-
-	THREE.NoBlending = 0;
-	THREE.NormalBlending = 1;
-	THREE.AdditiveBlending = 2;
-	THREE.SubtractiveBlending = 3;
-	THREE.MultiplyBlending = 4;
-	THREE.CustomBlending = 5;
-
-	// custom blending equations
-	// (numbers start from 100 not to clash with other
-	//  mappings to OpenGL constants defined in Texture.js)
-
-	THREE.AddEquation = 100;
-	THREE.SubtractEquation = 101;
-	THREE.ReverseSubtractEquation = 102;
-	THREE.MinEquation = 103;
-	THREE.MaxEquation = 104;
-
-	// custom blending destination factors
-
-	THREE.ZeroFactor = 200;
-	THREE.OneFactor = 201;
-	THREE.SrcColorFactor = 202;
-	THREE.OneMinusSrcColorFactor = 203;
-	THREE.SrcAlphaFactor = 204;
-	THREE.OneMinusSrcAlphaFactor = 205;
-	THREE.DstAlphaFactor = 206;
-	THREE.OneMinusDstAlphaFactor = 207;
-
-	// custom blending source factors
-
-	//THREE.ZeroFactor = 200;
-	//THREE.OneFactor = 201;
-	//THREE.SrcAlphaFactor = 204;
-	//THREE.OneMinusSrcAlphaFactor = 205;
-	//THREE.DstAlphaFactor = 206;
-	//THREE.OneMinusDstAlphaFactor = 207;
-	THREE.DstColorFactor = 208;
-	THREE.OneMinusDstColorFactor = 209;
-	THREE.SrcAlphaSaturateFactor = 210;
-
-
-	// TEXTURE CONSTANTS
-
-	THREE.MultiplyOperation = 0;
-	THREE.MixOperation = 1;
-	THREE.AddOperation = 2;
-
-	// Mapping modes
-
-	THREE.UVMapping = function () {};
-
-	THREE.CubeReflectionMapping = function () {};
-	THREE.CubeRefractionMapping = function () {};
-
-	THREE.SphericalReflectionMapping = function () {};
-	THREE.SphericalRefractionMapping = function () {};
-
-	// Wrapping modes
-
-	THREE.RepeatWrapping = 1000;
-	THREE.ClampToEdgeWrapping = 1001;
-	THREE.MirroredRepeatWrapping = 1002;
-
-	// Filters
-
-	THREE.NearestFilter = 1003;
-	THREE.NearestMipMapNearestFilter = 1004;
-	THREE.NearestMipMapLinearFilter = 1005;
-	THREE.LinearFilter = 1006;
-	THREE.LinearMipMapNearestFilter = 1007;
-	THREE.LinearMipMapLinearFilter = 1008;
-
-	// Data types
-
-	THREE.UnsignedByteType = 1009;
-	THREE.ByteType = 1010;
-	THREE.ShortType = 1011;
-	THREE.UnsignedShortType = 1012;
-	THREE.IntType = 1013;
-	THREE.UnsignedIntType = 1014;
-	THREE.FloatType = 1015;
-
-	// Pixel types
-
-	//THREE.UnsignedByteType = 1009;
-	THREE.UnsignedShort4444Type = 1016;
-	THREE.UnsignedShort5551Type = 1017;
-	THREE.UnsignedShort565Type = 1018;
-
-	// Pixel formats
-
-	THREE.AlphaFormat = 1019;
-	THREE.RGBFormat = 1020;
-	THREE.RGBAFormat = 1021;
-	THREE.LuminanceFormat = 1022;
-	THREE.LuminanceAlphaFormat = 1023;
-
-	// DDS / ST3C Compressed texture formats
-
-	THREE.RGB_S3TC_DXT1_Format = 2001;
-	THREE.RGBA_S3TC_DXT1_Format = 2002;
-	THREE.RGBA_S3TC_DXT3_Format = 2003;
-	THREE.RGBA_S3TC_DXT5_Format = 2004;
-
-
-	// PVRTC compressed texture formats
-
-	THREE.RGB_PVRTC_4BPPV1_Format = 2100;
-	THREE.RGB_PVRTC_2BPPV1_Format = 2101;
-	THREE.RGBA_PVRTC_4BPPV1_Format = 2102;
-	THREE.RGBA_PVRTC_2BPPV1_Format = 2103;
-
-
-	// File:src/math/Color.js
-
-	/**
-	 * @author mrdoob / http://mrdoob.com/
-	 */
-
-	THREE.Color = function ( color ) {
-
-		if ( arguments.length === 3 ) {
-
-			return this.setRGB( arguments[ 0 ], arguments[ 1 ], arguments[ 2 ] );
-
-		}
-
-		return this.set( color )
-
-	};
-
-	THREE.Color.prototype = {
-
-		constructor: THREE.Color,
-
-		r: 1, g: 1, b: 1,
-
-		set: function ( value ) {
-
-			if ( value instanceof THREE.Color ) {
-
-				this.copy( value );
-
-			} else if ( typeof value === 'number' ) {
-
-				this.setHex( value );
-
-			} else if ( typeof value === 'string' ) {
-
-				this.setStyle( value );
+				_valuesStartRepeat[property] = _valuesStart[property] || 0;
 
 			}
 
 			return this;
 
-		},
+		};
 
-		setHex: function ( hex ) {
+		this.stop = function () {
 
-			hex = Math.floor( hex );
+			if (!_isPlaying) {
+				return this;
+			}
 
-			this.r = ( hex >> 16 & 255 ) / 255;
-			this.g = ( hex >> 8 & 255 ) / 255;
-			this.b = ( hex & 255 ) / 255;
+			TWEEN.remove(this);
+			_isPlaying = false;
 
+			if (_onStopCallback !== null) {
+				_onStopCallback.call(_object);
+			}
+
+			this.stopChainedTweens();
 			return this;
 
-		},
+		};
 
-		setRGB: function ( r, g, b ) {
+		this.stopChainedTweens = function () {
 
-			this.r = r;
-			this.g = g;
-			this.b = b;
+			for (var i = 0, numChainedTweens = _chainedTweens.length; i < numChainedTweens; i++) {
+				_chainedTweens[i].stop();
+			}
 
+		};
+
+		this.delay = function (amount) {
+
+			_delayTime = amount;
 			return this;
 
+		};
+
+		this.repeat = function (times) {
+
+			_repeat = times;
+			return this;
+
+		};
+
+		this.yoyo = function (yoyo) {
+
+			_yoyo = yoyo;
+			return this;
+
+		};
+
+
+		this.easing = function (easing) {
+
+			_easingFunction = easing;
+			return this;
+
+		};
+
+		this.interpolation = function (interpolation) {
+
+			_interpolationFunction = interpolation;
+			return this;
+
+		};
+
+		this.chain = function () {
+
+			_chainedTweens = arguments;
+			return this;
+
+		};
+
+		this.onStart = function (callback) {
+
+			_onStartCallback = callback;
+			return this;
+
+		};
+
+		this.onUpdate = function (callback) {
+
+			_onUpdateCallback = callback;
+			return this;
+
+		};
+
+		this.onComplete = function (callback) {
+
+			_onCompleteCallback = callback;
+			return this;
+
+		};
+
+		this.onStop = function (callback) {
+
+			_onStopCallback = callback;
+			return this;
+
+		};
+
+		this.update = function (time) {
+
+			var property;
+			var elapsed;
+			var value;
+
+			if (time < _startTime) {
+				return true;
+			}
+
+			if (_onStartCallbackFired === false) {
+
+				if (_onStartCallback !== null) {
+					_onStartCallback.call(_object);
+				}
+
+				_onStartCallbackFired = true;
+
+			}
+
+			elapsed = (time - _startTime) / _duration;
+			elapsed = elapsed > 1 ? 1 : elapsed;
+
+			value = _easingFunction(elapsed);
+
+			for (property in _valuesEnd) {
+
+				// Don't update properties that do not exist in the source object
+				if (_valuesStart[property] === undefined) {
+					continue;
+				}
+
+				var start = _valuesStart[property] || 0;
+				var end = _valuesEnd[property];
+
+				if (end instanceof Array) {
+
+					_object[property] = _interpolationFunction(end, value);
+
+				} else {
+
+					// Parses relative end values with start as base (e.g.: +10, -3)
+					if (typeof (end) === 'string') {
+
+						if (end.charAt(0) === '+' || end.charAt(0) === '-') {
+							end = start + parseFloat(end, 10);
+						} else {
+							end = parseFloat(end, 10);
+						}
+					}
+
+					// Protect against non numeric properties.
+					if (typeof (end) === 'number') {
+						_object[property] = start + (end - start) * value;
+					}
+
+				}
+
+			}
+
+			if (_onUpdateCallback !== null) {
+				_onUpdateCallback.call(_object, value);
+			}
+
+			if (elapsed === 1) {
+
+				if (_repeat > 0) {
+
+					if (isFinite(_repeat)) {
+						_repeat--;
+					}
+
+					// Reassign starting values, restart by making startTime = now
+					for (property in _valuesStartRepeat) {
+
+						if (typeof (_valuesEnd[property]) === 'string') {
+							_valuesStartRepeat[property] = _valuesStartRepeat[property] + parseFloat(_valuesEnd[property], 10);
+						}
+
+						if (_yoyo) {
+							var tmp = _valuesStartRepeat[property];
+
+							_valuesStartRepeat[property] = _valuesEnd[property];
+							_valuesEnd[property] = tmp;
+						}
+
+						_valuesStart[property] = _valuesStartRepeat[property];
+
+					}
+
+					if (_yoyo) {
+						_reversed = !_reversed;
+					}
+
+					_startTime = time + _delayTime;
+
+					return true;
+
+				} else {
+
+					if (_onCompleteCallback !== null) {
+						_onCompleteCallback.call(_object);
+					}
+
+					for (var i = 0, numChainedTweens = _chainedTweens.length; i < numChainedTweens; i++) {
+						// Make the chained tweens start exactly at the time they should,
+						// even if the `update()` method was called way past the duration of the tween
+						_chainedTweens[i].start(_startTime + _duration);
+					}
+
+					return false;
+
+				}
+
+			}
+
+			return true;
+
+		};
+
+	};
+
+
+	TWEEN.Easing = {
+
+		Linear: {
+
+			None: function (k) {
+
+				return k;
+
+			}
+
 		},
 
-		setHSL: function ( h, s, l ) {
+		Quadratic: {
 
-			// h,s,l ranges are in 0.0 - 1.0
+			In: function (k) {
 
-			if ( s === 0 ) {
+				return k * k;
 
-				this.r = this.g = this.b = l;
+			},
+
+			Out: function (k) {
+
+				return k * (2 - k);
+
+			},
+
+			InOut: function (k) {
+
+				if ((k *= 2) < 1) {
+					return 0.5 * k * k;
+				}
+
+				return - 0.5 * (--k * (k - 2) - 1);
+
+			}
+
+		},
+
+		Cubic: {
+
+			In: function (k) {
+
+				return k * k * k;
+
+			},
+
+			Out: function (k) {
+
+				return --k * k * k + 1;
+
+			},
+
+			InOut: function (k) {
+
+				if ((k *= 2) < 1) {
+					return 0.5 * k * k * k;
+				}
+
+				return 0.5 * ((k -= 2) * k * k + 2);
+
+			}
+
+		},
+
+		Quartic: {
+
+			In: function (k) {
+
+				return k * k * k * k;
+
+			},
+
+			Out: function (k) {
+
+				return 1 - (--k * k * k * k);
+
+			},
+
+			InOut: function (k) {
+
+				if ((k *= 2) < 1) {
+					return 0.5 * k * k * k * k;
+				}
+
+				return - 0.5 * ((k -= 2) * k * k * k - 2);
+
+			}
+
+		},
+
+		Quintic: {
+
+			In: function (k) {
+
+				return k * k * k * k * k;
+
+			},
+
+			Out: function (k) {
+
+				return --k * k * k * k * k + 1;
+
+			},
+
+			InOut: function (k) {
+
+				if ((k *= 2) < 1) {
+					return 0.5 * k * k * k * k * k;
+				}
+
+				return 0.5 * ((k -= 2) * k * k * k * k + 2);
+
+			}
+
+		},
+
+		Sinusoidal: {
+
+			In: function (k) {
+
+				return 1 - Math.cos(k * Math.PI / 2);
+
+			},
+
+			Out: function (k) {
+
+				return Math.sin(k * Math.PI / 2);
+
+			},
+
+			InOut: function (k) {
+
+				return 0.5 * (1 - Math.cos(Math.PI * k));
+
+			}
+
+		},
+
+		Exponential: {
+
+			In: function (k) {
+
+				return k === 0 ? 0 : Math.pow(1024, k - 1);
+
+			},
+
+			Out: function (k) {
+
+				return k === 1 ? 1 : 1 - Math.pow(2, - 10 * k);
+
+			},
+
+			InOut: function (k) {
+
+				if (k === 0) {
+					return 0;
+				}
+
+				if (k === 1) {
+					return 1;
+				}
+
+				if ((k *= 2) < 1) {
+					return 0.5 * Math.pow(1024, k - 1);
+				}
+
+				return 0.5 * (- Math.pow(2, - 10 * (k - 1)) + 2);
+
+			}
+
+		},
+
+		Circular: {
+
+			In: function (k) {
+
+				return 1 - Math.sqrt(1 - k * k);
+
+			},
+
+			Out: function (k) {
+
+				return Math.sqrt(1 - (--k * k));
+
+			},
+
+			InOut: function (k) {
+
+				if ((k *= 2) < 1) {
+					return - 0.5 * (Math.sqrt(1 - k * k) - 1);
+				}
+
+				return 0.5 * (Math.sqrt(1 - (k -= 2) * k) + 1);
+
+			}
+
+		},
+
+		Elastic: {
+
+			In: function (k) {
+
+				if (k === 0) {
+					return 0;
+				}
+
+				if (k === 1) {
+					return 1;
+				}
+
+				return -Math.pow(2, 10 * (k - 1)) * Math.sin((k - 1.1) * 5 * Math.PI);
+
+			},
+
+			Out: function (k) {
+
+				if (k === 0) {
+					return 0;
+				}
+
+				if (k === 1) {
+					return 1;
+				}
+
+				return Math.pow(2, -10 * k) * Math.sin((k - 0.1) * 5 * Math.PI) + 1;
+
+			},
+
+			InOut: function (k) {
+
+				if (k === 0) {
+					return 0;
+				}
+
+				if (k === 1) {
+					return 1;
+				}
+
+				k *= 2;
+
+				if (k < 1) {
+					return -0.5 * Math.pow(2, 10 * (k - 1)) * Math.sin((k - 1.1) * 5 * Math.PI);
+				}
+
+				return 0.5 * Math.pow(2, -10 * (k - 1)) * Math.sin((k - 1.1) * 5 * Math.PI) + 1;
+
+			}
+
+		},
+
+		Back: {
+
+			In: function (k) {
+
+				var s = 1.70158;
+
+				return k * k * ((s + 1) * k - s);
+
+			},
+
+			Out: function (k) {
+
+				var s = 1.70158;
+
+				return --k * k * ((s + 1) * k + s) + 1;
+
+			},
+
+			InOut: function (k) {
+
+				var s = 1.70158 * 1.525;
+
+				if ((k *= 2) < 1) {
+					return 0.5 * (k * k * ((s + 1) * k - s));
+				}
+
+				return 0.5 * ((k -= 2) * k * ((s + 1) * k + s) + 2);
+
+			}
+
+		},
+
+		Bounce: {
+
+			In: function (k) {
+
+				return 1 - TWEEN.Easing.Bounce.Out(1 - k);
+
+			},
+
+			Out: function (k) {
+
+				if (k < (1 / 2.75)) {
+					return 7.5625 * k * k;
+				} else if (k < (2 / 2.75)) {
+					return 7.5625 * (k -= (1.5 / 2.75)) * k + 0.75;
+				} else if (k < (2.5 / 2.75)) {
+					return 7.5625 * (k -= (2.25 / 2.75)) * k + 0.9375;
+				} else {
+					return 7.5625 * (k -= (2.625 / 2.75)) * k + 0.984375;
+				}
+
+			},
+
+			InOut: function (k) {
+
+				if (k < 0.5) {
+					return TWEEN.Easing.Bounce.In(k * 2) * 0.5;
+				}
+
+				return TWEEN.Easing.Bounce.Out(k * 2 - 1) * 0.5 + 0.5;
+
+			}
+
+		}
+
+	};
+
+	TWEEN.Interpolation = {
+
+		Linear: function (v, k) {
+
+			var m = v.length - 1;
+			var f = m * k;
+			var i = Math.floor(f);
+			var fn = TWEEN.Interpolation.Utils.Linear;
+
+			if (k < 0) {
+				return fn(v[0], v[1], f);
+			}
+
+			if (k > 1) {
+				return fn(v[m], v[m - 1], m - f);
+			}
+
+			return fn(v[i], v[i + 1 > m ? m : i + 1], f - i);
+
+		},
+
+		Bezier: function (v, k) {
+
+			var b = 0;
+			var n = v.length - 1;
+			var pw = Math.pow;
+			var bn = TWEEN.Interpolation.Utils.Bernstein;
+
+			for (var i = 0; i <= n; i++) {
+				b += pw(1 - k, n - i) * pw(k, i) * v[i] * bn(n, i);
+			}
+
+			return b;
+
+		},
+
+		CatmullRom: function (v, k) {
+
+			var m = v.length - 1;
+			var f = m * k;
+			var i = Math.floor(f);
+			var fn = TWEEN.Interpolation.Utils.CatmullRom;
+
+			if (v[0] === v[m]) {
+
+				if (k < 0) {
+					i = Math.floor(f = m * (1 + k));
+				}
+
+				return fn(v[(i - 1 + m) % m], v[i], v[(i + 1) % m], v[(i + 2) % m], f - i);
 
 			} else {
 
-				var hue2rgb = function ( p, q, t ) {
+				if (k < 0) {
+					return v[0] - (fn(v[0], v[0], v[1], v[1], -f) - v[0]);
+				}
 
-					if ( t < 0 ) t += 1;
-					if ( t > 1 ) t -= 1;
-					if ( t < 1 / 6 ) return p + ( q - p ) * 6 * t;
-					if ( t < 1 / 2 ) return q;
-					if ( t < 2 / 3 ) return p + ( q - p ) * 6 * ( 2 / 3 - t );
-					return p;
+				if (k > 1) {
+					return v[m] - (fn(v[m], v[m], v[m - 1], v[m - 1], f - m) - v[m]);
+				}
+
+				return fn(v[i ? i - 1 : 0], v[i], v[m < i + 1 ? m : i + 1], v[m < i + 2 ? m : i + 2], f - i);
+
+			}
+
+		},
+
+		Utils: {
+
+			Linear: function (p0, p1, t) {
+
+				return (p1 - p0) * t + p0;
+
+			},
+
+			Bernstein: function (n, i) {
+
+				var fc = TWEEN.Interpolation.Utils.Factorial;
+
+				return fc(n) / fc(i) / fc(n - i);
+
+			},
+
+			Factorial: (function () {
+
+				var a = [1];
+
+				return function (n) {
+
+					var s = 1;
+
+					if (a[n]) {
+						return a[n];
+					}
+
+					for (var i = n; i > 1; i--) {
+						s *= i;
+					}
+
+					a[n] = s;
+					return s;
 
 				};
 
-				var p = l <= 0.5 ? l * ( 1 + s ) : l + s - ( l * s );
-				var q = ( 2 * l ) - p;
+			})(),
 
-				this.r = hue2rgb( q, p, h + 1 / 3 );
-				this.g = hue2rgb( q, p, h );
-				this.b = hue2rgb( q, p, h - 1 / 3 );
+			CatmullRom: function (p0, p1, p2, p3, t) {
 
-			}
+				var v0 = (p2 - p0) * 0.5;
+				var v1 = (p3 - p1) * 0.5;
+				var t2 = t * t;
+				var t3 = t * t2;
 
-			return this;
-
-		},
-
-		setStyle: function ( style ) {
-
-			// rgb(255,0,0)
-
-			if ( /^rgb\((\d+), ?(\d+), ?(\d+)\)$/i.test( style ) ) {
-
-				var color = /^rgb\((\d+), ?(\d+), ?(\d+)\)$/i.exec( style );
-
-				this.r = Math.min( 255, parseInt( color[ 1 ], 10 ) ) / 255;
-				this.g = Math.min( 255, parseInt( color[ 2 ], 10 ) ) / 255;
-				this.b = Math.min( 255, parseInt( color[ 3 ], 10 ) ) / 255;
-
-				return this;
+				return (2 * p1 - 2 * p2 + v0 + v1) * t3 + (- 3 * p1 + 3 * p2 - 2 * v0 - v1) * t2 + v0 * t + p1;
 
 			}
-
-			// rgb(100%,0%,0%)
-
-			if ( /^rgb\((\d+)\%, ?(\d+)\%, ?(\d+)\%\)$/i.test( style ) ) {
-
-				var color = /^rgb\((\d+)\%, ?(\d+)\%, ?(\d+)\%\)$/i.exec( style );
-
-				this.r = Math.min( 100, parseInt( color[ 1 ], 10 ) ) / 100;
-				this.g = Math.min( 100, parseInt( color[ 2 ], 10 ) ) / 100;
-				this.b = Math.min( 100, parseInt( color[ 3 ], 10 ) ) / 100;
-
-				return this;
-
-			}
-
-			// #ff0000
-
-			if ( /^\#([0-9a-f]{6})$/i.test( style ) ) {
-
-				var color = /^\#([0-9a-f]{6})$/i.exec( style );
-
-				this.setHex( parseInt( color[ 1 ], 16 ) );
-
-				return this;
-
-			}
-
-			// #f00
-
-			if ( /^\#([0-9a-f])([0-9a-f])([0-9a-f])$/i.test( style ) ) {
-
-				var color = /^\#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec( style );
-
-				this.setHex( parseInt( color[ 1 ] + color[ 1 ] + color[ 2 ] + color[ 2 ] + color[ 3 ] + color[ 3 ], 16 ) );
-
-				return this;
-
-			}
-
-			// red
-
-			if ( /^(\w+)$/i.test( style ) ) {
-
-				this.setHex( THREE.ColorKeywords[ style ] );
-
-				return this;
-
-			}
-
-
-		},
-
-		copy: function ( color ) {
-
-			this.r = color.r;
-			this.g = color.g;
-			this.b = color.b;
-
-			return this;
-
-		},
-
-		copyGammaToLinear: function ( color ) {
-
-			this.r = color.r * color.r;
-			this.g = color.g * color.g;
-			this.b = color.b * color.b;
-
-			return this;
-
-		},
-
-		copyLinearToGamma: function ( color ) {
-
-			this.r = Math.sqrt( color.r );
-			this.g = Math.sqrt( color.g );
-			this.b = Math.sqrt( color.b );
-
-			return this;
-
-		},
-
-		convertGammaToLinear: function () {
-
-			var r = this.r, g = this.g, b = this.b;
-
-			this.r = r * r;
-			this.g = g * g;
-			this.b = b * b;
-
-			return this;
-
-		},
-
-		convertLinearToGamma: function () {
-
-			this.r = Math.sqrt( this.r );
-			this.g = Math.sqrt( this.g );
-			this.b = Math.sqrt( this.b );
-
-			return this;
-
-		},
-
-		getHex: function () {
-
-			return ( this.r * 255 ) << 16 ^ ( this.g * 255 ) << 8 ^ ( this.b * 255 ) << 0;
-
-		},
-
-		getHexString: function () {
-
-			return ( '000000' + this.getHex().toString( 16 ) ).slice( - 6 );
-
-		},
-
-		getHSL: function ( optionalTarget ) {
-
-			// h,s,l ranges are in 0.0 - 1.0
-
-			var hsl = optionalTarget || { h: 0, s: 0, l: 0 };
-
-			var r = this.r, g = this.g, b = this.b;
-
-			var max = Math.max( r, g, b );
-			var min = Math.min( r, g, b );
-
-			var hue, saturation;
-			var lightness = ( min + max ) / 2.0;
-
-			if ( min === max ) {
-
-				hue = 0;
-				saturation = 0;
-
-			} else {
-
-				var delta = max - min;
-
-				saturation = lightness <= 0.5 ? delta / ( max + min ) : delta / ( 2 - max - min );
-
-				switch ( max ) {
-
-					case r: hue = ( g - b ) / delta + ( g < b ? 6 : 0 ); break;
-					case g: hue = ( b - r ) / delta + 2; break;
-					case b: hue = ( r - g ) / delta + 4; break;
-
-				}
-
-				hue /= 6;
-
-			}
-
-			hsl.h = hue;
-			hsl.s = saturation;
-			hsl.l = lightness;
-
-			return hsl;
-
-		},
-
-		getStyle: function () {
-
-			return 'rgb(' + ( ( this.r * 255 ) | 0 ) + ',' + ( ( this.g * 255 ) | 0 ) + ',' + ( ( this.b * 255 ) | 0 ) + ')';
-
-		},
-
-		offsetHSL: function ( h, s, l ) {
-
-			var hsl = this.getHSL();
-
-			hsl.h += h; hsl.s += s; hsl.l += l;
-
-			this.setHSL( hsl.h, hsl.s, hsl.l );
-
-			return this;
-
-		},
-
-		add: function ( color ) {
-
-			this.r += color.r;
-			this.g += color.g;
-			this.b += color.b;
-
-			return this;
-
-		},
-
-		addColors: function ( color1, color2 ) {
-
-			this.r = color1.r + color2.r;
-			this.g = color1.g + color2.g;
-			this.b = color1.b + color2.b;
-
-			return this;
-
-		},
-
-		addScalar: function ( s ) {
-
-			this.r += s;
-			this.g += s;
-			this.b += s;
-
-			return this;
-
-		},
-
-		multiply: function ( color ) {
-
-			this.r *= color.r;
-			this.g *= color.g;
-			this.b *= color.b;
-
-			return this;
-
-		},
-
-		multiplyScalar: function ( s ) {
-
-			this.r *= s;
-			this.g *= s;
-			this.b *= s;
-
-			return this;
-
-		},
-
-		lerp: function ( color, alpha ) {
-
-			this.r += ( color.r - this.r ) * alpha;
-			this.g += ( color.g - this.g ) * alpha;
-			this.b += ( color.b - this.b ) * alpha;
-
-			return this;
-
-		},
-
-		equals: function ( c ) {
-
-			return ( c.r === this.r ) && ( c.g === this.g ) && ( c.b === this.b );
-
-		},
-
-		fromArray: function ( array ) {
-
-			this.r = array[ 0 ];
-			this.g = array[ 1 ];
-			this.b = array[ 2 ];
-
-			return this;
-
-		},
-
-		toArray: function () {
-
-			return [ this.r, this.g, this.b ];
-
-		},
-
-		clone: function () {
-
-			return new THREE.Color().setRGB( this.r, this.g, this.b );
 
 		}
 
 	};
 
-	THREE.ColorKeywords = { 'aliceblue': 0xF0F8FF, 'antiquewhite': 0xFAEBD7, 'aqua': 0x00FFFF, 'aquamarine': 0x7FFFD4, 'azure': 0xF0FFFF,
-	'beige': 0xF5F5DC, 'bisque': 0xFFE4C4, 'black': 0x000000, 'blanchedalmond': 0xFFEBCD, 'blue': 0x0000FF, 'blueviolet': 0x8A2BE2,
-	'brown': 0xA52A2A, 'burlywood': 0xDEB887, 'cadetblue': 0x5F9EA0, 'chartreuse': 0x7FFF00, 'chocolate': 0xD2691E, 'coral': 0xFF7F50,
-	'cornflowerblue': 0x6495ED, 'cornsilk': 0xFFF8DC, 'crimson': 0xDC143C, 'cyan': 0x00FFFF, 'darkblue': 0x00008B, 'darkcyan': 0x008B8B,
-	'darkgoldenrod': 0xB8860B, 'darkgray': 0xA9A9A9, 'darkgreen': 0x006400, 'darkgrey': 0xA9A9A9, 'darkkhaki': 0xBDB76B, 'darkmagenta': 0x8B008B,
-	'darkolivegreen': 0x556B2F, 'darkorange': 0xFF8C00, 'darkorchid': 0x9932CC, 'darkred': 0x8B0000, 'darksalmon': 0xE9967A, 'darkseagreen': 0x8FBC8F,
-	'darkslateblue': 0x483D8B, 'darkslategray': 0x2F4F4F, 'darkslategrey': 0x2F4F4F, 'darkturquoise': 0x00CED1, 'darkviolet': 0x9400D3,
-	'deeppink': 0xFF1493, 'deepskyblue': 0x00BFFF, 'dimgray': 0x696969, 'dimgrey': 0x696969, 'dodgerblue': 0x1E90FF, 'firebrick': 0xB22222,
-	'floralwhite': 0xFFFAF0, 'forestgreen': 0x228B22, 'fuchsia': 0xFF00FF, 'gainsboro': 0xDCDCDC, 'ghostwhite': 0xF8F8FF, 'gold': 0xFFD700,
-	'goldenrod': 0xDAA520, 'gray': 0x808080, 'green': 0x008000, 'greenyellow': 0xADFF2F, 'grey': 0x808080, 'honeydew': 0xF0FFF0, 'hotpink': 0xFF69B4,
-	'indianred': 0xCD5C5C, 'indigo': 0x4B0082, 'ivory': 0xFFFFF0, 'khaki': 0xF0E68C, 'lavender': 0xE6E6FA, 'lavenderblush': 0xFFF0F5, 'lawngreen': 0x7CFC00,
-	'lemonchiffon': 0xFFFACD, 'lightblue': 0xADD8E6, 'lightcoral': 0xF08080, 'lightcyan': 0xE0FFFF, 'lightgoldenrodyellow': 0xFAFAD2, 'lightgray': 0xD3D3D3,
-	'lightgreen': 0x90EE90, 'lightgrey': 0xD3D3D3, 'lightpink': 0xFFB6C1, 'lightsalmon': 0xFFA07A, 'lightseagreen': 0x20B2AA, 'lightskyblue': 0x87CEFA,
-	'lightslategray': 0x778899, 'lightslategrey': 0x778899, 'lightsteelblue': 0xB0C4DE, 'lightyellow': 0xFFFFE0, 'lime': 0x00FF00, 'limegreen': 0x32CD32,
-	'linen': 0xFAF0E6, 'magenta': 0xFF00FF, 'maroon': 0x800000, 'mediumaquamarine': 0x66CDAA, 'mediumblue': 0x0000CD, 'mediumorchid': 0xBA55D3,
-	'mediumpurple': 0x9370DB, 'mediumseagreen': 0x3CB371, 'mediumslateblue': 0x7B68EE, 'mediumspringgreen': 0x00FA9A, 'mediumturquoise': 0x48D1CC,
-	'mediumvioletred': 0xC71585, 'midnightblue': 0x191970, 'mintcream': 0xF5FFFA, 'mistyrose': 0xFFE4E1, 'moccasin': 0xFFE4B5, 'navajowhite': 0xFFDEAD,
-	'navy': 0x000080, 'oldlace': 0xFDF5E6, 'olive': 0x808000, 'olivedrab': 0x6B8E23, 'orange': 0xFFA500, 'orangered': 0xFF4500, 'orchid': 0xDA70D6,
-	'palegoldenrod': 0xEEE8AA, 'palegreen': 0x98FB98, 'paleturquoise': 0xAFEEEE, 'palevioletred': 0xDB7093, 'papayawhip': 0xFFEFD5, 'peachpuff': 0xFFDAB9,
-	'peru': 0xCD853F, 'pink': 0xFFC0CB, 'plum': 0xDDA0DD, 'powderblue': 0xB0E0E6, 'purple': 0x800080, 'red': 0xFF0000, 'rosybrown': 0xBC8F8F,
-	'royalblue': 0x4169E1, 'saddlebrown': 0x8B4513, 'salmon': 0xFA8072, 'sandybrown': 0xF4A460, 'seagreen': 0x2E8B57, 'seashell': 0xFFF5EE,
-	'sienna': 0xA0522D, 'silver': 0xC0C0C0, 'skyblue': 0x87CEEB, 'slateblue': 0x6A5ACD, 'slategray': 0x708090, 'slategrey': 0x708090, 'snow': 0xFFFAFA,
-	'springgreen': 0x00FF7F, 'steelblue': 0x4682B4, 'tan': 0xD2B48C, 'teal': 0x008080, 'thistle': 0xD8BFD8, 'tomato': 0xFF6347, 'turquoise': 0x40E0D0,
-	'violet': 0xEE82EE, 'wheat': 0xF5DEB3, 'white': 0xFFFFFF, 'whitesmoke': 0xF5F5F5, 'yellow': 0xFFFF00, 'yellowgreen': 0x9ACD32 };
+	// UMD (Universal Module Definition)
+	(function (root) {
 
-	// File:src/math/Quaternion.js
+		if (true) {
 
-	/**
-	 * @author mikael emtinger / http://gomo.se/
-	 * @author alteredq / http://alteredqualia.com/
-	 * @author WestLangley / http://github.com/WestLangley
-	 * @author bhouston / http://exocortex.com
-	 */
+			// AMD
+			!(__WEBPACK_AMD_DEFINE_ARRAY__ = [], __WEBPACK_AMD_DEFINE_RESULT__ = function () {
+				return TWEEN;
+			}.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
 
-	THREE.Quaternion = function ( x, y, z, w ) {
+		} else if (typeof module !== 'undefined' && typeof exports === 'object') {
 
-		this._x = x || 0;
-		this._y = y || 0;
-		this._z = z || 0;
-		this._w = ( w !== undefined ) ? w : 1;
+			// Node.js
+			module.exports = TWEEN;
 
-	};
+		} else if (root !== undefined) {
 
-	THREE.Quaternion.prototype = {
-
-		constructor: THREE.Quaternion,
-
-		_x: 0,_y: 0, _z: 0, _w: 0,
-
-		get x () {
-
-			return this._x;
-
-		},
-
-		set x ( value ) {
-
-			this._x = value;
-			this.onChangeCallback();
-
-		},
-
-		get y () {
-
-			return this._y;
-
-		},
-
-		set y ( value ) {
-
-			this._y = value;
-			this.onChangeCallback();
-
-		},
-
-		get z () {
-
-			return this._z;
-
-		},
-
-		set z ( value ) {
-
-			this._z = value;
-			this.onChangeCallback();
-
-		},
-
-		get w () {
-
-			return this._w;
-
-		},
-
-		set w ( value ) {
-
-			this._w = value;
-			this.onChangeCallback();
-
-		},
-
-		set: function ( x, y, z, w ) {
-
-			this._x = x;
-			this._y = y;
-			this._z = z;
-			this._w = w;
-
-			this.onChangeCallback();
-
-			return this;
-
-		},
-
-		copy: function ( quaternion ) {
-
-			this._x = quaternion.x;
-			this._y = quaternion.y;
-			this._z = quaternion.z;
-			this._w = quaternion.w;
-
-			this.onChangeCallback();
-
-			return this;
-
-		},
-
-		setFromEuler: function ( euler, update ) {
-
-			if ( euler instanceof THREE.Euler === false ) {
-
-				throw new Error( 'THREE.Quaternion: .setFromEuler() now expects a Euler rotation rather than a Vector3 and order.' );
-			}
-
-			// http://www.mathworks.com/matlabcentral/fileexchange/
-			// 	20696-function-to-convert-between-dcm-euler-angles-quaternions-and-euler-vectors/
-			//	content/SpinCalc.m
-
-			var c1 = Math.cos( euler._x / 2 );
-			var c2 = Math.cos( euler._y / 2 );
-			var c3 = Math.cos( euler._z / 2 );
-			var s1 = Math.sin( euler._x / 2 );
-			var s2 = Math.sin( euler._y / 2 );
-			var s3 = Math.sin( euler._z / 2 );
-
-			if ( euler.order === 'XYZ' ) {
-
-				this._x = s1 * c2 * c3 + c1 * s2 * s3;
-				this._y = c1 * s2 * c3 - s1 * c2 * s3;
-				this._z = c1 * c2 * s3 + s1 * s2 * c3;
-				this._w = c1 * c2 * c3 - s1 * s2 * s3;
-
-			} else if ( euler.order === 'YXZ' ) {
-
-				this._x = s1 * c2 * c3 + c1 * s2 * s3;
-				this._y = c1 * s2 * c3 - s1 * c2 * s3;
-				this._z = c1 * c2 * s3 - s1 * s2 * c3;
-				this._w = c1 * c2 * c3 + s1 * s2 * s3;
-
-			} else if ( euler.order === 'ZXY' ) {
-
-				this._x = s1 * c2 * c3 - c1 * s2 * s3;
-				this._y = c1 * s2 * c3 + s1 * c2 * s3;
-				this._z = c1 * c2 * s3 + s1 * s2 * c3;
-				this._w = c1 * c2 * c3 - s1 * s2 * s3;
-
-			} else if ( euler.order === 'ZYX' ) {
-
-				this._x = s1 * c2 * c3 - c1 * s2 * s3;
-				this._y = c1 * s2 * c3 + s1 * c2 * s3;
-				this._z = c1 * c2 * s3 - s1 * s2 * c3;
-				this._w = c1 * c2 * c3 + s1 * s2 * s3;
-
-			} else if ( euler.order === 'YZX' ) {
-
-				this._x = s1 * c2 * c3 + c1 * s2 * s3;
-				this._y = c1 * s2 * c3 + s1 * c2 * s3;
-				this._z = c1 * c2 * s3 - s1 * s2 * c3;
-				this._w = c1 * c2 * c3 - s1 * s2 * s3;
-
-			} else if ( euler.order === 'XZY' ) {
-
-				this._x = s1 * c2 * c3 - c1 * s2 * s3;
-				this._y = c1 * s2 * c3 - s1 * c2 * s3;
-				this._z = c1 * c2 * s3 + s1 * s2 * c3;
-				this._w = c1 * c2 * c3 + s1 * s2 * s3;
-
-			}
-
-			if ( update !== false ) this.onChangeCallback();
-
-			return this;
-
-		},
-
-		setFromAxisAngle: function ( axis, angle ) {
-
-			// http://www.euclideanspace.com/maths/geometry/rotations/conversions/angleToQuaternion/index.htm
-
-			// assumes axis is normalized
-
-			var halfAngle = angle / 2, s = Math.sin( halfAngle );
-
-			this._x = axis.x * s;
-			this._y = axis.y * s;
-			this._z = axis.z * s;
-			this._w = Math.cos( halfAngle );
-
-			this.onChangeCallback();
-
-			return this;
-
-		},
-
-		setFromRotationMatrix: function ( m ) {
-
-			// http://www.euclideanspace.com/maths/geometry/rotations/conversions/matrixToQuaternion/index.htm
-
-			// assumes the upper 3x3 of m is a pure rotation matrix (i.e, unscaled)
-
-			var te = m.elements,
-
-				m11 = te[ 0 ], m12 = te[ 4 ], m13 = te[ 8 ],
-				m21 = te[ 1 ], m22 = te[ 5 ], m23 = te[ 9 ],
-				m31 = te[ 2 ], m32 = te[ 6 ], m33 = te[ 10 ],
-
-				trace = m11 + m22 + m33,
-				s;
-
-			if ( trace > 0 ) {
-
-				s = 0.5 / Math.sqrt( trace + 1.0 );
-
-				this._w = 0.25 / s;
-				this._x = ( m32 - m23 ) * s;
-				this._y = ( m13 - m31 ) * s;
-				this._z = ( m21 - m12 ) * s;
-
-			} else if ( m11 > m22 && m11 > m33 ) {
-
-				s = 2.0 * Math.sqrt( 1.0 + m11 - m22 - m33 );
-
-				this._w = ( m32 - m23 ) / s;
-				this._x = 0.25 * s;
-				this._y = ( m12 + m21 ) / s;
-				this._z = ( m13 + m31 ) / s;
-
-			} else if ( m22 > m33 ) {
-
-				s = 2.0 * Math.sqrt( 1.0 + m22 - m11 - m33 );
-
-				this._w = ( m13 - m31 ) / s;
-				this._x = ( m12 + m21 ) / s;
-				this._y = 0.25 * s;
-				this._z = ( m23 + m32 ) / s;
-
-			} else {
-
-				s = 2.0 * Math.sqrt( 1.0 + m33 - m11 - m22 );
-
-				this._w = ( m21 - m12 ) / s;
-				this._x = ( m13 + m31 ) / s;
-				this._y = ( m23 + m32 ) / s;
-				this._z = 0.25 * s;
-
-			}
-
-			this.onChangeCallback();
-
-			return this;
-
-		},
-
-		setFromUnitVectors: function () {
-
-			// http://lolengine.net/blog/2014/02/24/quaternion-from-two-vectors-final
-
-			// assumes direction vectors vFrom and vTo are normalized
-
-			var v1, r;
-
-			var EPS = 0.000001;
-
-			return function ( vFrom, vTo ) {
-
-				if ( v1 === undefined ) v1 = new THREE.Vector3();
-
-				r = vFrom.dot( vTo ) + 1;
-
-				if ( r < EPS ) {
-
-					r = 0;
-
-					if ( Math.abs( vFrom.x ) > Math.abs( vFrom.z ) ) {
-
-						v1.set( - vFrom.y, vFrom.x, 0 );
-
-					} else {
-
-						v1.set( 0, - vFrom.z, vFrom.y );
-
-					}
-
-				} else {
-
-					v1.crossVectors( vFrom, vTo );
-
-				}
-
-				this._x = v1.x;
-				this._y = v1.y;
-				this._z = v1.z;
-				this._w = r;
-
-				this.normalize();
-
-				return this;
-
-			}
-
-		}(),
-
-		inverse: function () {
-
-			this.conjugate().normalize();
-
-			return this;
-
-		},
-
-		conjugate: function () {
-
-			this._x *= - 1;
-			this._y *= - 1;
-			this._z *= - 1;
-
-			this.onChangeCallback();
-
-			return this;
-
-		},
-
-		dot: function ( v ) {
-
-			return this._x * v._x + this._y * v._y + this._z * v._z + this._w * v._w;
-
-		},
-
-		lengthSq: function () {
-
-			return this._x * this._x + this._y * this._y + this._z * this._z + this._w * this._w;
-
-		},
-
-		length: function () {
-
-			return Math.sqrt( this._x * this._x + this._y * this._y + this._z * this._z + this._w * this._w );
-
-		},
-
-		normalize: function () {
-
-			var l = this.length();
-
-			if ( l === 0 ) {
-
-				this._x = 0;
-				this._y = 0;
-				this._z = 0;
-				this._w = 1;
-
-			} else {
-
-				l = 1 / l;
-
-				this._x = this._x * l;
-				this._y = this._y * l;
-				this._z = this._z * l;
-				this._w = this._w * l;
-
-			}
-
-			this.onChangeCallback();
-
-			return this;
-
-		},
-
-		multiply: function ( q, p ) {
-
-			if ( p !== undefined ) {
-
-				console.warn( 'THREE.Quaternion: .multiply() now only accepts one argument. Use .multiplyQuaternions( a, b ) instead.' );
-				return this.multiplyQuaternions( q, p );
-
-			}
-
-			return this.multiplyQuaternions( this, q );
-
-		},
-
-		multiplyQuaternions: function ( a, b ) {
-
-			// from http://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/code/index.htm
-
-			var qax = a._x, qay = a._y, qaz = a._z, qaw = a._w;
-			var qbx = b._x, qby = b._y, qbz = b._z, qbw = b._w;
-
-			this._x = qax * qbw + qaw * qbx + qay * qbz - qaz * qby;
-			this._y = qay * qbw + qaw * qby + qaz * qbx - qax * qbz;
-			this._z = qaz * qbw + qaw * qbz + qax * qby - qay * qbx;
-			this._w = qaw * qbw - qax * qbx - qay * qby - qaz * qbz;
-
-			this.onChangeCallback();
-
-			return this;
-
-		},
-
-		multiplyVector3: function ( vector ) {
-
-			console.warn( 'THREE.Quaternion: .multiplyVector3() has been removed. Use is now vector.applyQuaternion( quaternion ) instead.' );
-			return vector.applyQuaternion( this );
-
-		},
-
-		slerp: function ( qb, t ) {
-
-			if ( t === 0 ) return this;
-			if ( t === 1 ) return this.copy( qb );
-
-			var x = this._x, y = this._y, z = this._z, w = this._w;
-
-			// http://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/slerp/
-
-			var cosHalfTheta = w * qb._w + x * qb._x + y * qb._y + z * qb._z;
-
-			if ( cosHalfTheta < 0 ) {
-
-				this._w = - qb._w;
-				this._x = - qb._x;
-				this._y = - qb._y;
-				this._z = - qb._z;
-
-				cosHalfTheta = - cosHalfTheta;
-
-			} else {
-
-				this.copy( qb );
-
-			}
-
-			if ( cosHalfTheta >= 1.0 ) {
-
-				this._w = w;
-				this._x = x;
-				this._y = y;
-				this._z = z;
-
-				return this;
-
-			}
-
-			var halfTheta = Math.acos( cosHalfTheta );
-			var sinHalfTheta = Math.sqrt( 1.0 - cosHalfTheta * cosHalfTheta );
-
-			if ( Math.abs( sinHalfTheta ) < 0.001 ) {
-
-				this._w = 0.5 * ( w + this._w );
-				this._x = 0.5 * ( x + this._x );
-				this._y = 0.5 * ( y + this._y );
-				this._z = 0.5 * ( z + this._z );
-
-				return this;
-
-			}
-
-			var ratioA = Math.sin( ( 1 - t ) * halfTheta ) / sinHalfTheta,
-			ratioB = Math.sin( t * halfTheta ) / sinHalfTheta;
-
-			this._w = ( w * ratioA + this._w * ratioB );
-			this._x = ( x * ratioA + this._x * ratioB );
-			this._y = ( y * ratioA + this._y * ratioB );
-			this._z = ( z * ratioA + this._z * ratioB );
-
-			this.onChangeCallback();
-
-			return this;
-
-		},
-
-		equals: function ( quaternion ) {
-
-			return ( quaternion._x === this._x ) && ( quaternion._y === this._y ) && ( quaternion._z === this._z ) && ( quaternion._w === this._w );
-
-		},
-
-		fromArray: function ( array, offset ) {
-
-			if ( offset === undefined ) offset = 0;
-
-			this._x = array[ offset ];
-			this._y = array[ offset + 1 ];
-			this._z = array[ offset + 2 ];
-			this._w = array[ offset + 3 ];
-
-			this.onChangeCallback();
-
-			return this;
-
-		},
-
-		toArray: function ( array, offset ) {
-
-			if ( array === undefined ) array = [];
-			if ( offset === undefined ) offset = 0;
-
-			array[ offset ] = this._x;
-			array[ offset + 1 ] = this._y;
-			array[ offset + 2 ] = this._z;
-			array[ offset + 3 ] = this._w;
-
-			return array;
-
-		},
-
-		onChange: function ( callback ) {
-
-			this.onChangeCallback = callback;
-
-			return this;
-
-		},
-
-		onChangeCallback: function () {},
-
-		clone: function () {
-
-			return new THREE.Quaternion( this._x, this._y, this._z, this._w );
+			// Global variable
+			root.TWEEN = TWEEN;
 
 		}
 
-	};
+	})(this);
 
-	THREE.Quaternion.slerp = function ( qa, qb, qm, t ) {
-
-		return qm.copy( qa ).slerp( qb, t );
-
-	}
-
-	// File:src/math/Vector2.js
-
-	/**
-	 * @author mrdoob / http://mrdoob.com/
-	 * @author philogb / http://blog.thejit.org/
-	 * @author egraether / http://egraether.com/
-	 * @author zz85 / http://www.lab4games.net/zz85/blog
-	 */
-
-	THREE.Vector2 = function ( x, y ) {
-
-		this.x = x || 0;
-		this.y = y || 0;
-
-	};
-
-	THREE.Vector2.prototype = {
-
-		constructor: THREE.Vector2,
-
-		set: function ( x, y ) {
-
-			this.x = x;
-			this.y = y;
-
-			return this;
-
-		},
-
-		setX: function ( x ) {
-
-			this.x = x;
-
-			return this;
-
-		},
-
-		setY: function ( y ) {
-
-			this.y = y;
-
-			return this;
-
-		},
-
-		setComponent: function ( index, value ) {
-
-			switch ( index ) {
-
-				case 0: this.x = value; break;
-				case 1: this.y = value; break;
-				default: throw new Error( 'index is out of range: ' + index );
-
-			}
-
-		},
-
-		getComponent: function ( index ) {
-
-			switch ( index ) {
-
-				case 0: return this.x;
-				case 1: return this.y;
-				default: throw new Error( 'index is out of range: ' + index );
-
-			}
-
-		},
-
-		copy: function ( v ) {
-
-			this.x = v.x;
-			this.y = v.y;
-
-			return this;
-
-		},
-
-		add: function ( v, w ) {
-
-			if ( w !== undefined ) {
-
-				console.warn( 'THREE.Vector2: .add() now only accepts one argument. Use .addVectors( a, b ) instead.' );
-				return this.addVectors( v, w );
-
-			}
-
-			this.x += v.x;
-			this.y += v.y;
-
-			return this;
-
-		},
-
-		addVectors: function ( a, b ) {
-
-			this.x = a.x + b.x;
-			this.y = a.y + b.y;
-
-			return this;
-
-		},
-
-		addScalar: function ( s ) {
-
-			this.x += s;
-			this.y += s;
-
-			return this;
-
-		},
-
-		sub: function ( v, w ) {
-
-			if ( w !== undefined ) {
-
-				console.warn( 'THREE.Vector2: .sub() now only accepts one argument. Use .subVectors( a, b ) instead.' );
-				return this.subVectors( v, w );
-
-			}
-
-			this.x -= v.x;
-			this.y -= v.y;
-
-			return this;
-
-		},
-
-		subVectors: function ( a, b ) {
-
-			this.x = a.x - b.x;
-			this.y = a.y - b.y;
-
-			return this;
-
-		},
-
-		multiply: function ( v ) {
-
-			this.x *= v.x;
-			this.y *= v.y;
-
-			return this;
-
-		},
-
-		multiplyScalar: function ( s ) {
-
-			this.x *= s;
-			this.y *= s;
-
-			return this;
-
-		},
-
-		divide: function ( v ) {
-
-			this.x /= v.x;
-			this.y /= v.y;
-
-			return this;
-
-		},
-
-		divideScalar: function ( scalar ) {
-
-			if ( scalar !== 0 ) {
-
-				var invScalar = 1 / scalar;
-
-				this.x *= invScalar;
-				this.y *= invScalar;
-
-			} else {
-
-				this.x = 0;
-				this.y = 0;
-
-			}
-
-			return this;
-
-		},
-
-		min: function ( v ) {
-
-			if ( this.x > v.x ) {
-
-				this.x = v.x;
-
-			}
-
-			if ( this.y > v.y ) {
-
-				this.y = v.y;
-
-			}
-
-			return this;
-
-		},
-
-		max: function ( v ) {
-
-			if ( this.x < v.x ) {
-
-				this.x = v.x;
-
-			}
-
-			if ( this.y < v.y ) {
-
-				this.y = v.y;
-
-			}
-
-			return this;
-
-		},
-
-		clamp: function ( min, max ) {
-
-			// This function assumes min < max, if this assumption isn't true it will not operate correctly
-
-			if ( this.x < min.x ) {
-
-				this.x = min.x;
-
-			} else if ( this.x > max.x ) {
-
-				this.x = max.x;
-
-			}
-
-			if ( this.y < min.y ) {
-
-				this.y = min.y;
-
-			} else if ( this.y > max.y ) {
-
-				this.y = max.y;
-
-			}
-
-			return this;
-		},
-
-		clampScalar: ( function () {
-
-			var min, max;
-
-			return function ( minVal, maxVal ) {
-
-				if ( min === undefined ) {
-
-					min = new THREE.Vector2();
-					max = new THREE.Vector2();
-
-				}
-
-				min.set( minVal, minVal );
-				max.set( maxVal, maxVal );
-
-				return this.clamp( min, max );
-
-			};
-
-		} )(),
-
-		floor: function () {
-
-			this.x = Math.floor( this.x );
-			this.y = Math.floor( this.y );
-
-			return this;
-
-		},
-
-		ceil: function () {
-
-			this.x = Math.ceil( this.x );
-			this.y = Math.ceil( this.y );
-
-			return this;
-
-		},
-
-		round: function () {
-
-			this.x = Math.round( this.x );
-			this.y = Math.round( this.y );
-
-			return this;
-
-		},
-
-		roundToZero: function () {
-
-			this.x = ( this.x < 0 ) ? Math.ceil( this.x ) : Math.floor( this.x );
-			this.y = ( this.y < 0 ) ? Math.ceil( this.y ) : Math.floor( this.y );
-
-			return this;
-
-		},
-
-		negate: function () {
-
-			this.x = - this.x;
-			this.y = - this.y;
-
-			return this;
-
-		},
-
-		dot: function ( v ) {
-
-			return this.x * v.x + this.y * v.y;
-
-		},
-
-		lengthSq: function () {
-
-			return this.x * this.x + this.y * this.y;
-
-		},
-
-		length: function () {
-
-			return Math.sqrt( this.x * this.x + this.y * this.y );
-
-		},
-
-		normalize: function () {
-
-			return this.divideScalar( this.length() );
-
-		},
-
-		distanceTo: function ( v ) {
-
-			return Math.sqrt( this.distanceToSquared( v ) );
-
-		},
-
-		distanceToSquared: function ( v ) {
-
-			var dx = this.x - v.x, dy = this.y - v.y;
-			return dx * dx + dy * dy;
-
-		},
-
-		setLength: function ( l ) {
-
-			var oldLength = this.length();
-
-			if ( oldLength !== 0 && l !== oldLength ) {
-
-				this.multiplyScalar( l / oldLength );
-			}
-
-			return this;
-
-		},
-
-		lerp: function ( v, alpha ) {
-
-			this.x += ( v.x - this.x ) * alpha;
-			this.y += ( v.y - this.y ) * alpha;
-
-			return this;
-
-		},
-
-		equals: function ( v ) {
-
-			return ( ( v.x === this.x ) && ( v.y === this.y ) );
-
-		},
-
-		fromArray: function ( array, offset ) {
-
-			if ( offset === undefined ) offset = 0;
-
-			this.x = array[ offset ];
-			this.y = array[ offset + 1 ];
-
-			return this;
-
-		},
-
-		toArray: function ( array, offset ) {
-
-			if ( array === undefined ) array = [];
-			if ( offset === undefined ) offset = 0;
-
-			array[ offset ] = this.x;
-			array[ offset + 1 ] = this.y;
-
-			return array;
-
-		},
-
-		clone: function () {
-
-			return new THREE.Vector2( this.x, this.y );
-
-		}
-
-	};
-
-	// File:src/math/Vector3.js
-
-	/**
-	 * @author mrdoob / http://mrdoob.com/
-	 * @author *kile / http://kile.stravaganza.org/
-	 * @author philogb / http://blog.thejit.org/
-	 * @author mikael emtinger / http://gomo.se/
-	 * @author egraether / http://egraether.com/
-	 * @author WestLangley / http://github.com/WestLangley
-	 */
-
-	THREE.Vector3 = function ( x, y, z ) {
-
-		this.x = x || 0;
-		this.y = y || 0;
-		this.z = z || 0;
-
-	};
-
-	THREE.Vector3.prototype = {
-
-		constructor: THREE.Vector3,
-
-		set: function ( x, y, z ) {
-
-			this.x = x;
-			this.y = y;
-			this.z = z;
-
-			return this;
-
-		},
-
-		setX: function ( x ) {
-
-			this.x = x;
-
-			return this;
-
-		},
-
-		setY: function ( y ) {
-
-			this.y = y;
-
-			return this;
-
-		},
-
-		setZ: function ( z ) {
-
-			this.z = z;
-
-			return this;
-
-		},
-
-		setComponent: function ( index, value ) {
-
-			switch ( index ) {
-
-				case 0: this.x = value; break;
-				case 1: this.y = value; break;
-				case 2: this.z = value; break;
-				default: throw new Error( 'index is out of range: ' + index );
-
-			}
-
-		},
-
-		getComponent: function ( index ) {
-
-			switch ( index ) {
-
-				case 0: return this.x;
-				case 1: return this.y;
-				case 2: return this.z;
-				default: throw new Error( 'index is out of range: ' + index );
-
-			}
-
-		},
-
-		copy: function ( v ) {
-
-			this.x = v.x;
-			this.y = v.y;
-			this.z = v.z;
-
-			return this;
-
-		},
-
-		add: function ( v, w ) {
-
-			if ( w !== undefined ) {
-
-				console.warn( 'THREE.Vector3: .add() now only accepts one argument. Use .addVectors( a, b ) instead.' );
-				return this.addVectors( v, w );
-
-			}
-
-			this.x += v.x;
-			this.y += v.y;
-			this.z += v.z;
-
-			return this;
-
-		},
-
-		addScalar: function ( s ) {
-
-			this.x += s;
-			this.y += s;
-			this.z += s;
-
-			return this;
-
-		},
-
-		addVectors: function ( a, b ) {
-
-			this.x = a.x + b.x;
-			this.y = a.y + b.y;
-			this.z = a.z + b.z;
-
-			return this;
-
-		},
-
-		sub: function ( v, w ) {
-
-			if ( w !== undefined ) {
-
-				console.warn( 'THREE.Vector3: .sub() now only accepts one argument. Use .subVectors( a, b ) instead.' );
-				return this.subVectors( v, w );
-
-			}
-
-			this.x -= v.x;
-			this.y -= v.y;
-			this.z -= v.z;
-
-			return this;
-
-		},
-
-		subVectors: function ( a, b ) {
-
-			this.x = a.x - b.x;
-			this.y = a.y - b.y;
-			this.z = a.z - b.z;
-
-			return this;
-
-		},
-
-		multiply: function ( v, w ) {
-
-			if ( w !== undefined ) {
-
-				console.warn( 'THREE.Vector3: .multiply() now only accepts one argument. Use .multiplyVectors( a, b ) instead.' );
-				return this.multiplyVectors( v, w );
-
-			}
-
-			this.x *= v.x;
-			this.y *= v.y;
-			this.z *= v.z;
-
-			return this;
-
-		},
-
-		multiplyScalar: function ( scalar ) {
-
-			this.x *= scalar;
-			this.y *= scalar;
-			this.z *= scalar;
-
-			return this;
-
-		},
-
-		multiplyVectors: function ( a, b ) {
-
-			this.x = a.x * b.x;
-			this.y = a.y * b.y;
-			this.z = a.z * b.z;
-
-			return this;
-
-		},
-
-		applyEuler: function () {
-
-			var quaternion;
-
-			return function ( euler ) {
-
-				if ( euler instanceof THREE.Euler === false ) {
-
-					console.error( 'THREE.Vector3: .applyEuler() now expects a Euler rotation rather than a Vector3 and order.' );
-
-				}
-
-				if ( quaternion === undefined ) quaternion = new THREE.Quaternion();
-
-				this.applyQuaternion( quaternion.setFromEuler( euler ) );
-
-				return this;
-
-			};
-
-		}(),
-
-		applyAxisAngle: function () {
-
-			var quaternion;
-
-			return function ( axis, angle ) {
-
-				if ( quaternion === undefined ) quaternion = new THREE.Quaternion();
-
-				this.applyQuaternion( quaternion.setFromAxisAngle( axis, angle ) );
-
-				return this;
-
-			};
-
-		}(),
-
-		applyMatrix3: function ( m ) {
-
-			var x = this.x;
-			var y = this.y;
-			var z = this.z;
-
-			var e = m.elements;
-
-			this.x = e[ 0 ] * x + e[ 3 ] * y + e[ 6 ] * z;
-			this.y = e[ 1 ] * x + e[ 4 ] * y + e[ 7 ] * z;
-			this.z = e[ 2 ] * x + e[ 5 ] * y + e[ 8 ] * z;
-
-			return this;
-
-		},
-
-		applyMatrix4: function ( m ) {
-
-			// input: THREE.Matrix4 affine matrix
-
-			var x = this.x, y = this.y, z = this.z;
-
-			var e = m.elements;
-
-			this.x = e[ 0 ] * x + e[ 4 ] * y + e[ 8 ]  * z + e[ 12 ];
-			this.y = e[ 1 ] * x + e[ 5 ] * y + e[ 9 ]  * z + e[ 13 ];
-			this.z = e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z + e[ 14 ];
-
-			return this;
-
-		},
-
-		applyProjection: function ( m ) {
-
-			// input: THREE.Matrix4 projection matrix
-
-			var x = this.x, y = this.y, z = this.z;
-
-			var e = m.elements;
-			var d = 1 / ( e[ 3 ] * x + e[ 7 ] * y + e[ 11 ] * z + e[ 15 ] ); // perspective divide
-
-			this.x = ( e[ 0 ] * x + e[ 4 ] * y + e[ 8 ]  * z + e[ 12 ] ) * d;
-			this.y = ( e[ 1 ] * x + e[ 5 ] * y + e[ 9 ]  * z + e[ 13 ] ) * d;
-			this.z = ( e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z + e[ 14 ] ) * d;
-
-			return this;
-
-		},
-
-		applyQuaternion: function ( q ) {
-
-			var x = this.x;
-			var y = this.y;
-			var z = this.z;
-
-			var qx = q.x;
-			var qy = q.y;
-			var qz = q.z;
-			var qw = q.w;
-
-			// calculate quat * vector
-
-			var ix =  qw * x + qy * z - qz * y;
-			var iy =  qw * y + qz * x - qx * z;
-			var iz =  qw * z + qx * y - qy * x;
-			var iw = - qx * x - qy * y - qz * z;
-
-			// calculate result * inverse quat
-
-			this.x = ix * qw + iw * - qx + iy * - qz - iz * - qy;
-			this.y = iy * qw + iw * - qy + iz * - qx - ix * - qz;
-			this.z = iz * qw + iw * - qz + ix * - qy - iy * - qx;
-
-			return this;
-
-		},
-
-		project: function () {
-
-			var matrix;
-
-			return function ( camera ) {
-
-				if ( matrix === undefined ) matrix = new THREE.Matrix4();
-
-				matrix.multiplyMatrices( camera.projectionMatrix, matrix.getInverse( camera.matrixWorld ) );
-				return this.applyProjection( matrix );
-
-			};
-
-		}(),
-
-		unproject: function () {
-
-			var matrix;
-
-			return function ( camera ) {
-
-				if ( matrix === undefined ) matrix = new THREE.Matrix4();
-
-				matrix.multiplyMatrices( camera.matrixWorld, matrix.getInverse( camera.projectionMatrix ) );
-				return this.applyProjection( matrix );
-
-			};
-
-		}(),
-
-		transformDirection: function ( m ) {
-
-			// input: THREE.Matrix4 affine matrix
-			// vector interpreted as a direction
-
-			var x = this.x, y = this.y, z = this.z;
-
-			var e = m.elements;
-
-			this.x = e[ 0 ] * x + e[ 4 ] * y + e[ 8 ]  * z;
-			this.y = e[ 1 ] * x + e[ 5 ] * y + e[ 9 ]  * z;
-			this.z = e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z;
-
-			this.normalize();
-
-			return this;
-
-		},
-
-		divide: function ( v ) {
-
-			this.x /= v.x;
-			this.y /= v.y;
-			this.z /= v.z;
-
-			return this;
-
-		},
-
-		divideScalar: function ( scalar ) {
-
-			if ( scalar !== 0 ) {
-
-				var invScalar = 1 / scalar;
-
-				this.x *= invScalar;
-				this.y *= invScalar;
-				this.z *= invScalar;
-
-			} else {
-
-				this.x = 0;
-				this.y = 0;
-				this.z = 0;
-
-			}
-
-			return this;
-
-		},
-
-		min: function ( v ) {
-
-			if ( this.x > v.x ) {
-
-				this.x = v.x;
-
-			}
-
-			if ( this.y > v.y ) {
-
-				this.y = v.y;
-
-			}
-
-			if ( this.z > v.z ) {
-
-				this.z = v.z;
-
-			}
-
-			return this;
-
-		},
-
-		max: function ( v ) {
-
-			if ( this.x < v.x ) {
-
-				this.x = v.x;
-
-			}
-
-			if ( this.y < v.y ) {
-
-				this.y = v.y;
-
-			}
-
-			if ( this.z < v.z ) {
-
-				this.z = v.z;
-
-			}
-
-			return this;
-
-		},
-
-		clamp: function ( min, max ) {
-
-			// This function assumes min < max, if this assumption isn't true it will not operate correctly
-
-			if ( this.x < min.x ) {
-
-				this.x = min.x;
-
-			} else if ( this.x > max.x ) {
-
-				this.x = max.x;
-
-			}
-
-			if ( this.y < min.y ) {
-
-				this.y = min.y;
-
-			} else if ( this.y > max.y ) {
-
-				this.y = max.y;
-
-			}
-
-			if ( this.z < min.z ) {
-
-				this.z = min.z;
-
-			} else if ( this.z > max.z ) {
-
-				this.z = max.z;
-
-			}
-
-			return this;
-
-		},
-
-		clampScalar: ( function () {
-
-			var min, max;
-
-			return function ( minVal, maxVal ) {
-
-				if ( min === undefined ) {
-
-					min = new THREE.Vector3();
-					max = new THREE.Vector3();
-
-				}
-
-				min.set( minVal, minVal, minVal );
-				max.set( maxVal, maxVal, maxVal );
-
-				return this.clamp( min, max );
-
-			};
-
-		} )(),
-
-		floor: function () {
-
-			this.x = Math.floor( this.x );
-			this.y = Math.floor( this.y );
-			this.z = Math.floor( this.z );
-
-			return this;
-
-		},
-
-		ceil: function () {
-
-			this.x = Math.ceil( this.x );
-			this.y = Math.ceil( this.y );
-			this.z = Math.ceil( this.z );
-
-			return this;
-
-		},
-
-		round: function () {
-
-			this.x = Math.round( this.x );
-			this.y = Math.round( this.y );
-			this.z = Math.round( this.z );
-
-			return this;
-
-		},
-
-		roundToZero: function () {
-
-			this.x = ( this.x < 0 ) ? Math.ceil( this.x ) : Math.floor( this.x );
-			this.y = ( this.y < 0 ) ? Math.ceil( this.y ) : Math.floor( this.y );
-			this.z = ( this.z < 0 ) ? Math.ceil( this.z ) : Math.floor( this.z );
-
-			return this;
-
-		},
-
-		negate: function () {
-
-			this.x = - this.x;
-			this.y = - this.y;
-			this.z = - this.z;
-
-			return this;
-
-		},
-
-		dot: function ( v ) {
-
-			return this.x * v.x + this.y * v.y + this.z * v.z;
-
-		},
-
-		lengthSq: function () {
-
-			return this.x * this.x + this.y * this.y + this.z * this.z;
-
-		},
-
-		length: function () {
-
-			return Math.sqrt( this.x * this.x + this.y * this.y + this.z * this.z );
-
-		},
-
-		lengthManhattan: function () {
-
-			return Math.abs( this.x ) + Math.abs( this.y ) + Math.abs( this.z );
-
-		},
-
-		normalize: function () {
-
-			return this.divideScalar( this.length() );
-
-		},
-
-		setLength: function ( l ) {
-
-			var oldLength = this.length();
-
-			if ( oldLength !== 0 && l !== oldLength  ) {
-
-				this.multiplyScalar( l / oldLength );
-			}
-
-			return this;
-
-		},
-
-		lerp: function ( v, alpha ) {
-
-			this.x += ( v.x - this.x ) * alpha;
-			this.y += ( v.y - this.y ) * alpha;
-			this.z += ( v.z - this.z ) * alpha;
-
-			return this;
-
-		},
-
-		cross: function ( v, w ) {
-
-			if ( w !== undefined ) {
-
-				console.warn( 'THREE.Vector3: .cross() now only accepts one argument. Use .crossVectors( a, b ) instead.' );
-				return this.crossVectors( v, w );
-
-			}
-
-			var x = this.x, y = this.y, z = this.z;
-
-			this.x = y * v.z - z * v.y;
-			this.y = z * v.x - x * v.z;
-			this.z = x * v.y - y * v.x;
-
-			return this;
-
-		},
-
-		crossVectors: function ( a, b ) {
-
-			var ax = a.x, ay = a.y, az = a.z;
-			var bx = b.x, by = b.y, bz = b.z;
-
-			this.x = ay * bz - az * by;
-			this.y = az * bx - ax * bz;
-			this.z = ax * by - ay * bx;
-
-			return this;
-
-		},
-
-		projectOnVector: function () {
-
-			var v1, dot;
-
-			return function ( vector ) {
-
-				if ( v1 === undefined ) v1 = new THREE.Vector3();
-
-				v1.copy( vector ).normalize();
-
-				dot = this.dot( v1 );
-
-				return this.copy( v1 ).multiplyScalar( dot );
-
-			};
-
-		}(),
-
-		projectOnPlane: function () {
-
-			var v1;
-
-			return function ( planeNormal ) {
-
-				if ( v1 === undefined ) v1 = new THREE.Vector3();
-
-				v1.copy( this ).projectOnVector( planeNormal );
-
-				return this.sub( v1 );
-
-			}
-
-		}(),
-
-		reflect: function () {
-
-			// reflect incident vector off plane orthogonal to normal
-			// normal is assumed to have unit length
-
-			var v1;
-
-			return function ( normal ) {
-
-				if ( v1 === undefined ) v1 = new THREE.Vector3();
-
-				return this.sub( v1.copy( normal ).multiplyScalar( 2 * this.dot( normal ) ) );
-
-			}
-
-		}(),
-
-		angleTo: function ( v ) {
-
-			var theta = this.dot( v ) / ( this.length() * v.length() );
-
-			// clamp, to handle numerical problems
-
-			return Math.acos( THREE.Math.clamp( theta, - 1, 1 ) );
-
-		},
-
-		distanceTo: function ( v ) {
-
-			return Math.sqrt( this.distanceToSquared( v ) );
-
-		},
-
-		distanceToSquared: function ( v ) {
-
-			var dx = this.x - v.x;
-			var dy = this.y - v.y;
-			var dz = this.z - v.z;
-
-			return dx * dx + dy * dy + dz * dz;
-
-		},
-
-		setEulerFromRotationMatrix: function ( m, order ) {
-
-			console.error( 'THREE.Vector3: .setEulerFromRotationMatrix() has been removed. Use Euler.setFromRotationMatrix() instead.' );
-
-		},
-
-		setEulerFromQuaternion: function ( q, order ) {
-
-			console.error( 'THREE.Vector3: .setEulerFromQuaternion() has been removed. Use Euler.setFromQuaternion() instead.' );
-
-		},
-
-		getPositionFromMatrix: function ( m ) {
-
-			console.warn( 'THREE.Vector3: .getPositionFromMatrix() has been renamed to .setFromMatrixPosition().' );
-
-			return this.setFromMatrixPosition( m );
-
-		},
-
-		getScaleFromMatrix: function ( m ) {
-
-			console.warn( 'THREE.Vector3: .getScaleFromMatrix() has been renamed to .setFromMatrixScale().' );
-
-			return this.setFromMatrixScale( m );
-		},
-
-		getColumnFromMatrix: function ( index, matrix ) {
-
-			console.warn( 'THREE.Vector3: .getColumnFromMatrix() has been renamed to .setFromMatrixColumn().' );
-
-			return this.setFromMatrixColumn( index, matrix );
-
-		},
-
-		setFromMatrixPosition: function ( m ) {
-
-			this.x = m.elements[ 12 ];
-			this.y = m.elements[ 13 ];
-			this.z = m.elements[ 14 ];
-
-			return this;
-
-		},
-
-		setFromMatrixScale: function ( m ) {
-
-			var sx = this.set( m.elements[ 0 ], m.elements[ 1 ], m.elements[  2 ] ).length();
-			var sy = this.set( m.elements[ 4 ], m.elements[ 5 ], m.elements[  6 ] ).length();
-			var sz = this.set( m.elements[ 8 ], m.elements[ 9 ], m.elements[ 10 ] ).length();
-
-			this.x = sx;
-			this.y = sy;
-			this.z = sz;
-
-			return this;
-		},
-
-		setFromMatrixColumn: function ( index, matrix ) {
-
-			var offset = index * 4;
-
-			var me = matrix.elements;
-
-			this.x = me[ offset ];
-			this.y = me[ offset + 1 ];
-			this.z = me[ offset + 2 ];
-
-			return this;
-
-		},
-
-		equals: function ( v ) {
-
-			return ( ( v.x === this.x ) && ( v.y === this.y ) && ( v.z === this.z ) );
-
-		},
-
-		fromArray: function ( array, offset ) {
-
-			if ( offset === undefined ) offset = 0;
-
-			this.x = array[ offset ];
-			this.y = array[ offset + 1 ];
-			this.z = array[ offset + 2 ];
-
-			return this;
-
-		},
-
-		toArray: function ( array, offset ) {
-
-			if ( array === undefined ) array = [];
-			if ( offset === undefined ) offset = 0;
-
-			array[ offset ] = this.x;
-			array[ offset + 1 ] = this.y;
-			array[ offset + 2 ] = this.z;
-
-			return array;
-
-		},
-
-		clone: function () {
-
-			return new THREE.Vector3( this.x, this.y, this.z );
-
-		}
-
-	};
-
-	// File:src/math/Vector4.js
-
-	/**
-	 * @author supereggbert / http://www.paulbrunt.co.uk/
-	 * @author philogb / http://blog.thejit.org/
-	 * @author mikael emtinger / http://gomo.se/
-	 * @author egraether / http://egraether.com/
-	 * @author WestLangley / http://github.com/WestLangley
-	 */
-
-	THREE.Vector4 = function ( x, y, z, w ) {
-
-		this.x = x || 0;
-		this.y = y || 0;
-		this.z = z || 0;
-		this.w = ( w !== undefined ) ? w : 1;
-
-	};
-
-	THREE.Vector4.prototype = {
-
-		constructor: THREE.Vector4,
-
-		set: function ( x, y, z, w ) {
-
-			this.x = x;
-			this.y = y;
-			this.z = z;
-			this.w = w;
-
-			return this;
-
-		},
-
-		setX: function ( x ) {
-
-			this.x = x;
-
-			return this;
-
-		},
-
-		setY: function ( y ) {
-
-			this.y = y;
-
-			return this;
-
-		},
-
-		setZ: function ( z ) {
-
-			this.z = z;
-
-			return this;
-
-		},
-
-		setW: function ( w ) {
-
-			this.w = w;
-
-			return this;
-
-		},
-
-		setComponent: function ( index, value ) {
-
-			switch ( index ) {
-
-				case 0: this.x = value; break;
-				case 1: this.y = value; break;
-				case 2: this.z = value; break;
-				case 3: this.w = value; break;
-				default: throw new Error( 'index is out of range: ' + index );
-
-			}
-
-		},
-
-		getComponent: function ( index ) {
-
-			switch ( index ) {
-
-				case 0: return this.x;
-				case 1: return this.y;
-				case 2: return this.z;
-				case 3: return this.w;
-				default: throw new Error( 'index is out of range: ' + index );
-
-			}
-
-		},
-
-		copy: function ( v ) {
-
-			this.x = v.x;
-			this.y = v.y;
-			this.z = v.z;
-			this.w = ( v.w !== undefined ) ? v.w : 1;
-
-			return this;
-
-		},
-
-		add: function ( v, w ) {
-
-			if ( w !== undefined ) {
-
-				console.warn( 'THREE.Vector4: .add() now only accepts one argument. Use .addVectors( a, b ) instead.' );
-				return this.addVectors( v, w );
-
-			}
-
-			this.x += v.x;
-			this.y += v.y;
-			this.z += v.z;
-			this.w += v.w;
-
-			return this;
-
-		},
-
-		addScalar: function ( s ) {
-
-			this.x += s;
-			this.y += s;
-			this.z += s;
-			this.w += s;
-
-			return this;
-
-		},
-
-		addVectors: function ( a, b ) {
-
-			this.x = a.x + b.x;
-			this.y = a.y + b.y;
-			this.z = a.z + b.z;
-			this.w = a.w + b.w;
-
-			return this;
-
-		},
-
-		sub: function ( v, w ) {
-
-			if ( w !== undefined ) {
-
-				console.warn( 'THREE.Vector4: .sub() now only accepts one argument. Use .subVectors( a, b ) instead.' );
-				return this.subVectors( v, w );
-
-			}
-
-			this.x -= v.x;
-			this.y -= v.y;
-			this.z -= v.z;
-			this.w -= v.w;
-
-			return this;
-
-		},
-
-		subVectors: function ( a, b ) {
-
-			this.x = a.x - b.x;
-			this.y = a.y - b.y;
-			this.z = a.z - b.z;
-			this.w = a.w - b.w;
-
-			return this;
-
-		},
-
-		multiplyScalar: function ( scalar ) {
-
-			this.x *= scalar;
-			this.y *= scalar;
-			this.z *= scalar;
-			this.w *= scalar;
-
-			return this;
-
-		},
-
-		applyMatrix4: function ( m ) {
-
-			var x = this.x;
-			var y = this.y;
-			var z = this.z;
-			var w = this.w;
-
-			var e = m.elements;
-
-			this.x = e[ 0 ] * x + e[ 4 ] * y + e[ 8 ] * z + e[ 12 ] * w;
-			this.y = e[ 1 ] * x + e[ 5 ] * y + e[ 9 ] * z + e[ 13 ] * w;
-			this.z = e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z + e[ 14 ] * w;
-			this.w = e[ 3 ] * x + e[ 7 ] * y + e[ 11 ] * z + e[ 15 ] * w;
-
-			return this;
-
-		},
-
-		divideScalar: function ( scalar ) {
-
-			if ( scalar !== 0 ) {
-
-				var invScalar = 1 / scalar;
-
-				this.x *= invScalar;
-				this.y *= invScalar;
-				this.z *= invScalar;
-				this.w *= invScalar;
-
-			} else {
-
-				this.x = 0;
-				this.y = 0;
-				this.z = 0;
-				this.w = 1;
-
-			}
-
-			return this;
-
-		},
-
-		setAxisAngleFromQuaternion: function ( q ) {
-
-			// http://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToAngle/index.htm
-
-			// q is assumed to be normalized
-
-			this.w = 2 * Math.acos( q.w );
-
-			var s = Math.sqrt( 1 - q.w * q.w );
-
-			if ( s < 0.0001 ) {
-
-				 this.x = 1;
-				 this.y = 0;
-				 this.z = 0;
-
-			} else {
-
-				 this.x = q.x / s;
-				 this.y = q.y / s;
-				 this.z = q.z / s;
-
-			}
-
-			return this;
-
-		},
-
-		setAxisAngleFromRotationMatrix: function ( m ) {
-
-			// http://www.euclideanspace.com/maths/geometry/rotations/conversions/matrixToAngle/index.htm
-
-			// assumes the upper 3x3 of m is a pure rotation matrix (i.e, unscaled)
-
-			var angle, x, y, z,		// variables for result
-				epsilon = 0.01,		// margin to allow for rounding errors
-				epsilon2 = 0.1,		// margin to distinguish between 0 and 180 degrees
-
-				te = m.elements,
-
-				m11 = te[ 0 ], m12 = te[ 4 ], m13 = te[ 8 ],
-				m21 = te[ 1 ], m22 = te[ 5 ], m23 = te[ 9 ],
-				m31 = te[ 2 ], m32 = te[ 6 ], m33 = te[ 10 ];
-
-			if ( ( Math.abs( m12 - m21 ) < epsilon )
-			   && ( Math.abs( m13 - m31 ) < epsilon )
-			   && ( Math.abs( m23 - m32 ) < epsilon ) ) {
-
-				// singularity found
-				// first check for identity matrix which must have +1 for all terms
-				// in leading diagonal and zero in other terms
-
-				if ( ( Math.abs( m12 + m21 ) < epsilon2 )
-				   && ( Math.abs( m13 + m31 ) < epsilon2 )
-				   && ( Math.abs( m23 + m32 ) < epsilon2 )
-				   && ( Math.abs( m11 + m22 + m33 - 3 ) < epsilon2 ) ) {
-
-					// this singularity is identity matrix so angle = 0
-
-					this.set( 1, 0, 0, 0 );
-
-					return this; // zero angle, arbitrary axis
-
-				}
-
-				// otherwise this singularity is angle = 180
-
-				angle = Math.PI;
-
-				var xx = ( m11 + 1 ) / 2;
-				var yy = ( m22 + 1 ) / 2;
-				var zz = ( m33 + 1 ) / 2;
-				var xy = ( m12 + m21 ) / 4;
-				var xz = ( m13 + m31 ) / 4;
-				var yz = ( m23 + m32 ) / 4;
-
-				if ( ( xx > yy ) && ( xx > zz ) ) { // m11 is the largest diagonal term
-
-					if ( xx < epsilon ) {
-
-						x = 0;
-						y = 0.707106781;
-						z = 0.707106781;
-
-					} else {
-
-						x = Math.sqrt( xx );
-						y = xy / x;
-						z = xz / x;
-
-					}
-
-				} else if ( yy > zz ) { // m22 is the largest diagonal term
-
-					if ( yy < epsilon ) {
-
-						x = 0.707106781;
-						y = 0;
-						z = 0.707106781;
-
-					} else {
-
-						y = Math.sqrt( yy );
-						x = xy / y;
-						z = yz / y;
-
-					}
-
-				} else { // m33 is the largest diagonal term so base result on this
-
-					if ( zz < epsilon ) {
-
-						x = 0.707106781;
-						y = 0.707106781;
-						z = 0;
-
-					} else {
-
-						z = Math.sqrt( zz );
-						x = xz / z;
-						y = yz / z;
-
-					}
-
-				}
-
-				this.set( x, y, z, angle );
-
-				return this; // return 180 deg rotation
-
-			}
-
-			// as we have reached here there are no singularities so we can handle normally
-
-			var s = Math.sqrt( ( m32 - m23 ) * ( m32 - m23 )
-							  + ( m13 - m31 ) * ( m13 - m31 )
-							  + ( m21 - m12 ) * ( m21 - m12 ) ); // used to normalize
-
-			if ( Math.abs( s ) < 0.001 ) s = 1;
-
-			// prevent divide by zero, should not happen if matrix is orthogonal and should be
-			// caught by singularity test above, but I've left it in just in case
-
-			this.x = ( m32 - m23 ) / s;
-			this.y = ( m13 - m31 ) / s;
-			this.z = ( m21 - m12 ) / s;
-			this.w = Math.acos( ( m11 + m22 + m33 - 1 ) / 2 );
-
-			return this;
-
-		},
-
-		min: function ( v ) {
-
-			if ( this.x > v.x ) {
-
-				this.x = v.x;
-
-			}
-
-			if ( this.y > v.y ) {
-
-				this.y = v.y;
-
-			}
-
-			if ( this.z > v.z ) {
-
-				this.z = v.z;
-
-			}
-
-			if ( this.w > v.w ) {
-
-				this.w = v.w;
-
-			}
-
-			return this;
-
-		},
-
-		max: function ( v ) {
-
-			if ( this.x < v.x ) {
-
-				this.x = v.x;
-
-			}
-
-			if ( this.y < v.y ) {
-
-				this.y = v.y;
-
-			}
-
-			if ( this.z < v.z ) {
-
-				this.z = v.z;
-
-			}
-
-			if ( this.w < v.w ) {
-
-				this.w = v.w;
-
-			}
-
-			return this;
-
-		},
-
-		clamp: function ( min, max ) {
-
-			// This function assumes min < max, if this assumption isn't true it will not operate correctly
-
-			if ( this.x < min.x ) {
-
-				this.x = min.x;
-
-			} else if ( this.x > max.x ) {
-
-				this.x = max.x;
-
-			}
-
-			if ( this.y < min.y ) {
-
-				this.y = min.y;
-
-			} else if ( this.y > max.y ) {
-
-				this.y = max.y;
-
-			}
-
-			if ( this.z < min.z ) {
-
-				this.z = min.z;
-
-			} else if ( this.z > max.z ) {
-
-				this.z = max.z;
-
-			}
-
-			if ( this.w < min.w ) {
-
-				this.w = min.w;
-
-			} else if ( this.w > max.w ) {
-
-				this.w = max.w;
-
-			}
-
-			return this;
-
-		},
-
-		clampScalar: ( function () {
-
-			var min, max;
-
-			return function ( minVal, maxVal ) {
-
-				if ( min === undefined ) {
-
-					min = new THREE.Vector4();
-					max = new THREE.Vector4();
-
-				}
-
-				min.set( minVal, minVal, minVal, minVal );
-				max.set( maxVal, maxVal, maxVal, maxVal );
-
-				return this.clamp( min, max );
-
-			};
-
-		} )(),
-
-	    floor: function () {
-
-	        this.x = Math.floor( this.x );
-	        this.y = Math.floor( this.y );
-	        this.z = Math.floor( this.z );
-	        this.w = Math.floor( this.w );
-
-	        return this;
-
-	    },
-
-	    ceil: function () {
-
-	        this.x = Math.ceil( this.x );
-	        this.y = Math.ceil( this.y );
-	        this.z = Math.ceil( this.z );
-	        this.w = Math.ceil( this.w );
-
-	        return this;
-
-	    },
-
-	    round: function () {
-
-	        this.x = Math.round( this.x );
-	        this.y = Math.round( this.y );
-	        this.z = Math.round( this.z );
-	        this.w = Math.round( this.w );
-
-	        return this;
-
-	    },
-
-	    roundToZero: function () {
-
-	        this.x = ( this.x < 0 ) ? Math.ceil( this.x ) : Math.floor( this.x );
-	        this.y = ( this.y < 0 ) ? Math.ceil( this.y ) : Math.floor( this.y );
-	        this.z = ( this.z < 0 ) ? Math.ceil( this.z ) : Math.floor( this.z );
-	        this.w = ( this.w < 0 ) ? Math.ceil( this.w ) : Math.floor( this.w );
-
-	        return this;
-
-	    },
-
-		negate: function () {
-
-			this.x = - this.x;
-			this.y = - this.y;
-			this.z = - this.z;
-			this.w = - this.w;
-
-			return this;
-
-		},
-
-		dot: function ( v ) {
-
-			return this.x * v.x + this.y * v.y + this.z * v.z + this.w * v.w;
-
-		},
-
-		lengthSq: function () {
-
-			return this.x * this.x + this.y * this.y + this.z * this.z + this.w * this.w;
-
-		},
-
-		length: function () {
-
-			return Math.sqrt( this.x * this.x + this.y * this.y + this.z * this.z + this.w * this.w );
-
-		},
-
-		lengthManhattan: function () {
-
-			return Math.abs( this.x ) + Math.abs( this.y ) + Math.abs( this.z ) + Math.abs( this.w );
-
-		},
-
-		normalize: function () {
-
-			return this.divideScalar( this.length() );
-
-		},
-
-		setLength: function ( l ) {
-
-			var oldLength = this.length();
-
-			if ( oldLength !== 0 && l !== oldLength ) {
-
-				this.multiplyScalar( l / oldLength );
-
-			}
-
-			return this;
-
-		},
-
-		lerp: function ( v, alpha ) {
-
-			this.x += ( v.x - this.x ) * alpha;
-			this.y += ( v.y - this.y ) * alpha;
-			this.z += ( v.z - this.z ) * alpha;
-			this.w += ( v.w - this.w ) * alpha;
-
-			return this;
-
-		},
-
-		equals: function ( v ) {
-
-			return ( ( v.x === this.x ) && ( v.y === this.y ) && ( v.z === this.z ) && ( v.w === this.w ) );
-
-		},
-
-		fromArray: function ( array, offset ) {
-
-			if ( offset === undefined ) offset = 0;
-
-			this.x = array[ offset ];
-			this.y = array[ offset + 1 ];
-			this.z = array[ offset + 2 ];
-			this.w = array[ offset + 3 ];
-
-			return this;
-
-		},
-
-		toArray: function ( array, offset ) {
-
-			if ( array === undefined ) array = [];
-			if ( offset === undefined ) offset = 0;
-
-			array[ offset ] = this.x;
-			array[ offset + 1 ] = this.y;
-			array[ offset + 2 ] = this.z;
-			array[ offset + 3 ] = this.w;
-
-			return array;
-
-		},
-
-		clone: function () {
-
-			return new THREE.Vector4( this.x, this.y, this.z, this.w );
-
-		}
-
-	};
-
-	// File:src/math/Euler.js
-
-	/**
-	 * @author mrdoob / http://mrdoob.com/
-	 * @author WestLangley / http://github.com/WestLangley
-	 * @author bhouston / http://exocortex.com
-	 */
-
-	THREE.Euler = function ( x, y, z, order ) {
-
-		this._x = x || 0;
-		this._y = y || 0;
-		this._z = z || 0;
-		this._order = order || THREE.Euler.DefaultOrder;
-
-	};
-
-	THREE.Euler.RotationOrders = [ 'XYZ', 'YZX', 'ZXY', 'XZY', 'YXZ', 'ZYX' ];
-
-	THREE.Euler.DefaultOrder = 'XYZ';
-
-	THREE.Euler.prototype = {
-
-		constructor: THREE.Euler,
-
-		_x: 0, _y: 0, _z: 0, _order: THREE.Euler.DefaultOrder,
-
-		get x () {
-
-			return this._x;
-
-		},
-
-		set x ( value ) {
-
-			this._x = value;
-			this.onChangeCallback();
-
-		},
-
-		get y () {
-
-			return this._y;
-
-		},
-
-		set y ( value ) {
-
-			this._y = value;
-			this.onChangeCallback();
-
-		},
-
-		get z () {
-
-			return this._z;
-
-		},
-
-		set z ( value ) {
-
-			this._z = value;
-			this.onChangeCallback();
-
-		},
-
-		get order () {
-
-			return this._order;
-
-		},
-
-		set order ( value ) {
-
-			this._order = value;
-			this.onChangeCallback();
-
-		},
-
-		set: function ( x, y, z, order ) {
-
-			this._x = x;
-			this._y = y;
-			this._z = z;
-			this._order = order || this._order;
-
-			this.onChangeCallback();
-
-			return this;
-
-		},
-
-		copy: function ( euler ) {
-
-			this._x = euler._x;
-			this._y = euler._y;
-			this._z = euler._z;
-			this._order = euler._order;
-
-			this.onChangeCallback();
-
-			return this;
-
-		},
-
-		setFromRotationMatrix: function ( m, order ) {
-
-			var clamp = THREE.Math.clamp;
-
-			// assumes the upper 3x3 of m is a pure rotation matrix (i.e, unscaled)
-
-			var te = m.elements;
-			var m11 = te[ 0 ], m12 = te[ 4 ], m13 = te[ 8 ];
-			var m21 = te[ 1 ], m22 = te[ 5 ], m23 = te[ 9 ];
-			var m31 = te[ 2 ], m32 = te[ 6 ], m33 = te[ 10 ];
-
-			order = order || this._order;
-
-			if ( order === 'XYZ' ) {
-
-				this._y = Math.asin( clamp( m13, - 1, 1 ) );
-
-				if ( Math.abs( m13 ) < 0.99999 ) {
-
-					this._x = Math.atan2( - m23, m33 );
-					this._z = Math.atan2( - m12, m11 );
-
-				} else {
-
-					this._x = Math.atan2( m32, m22 );
-					this._z = 0;
-
-				}
-
-			} else if ( order === 'YXZ' ) {
-
-				this._x = Math.asin( - clamp( m23, - 1, 1 ) );
-
-				if ( Math.abs( m23 ) < 0.99999 ) {
-
-					this._y = Math.atan2( m13, m33 );
-					this._z = Math.atan2( m21, m22 );
-
-				} else {
-
-					this._y = Math.atan2( - m31, m11 );
-					this._z = 0;
-
-				}
-
-			} else if ( order === 'ZXY' ) {
-
-				this._x = Math.asin( clamp( m32, - 1, 1 ) );
-
-				if ( Math.abs( m32 ) < 0.99999 ) {
-
-					this._y = Math.atan2( - m31, m33 );
-					this._z = Math.atan2( - m12, m22 );
-
-				} else {
-
-					this._y = 0;
-					this._z = Math.atan2( m21, m11 );
-
-				}
-
-			} else if ( order === 'ZYX' ) {
-
-				this._y = Math.asin( - clamp( m31, - 1, 1 ) );
-
-				if ( Math.abs( m31 ) < 0.99999 ) {
-
-					this._x = Math.atan2( m32, m33 );
-					this._z = Math.atan2( m21, m11 );
-
-				} else {
-
-					this._x = 0;
-					this._z = Math.atan2( - m12, m22 );
-
-				}
-
-			} else if ( order === 'YZX' ) {
-
-				this._z = Math.asin( clamp( m21, - 1, 1 ) );
-
-				if ( Math.abs( m21 ) < 0.99999 ) {
-
-					this._x = Math.atan2( - m23, m22 );
-					this._y = Math.atan2( - m31, m11 );
-
-				} else {
-
-					this._x = 0;
-					this._y = Math.atan2( m13, m33 );
-
-				}
-
-			} else if ( order === 'XZY' ) {
-
-				this._z = Math.asin( - clamp( m12, - 1, 1 ) );
-
-				if ( Math.abs( m12 ) < 0.99999 ) {
-
-					this._x = Math.atan2( m32, m22 );
-					this._y = Math.atan2( m13, m11 );
-
-				} else {
-
-					this._x = Math.atan2( - m23, m33 );
-					this._y = 0;
-
-				}
-
-			} else {
-
-				console.warn( 'THREE.Euler: .setFromRotationMatrix() given unsupported order: ' + order )
-
-			}
-
-			this._order = order;
-
-			this.onChangeCallback();
-
-			return this;
-
-		},
-
-		setFromQuaternion: function ( q, order, update ) {
-
-			var clamp = THREE.Math.clamp;
-
-			// q is assumed to be normalized
-
-			// http://www.mathworks.com/matlabcentral/fileexchange/20696-function-to-convert-between-dcm-euler-angles-quaternions-and-euler-vectors/content/SpinCalc.m
-
-			var sqx = q.x * q.x;
-			var sqy = q.y * q.y;
-			var sqz = q.z * q.z;
-			var sqw = q.w * q.w;
-
-			order = order || this._order;
-
-			if ( order === 'XYZ' ) {
-
-				this._x = Math.atan2( 2 * ( q.x * q.w - q.y * q.z ), ( sqw - sqx - sqy + sqz ) );
-				this._y = Math.asin(  clamp( 2 * ( q.x * q.z + q.y * q.w ), - 1, 1 ) );
-				this._z = Math.atan2( 2 * ( q.z * q.w - q.x * q.y ), ( sqw + sqx - sqy - sqz ) );
-
-			} else if ( order ===  'YXZ' ) {
-
-				this._x = Math.asin(  clamp( 2 * ( q.x * q.w - q.y * q.z ), - 1, 1 ) );
-				this._y = Math.atan2( 2 * ( q.x * q.z + q.y * q.w ), ( sqw - sqx - sqy + sqz ) );
-				this._z = Math.atan2( 2 * ( q.x * q.y + q.z * q.w ), ( sqw - sqx + sqy - sqz ) );
-
-			} else if ( order === 'ZXY' ) {
-
-				this._x = Math.asin(  clamp( 2 * ( q.x * q.w + q.y * q.z ), - 1, 1 ) );
-				this._y = Math.atan2( 2 * ( q.y * q.w - q.z * q.x ), ( sqw - sqx - sqy + sqz ) );
-				this._z = Math.atan2( 2 * ( q.z * q.w - q.x * q.y ), ( sqw - sqx + sqy - sqz ) );
-
-			} else if ( order === 'ZYX' ) {
-
-				this._x = Math.atan2( 2 * ( q.x * q.w + q.z * q.y ), ( sqw - sqx - sqy + sqz ) );
-				this._y = Math.asin(  clamp( 2 * ( q.y * q.w - q.x * q.z ), - 1, 1 ) );
-				this._z = Math.atan2( 2 * ( q.x * q.y + q.z * q.w ), ( sqw + sqx - sqy - sqz ) );
-
-			} else if ( order === 'YZX' ) {
-
-				this._x = Math.atan2( 2 * ( q.x * q.w - q.z * q.y ), ( sqw - sqx + sqy - sqz ) );
-				this._y = Math.atan2( 2 * ( q.y * q.w - q.x * q.z ), ( sqw + sqx - sqy - sqz ) );
-				this._z = Math.asin(  clamp( 2 * ( q.x * q.y + q.z * q.w ), - 1, 1 ) );
-
-			} else if ( order === 'XZY' ) {
-
-				this._x = Math.atan2( 2 * ( q.x * q.w + q.y * q.z ), ( sqw - sqx + sqy - sqz ) );
-				this._y = Math.atan2( 2 * ( q.x * q.z + q.y * q.w ), ( sqw + sqx - sqy - sqz ) );
-				this._z = Math.asin(  clamp( 2 * ( q.z * q.w - q.x * q.y ), - 1, 1 ) );
-
-			} else {
-
-				console.warn( 'THREE.Euler: .setFromQuaternion() given unsupported order: ' + order )
-
-			}
-
-			this._order = order;
-
-			if ( update !== false ) this.onChangeCallback();
-
-			return this;
-
-		},
-
-		reorder: function () {
-
-			// WARNING: this discards revolution information -bhouston
-
-			var q = new THREE.Quaternion();
-
-			return function ( newOrder ) {
-
-				q.setFromEuler( this );
-				this.setFromQuaternion( q, newOrder );
-
-			};
-
-
-		}(),
-
-		equals: function ( euler ) {
-
-			return ( euler._x === this._x ) && ( euler._y === this._y ) && ( euler._z === this._z ) && ( euler._order === this._order );
-
-		},
-
-		fromArray: function ( array ) {
-
-			this._x = array[ 0 ];
-			this._y = array[ 1 ];
-			this._z = array[ 2 ];
-			if ( array[ 3 ] !== undefined ) this._order = array[ 3 ];
-
-			this.onChangeCallback();
-
-			return this;
-
-		},
-
-		toArray: function () {
-
-			return [ this._x, this._y, this._z, this._order ];
-
-		},
-
-		onChange: function ( callback ) {
-
-			this.onChangeCallback = callback;
-
-			return this;
-
-		},
-
-		onChangeCallback: function () {},
-
-		clone: function () {
-
-			return new THREE.Euler( this._x, this._y, this._z, this._order );
-
-		}
-
-	};
-
-	// File:src/math/Line3.js
-
-	/**
-	 * @author bhouston / http://exocortex.com
-	 */
-
-	THREE.Line3 = function ( start, end ) {
-
-		this.start = ( start !== undefined ) ? start : new THREE.Vector3();
-		this.end = ( end !== undefined ) ? end : new THREE.Vector3();
-
-	};
-
-	THREE.Line3.prototype = {
-
-		constructor: THREE.Line3,
-
-		set: function ( start, end ) {
-
-			this.start.copy( start );
-			this.end.copy( end );
-
-			return this;
-
-		},
-
-		copy: function ( line ) {
-
-			this.start.copy( line.start );
-			this.end.copy( line.end );
-
-			return this;
-
-		},
-
-		center: function ( optionalTarget ) {
-
-			var result = optionalTarget || new THREE.Vector3();
-			return result.addVectors( this.start, this.end ).multiplyScalar( 0.5 );
-
-		},
-
-		delta: function ( optionalTarget ) {
-
-			var result = optionalTarget || new THREE.Vector3();
-			return result.subVectors( this.end, this.start );
-
-		},
-
-		distanceSq: function () {
-
-			return this.start.distanceToSquared( this.end );
-
-		},
-
-		distance: function () {
-
-			return this.start.distanceTo( this.end );
-
-		},
-
-		at: function ( t, optionalTarget ) {
-
-			var result = optionalTarget || new THREE.Vector3();
-
-			return this.delta( result ).multiplyScalar( t ).add( this.start );
-
-		},
-
-		closestPointToPointParameter: function () {
-
-			var startP = new THREE.Vector3();
-			var startEnd = new THREE.Vector3();
-
-			return function ( point, clampToLine ) {
-
-				startP.subVectors( point, this.start );
-				startEnd.subVectors( this.end, this.start );
-
-				var startEnd2 = startEnd.dot( startEnd );
-				var startEnd_startP = startEnd.dot( startP );
-
-				var t = startEnd_startP / startEnd2;
-
-				if ( clampToLine ) {
-
-					t = THREE.Math.clamp( t, 0, 1 );
-
-				}
-
-				return t;
-
-			};
-
-		}(),
-
-		closestPointToPoint: function ( point, clampToLine, optionalTarget ) {
-
-			var t = this.closestPointToPointParameter( point, clampToLine );
-
-			var result = optionalTarget || new THREE.Vector3();
-
-			return this.delta( result ).multiplyScalar( t ).add( this.start );
-
-		},
-
-		applyMatrix4: function ( matrix ) {
-
-			this.start.applyMatrix4( matrix );
-			this.end.applyMatrix4( matrix );
-
-			return this;
-
-		},
-
-		equals: function ( line ) {
-
-			return line.start.equals( this.start ) && line.end.equals( this.end );
-
-		},
-
-		clone: function () {
-
-			return new THREE.Line3().copy( this );
-
-		}
-
-	};
-
-	// File:src/math/Box2.js
-
-	/**
-	 * @author bhouston / http://exocortex.com
-	 */
-
-	THREE.Box2 = function ( min, max ) {
-
-		this.min = ( min !== undefined ) ? min : new THREE.Vector2( Infinity, Infinity );
-		this.max = ( max !== undefined ) ? max : new THREE.Vector2( - Infinity, - Infinity );
-
-	};
-
-	THREE.Box2.prototype = {
-
-		constructor: THREE.Box2,
-
-		set: function ( min, max ) {
-
-			this.min.copy( min );
-			this.max.copy( max );
-
-			return this;
-
-		},
-
-		setFromPoints: function ( points ) {
-
-			this.makeEmpty();
-
-			for ( var i = 0, il = points.length; i < il; i ++ ) {
-
-				this.expandByPoint( points[ i ] )
-
-			}
-
-			return this;
-
-		},
-
-		setFromCenterAndSize: function () {
-
-			var v1 = new THREE.Vector2();
-
-			return function ( center, size ) {
-
-				var halfSize = v1.copy( size ).multiplyScalar( 0.5 );
-				this.min.copy( center ).sub( halfSize );
-				this.max.copy( center ).add( halfSize );
-
-				return this;
-
-			};
-
-		}(),
-
-		copy: function ( box ) {
-
-			this.min.copy( box.min );
-			this.max.copy( box.max );
-
-			return this;
-
-		},
-
-		makeEmpty: function () {
-
-			this.min.x = this.min.y = Infinity;
-			this.max.x = this.max.y = - Infinity;
-
-			return this;
-
-		},
-
-		empty: function () {
-
-			// this is a more robust check for empty than ( volume <= 0 ) because volume can get positive with two negative axes
-
-			return ( this.max.x < this.min.x ) || ( this.max.y < this.min.y );
-
-		},
-
-		center: function ( optionalTarget ) {
-
-			var result = optionalTarget || new THREE.Vector2();
-			return result.addVectors( this.min, this.max ).multiplyScalar( 0.5 );
-
-		},
-
-		size: function ( optionalTarget ) {
-
-			var result = optionalTarget || new THREE.Vector2();
-			return result.subVectors( this.max, this.min );
-
-		},
-
-		expandByPoint: function ( point ) {
-
-			this.min.min( point );
-			this.max.max( point );
-
-			return this;
-		},
-
-		expandByVector: function ( vector ) {
-
-			this.min.sub( vector );
-			this.max.add( vector );
-
-			return this;
-		},
-
-		expandByScalar: function ( scalar ) {
-
-			this.min.addScalar( - scalar );
-			this.max.addScalar( scalar );
-
-			return this;
-		},
-
-		containsPoint: function ( point ) {
-
-			if ( point.x < this.min.x || point.x > this.max.x ||
-			     point.y < this.min.y || point.y > this.max.y ) {
-
-				return false;
-
-			}
-
-			return true;
-
-		},
-
-		containsBox: function ( box ) {
-
-			if ( ( this.min.x <= box.min.x ) && ( box.max.x <= this.max.x ) &&
-			     ( this.min.y <= box.min.y ) && ( box.max.y <= this.max.y ) ) {
-
-				return true;
-
-			}
-
-			return false;
-
-		},
-
-		getParameter: function ( point, optionalTarget ) {
-
-			// This can potentially have a divide by zero if the box
-			// has a size dimension of 0.
-
-			var result = optionalTarget || new THREE.Vector2();
-
-			return result.set(
-				( point.x - this.min.x ) / ( this.max.x - this.min.x ),
-				( point.y - this.min.y ) / ( this.max.y - this.min.y )
-			);
-
-		},
-
-		isIntersectionBox: function ( box ) {
-
-			// using 6 splitting planes to rule out intersections.
-
-			if ( box.max.x < this.min.x || box.min.x > this.max.x ||
-			     box.max.y < this.min.y || box.min.y > this.max.y ) {
-
-				return false;
-
-			}
-
-			return true;
-
-		},
-
-		clampPoint: function ( point, optionalTarget ) {
-
-			var result = optionalTarget || new THREE.Vector2();
-			return result.copy( point ).clamp( this.min, this.max );
-
-		},
-
-		distanceToPoint: function () {
-
-			var v1 = new THREE.Vector2();
-
-			return function ( point ) {
-
-				var clampedPoint = v1.copy( point ).clamp( this.min, this.max );
-				return clampedPoint.sub( point ).length();
-
-			};
-
-		}(),
-
-		intersect: function ( box ) {
-
-			this.min.max( box.min );
-			this.max.min( box.max );
-
-			return this;
-
-		},
-
-		union: function ( box ) {
-
-			this.min.min( box.min );
-			this.max.max( box.max );
-
-			return this;
-
-		},
-
-		translate: function ( offset ) {
-
-			this.min.add( offset );
-			this.max.add( offset );
-
-			return this;
-
-		},
-
-		equals: function ( box ) {
-
-			return box.min.equals( this.min ) && box.max.equals( this.max );
-
-		},
-
-		clone: function () {
-
-			return new THREE.Box2().copy( this );
-
-		}
-
-	};
-
-	// File:src/math/Box3.js
-
-	/**
-	 * @author bhouston / http://exocortex.com
-	 * @author WestLangley / http://github.com/WestLangley
-	 */
-
-	THREE.Box3 = function ( min, max ) {
-
-		this.min = ( min !== undefined ) ? min : new THREE.Vector3( Infinity, Infinity, Infinity );
-		this.max = ( max !== undefined ) ? max : new THREE.Vector3( - Infinity, - Infinity, - Infinity );
-
-	};
-
-	THREE.Box3.prototype = {
-
-		constructor: THREE.Box3,
-
-		set: function ( min, max ) {
-
-			this.min.copy( min );
-			this.max.copy( max );
-
-			return this;
-
-		},
-
-		setFromPoints: function ( points ) {
-
-			this.makeEmpty();
-
-			for ( var i = 0, il = points.length; i < il; i ++ ) {
-
-				this.expandByPoint( points[ i ] )
-
-			}
-
-			return this;
-
-		},
-
-		setFromCenterAndSize: function () {
-
-			var v1 = new THREE.Vector3();
-
-			return function ( center, size ) {
-
-				var halfSize = v1.copy( size ).multiplyScalar( 0.5 );
-
-				this.min.copy( center ).sub( halfSize );
-				this.max.copy( center ).add( halfSize );
-
-				return this;
-
-			};
-
-		}(),
-
-		setFromObject: function () {
-
-			// Computes the world-axis-aligned bounding box of an object (including its children),
-			// accounting for both the object's, and childrens', world transforms
-
-			var v1 = new THREE.Vector3();
-
-			return function ( object ) {
-
-				var scope = this;
-
-				object.updateMatrixWorld( true );
-
-				this.makeEmpty();
-
-				object.traverse( function ( node ) {
-
-					var geometry = node.geometry;
-
-					if ( geometry !== undefined ) {
-
-						if ( geometry instanceof THREE.Geometry ) {
-
-							var vertices = geometry.vertices;
-
-							for ( var i = 0, il = vertices.length; i < il; i ++ ) {
-
-								v1.copy( vertices[ i ] );
-
-								v1.applyMatrix4( node.matrixWorld );
-
-								scope.expandByPoint( v1 );
-
-							}
-
-						} else if ( geometry instanceof THREE.BufferGeometry && geometry.attributes[ 'position' ] !== undefined ) {
-
-							var positions = geometry.attributes[ 'position' ].array;
-
-							for ( var i = 0, il = positions.length; i < il; i += 3 ) {
-
-								v1.set( positions[ i ], positions[ i + 1 ], positions[ i + 2 ] );
-
-								v1.applyMatrix4( node.matrixWorld );
-
-								scope.expandByPoint( v1 );
-
-							}
-
-						}
-
-					}
-
-				} );
-
-				return this;
-
-			};
-
-		}(),
-
-		copy: function ( box ) {
-
-			this.min.copy( box.min );
-			this.max.copy( box.max );
-
-			return this;
-
-		},
-
-		makeEmpty: function () {
-
-			this.min.x = this.min.y = this.min.z = Infinity;
-			this.max.x = this.max.y = this.max.z = - Infinity;
-
-			return this;
-
-		},
-
-		empty: function () {
-
-			// this is a more robust check for empty than ( volume <= 0 ) because volume can get positive with two negative axes
-
-			return ( this.max.x < this.min.x ) || ( this.max.y < this.min.y ) || ( this.max.z < this.min.z );
-
-		},
-
-		center: function ( optionalTarget ) {
-
-			var result = optionalTarget || new THREE.Vector3();
-			return result.addVectors( this.min, this.max ).multiplyScalar( 0.5 );
-
-		},
-
-		size: function ( optionalTarget ) {
-
-			var result = optionalTarget || new THREE.Vector3();
-			return result.subVectors( this.max, this.min );
-
-		},
-
-		expandByPoint: function ( point ) {
-
-			this.min.min( point );
-			this.max.max( point );
-
-			return this;
-
-		},
-
-		expandByVector: function ( vector ) {
-
-			this.min.sub( vector );
-			this.max.add( vector );
-
-			return this;
-
-		},
-
-		expandByScalar: function ( scalar ) {
-
-			this.min.addScalar( - scalar );
-			this.max.addScalar( scalar );
-
-			return this;
-
-		},
-
-		containsPoint: function ( point ) {
-
-			if ( point.x < this.min.x || point.x > this.max.x ||
-			     point.y < this.min.y || point.y > this.max.y ||
-			     point.z < this.min.z || point.z > this.max.z ) {
-
-				return false;
-
-			}
-
-			return true;
-
-		},
-
-		containsBox: function ( box ) {
-
-			if ( ( this.min.x <= box.min.x ) && ( box.max.x <= this.max.x ) &&
-				 ( this.min.y <= box.min.y ) && ( box.max.y <= this.max.y ) &&
-				 ( this.min.z <= box.min.z ) && ( box.max.z <= this.max.z ) ) {
-
-				return true;
-
-			}
-
-			return false;
-
-		},
-
-		getParameter: function ( point, optionalTarget ) {
-
-			// This can potentially have a divide by zero if the box
-			// has a size dimension of 0.
-
-			var result = optionalTarget || new THREE.Vector3();
-
-			return result.set(
-				( point.x - this.min.x ) / ( this.max.x - this.min.x ),
-				( point.y - this.min.y ) / ( this.max.y - this.min.y ),
-				( point.z - this.min.z ) / ( this.max.z - this.min.z )
-			);
-
-		},
-
-		isIntersectionBox: function ( box ) {
-
-			// using 6 splitting planes to rule out intersections.
-
-			if ( box.max.x < this.min.x || box.min.x > this.max.x ||
-			     box.max.y < this.min.y || box.min.y > this.max.y ||
-			     box.max.z < this.min.z || box.min.z > this.max.z ) {
-
-				return false;
-
-			}
-
-			return true;
-
-		},
-
-		clampPoint: function ( point, optionalTarget ) {
-
-			var result = optionalTarget || new THREE.Vector3();
-			return result.copy( point ).clamp( this.min, this.max );
-
-		},
-
-		distanceToPoint: function () {
-
-			var v1 = new THREE.Vector3();
-
-			return function ( point ) {
-
-				var clampedPoint = v1.copy( point ).clamp( this.min, this.max );
-				return clampedPoint.sub( point ).length();
-
-			};
-
-		}(),
-
-		getBoundingSphere: function () {
-
-			var v1 = new THREE.Vector3();
-
-			return function ( optionalTarget ) {
-
-				var result = optionalTarget || new THREE.Sphere();
-
-				result.center = this.center();
-				result.radius = this.size( v1 ).length() * 0.5;
-
-				return result;
-
-			};
-
-		}(),
-
-		intersect: function ( box ) {
-
-			this.min.max( box.min );
-			this.max.min( box.max );
-
-			return this;
-
-		},
-
-		union: function ( box ) {
-
-			this.min.min( box.min );
-			this.max.max( box.max );
-
-			return this;
-
-		},
-
-		applyMatrix4: function () {
-
-			var points = [
-				new THREE.Vector3(),
-				new THREE.Vector3(),
-				new THREE.Vector3(),
-				new THREE.Vector3(),
-				new THREE.Vector3(),
-				new THREE.Vector3(),
-				new THREE.Vector3(),
-				new THREE.Vector3()
-			];
-
-			return function ( matrix ) {
-
-				// NOTE: I am using a binary pattern to specify all 2^3 combinations below
-				points[ 0 ].set( this.min.x, this.min.y, this.min.z ).applyMatrix4( matrix ); // 000
-				points[ 1 ].set( this.min.x, this.min.y, this.max.z ).applyMatrix4( matrix ); // 001
-				points[ 2 ].set( this.min.x, this.max.y, this.min.z ).applyMatrix4( matrix ); // 010
-				points[ 3 ].set( this.min.x, this.max.y, this.max.z ).applyMatrix4( matrix ); // 011
-				points[ 4 ].set( this.max.x, this.min.y, this.min.z ).applyMatrix4( matrix ); // 100
-				points[ 5 ].set( this.max.x, this.min.y, this.max.z ).applyMatrix4( matrix ); // 101
-				points[ 6 ].set( this.max.x, this.max.y, this.min.z ).applyMatrix4( matrix ); // 110
-				points[ 7 ].set( this.max.x, this.max.y, this.max.z ).applyMatrix4( matrix );  // 111
-
-				this.makeEmpty();
-				this.setFromPoints( points );
-
-				return this;
-
-			};
-
-		}(),
-
-		translate: function ( offset ) {
-
-			this.min.add( offset );
-			this.max.add( offset );
-
-			return this;
-
-		},
-
-		equals: function ( box ) {
-
-			return box.min.equals( this.min ) && box.max.equals( this.max );
-
-		},
-
-		clone: function () {
-
-			return new THREE.Box3().copy( this );
-
-		}
-
-	};
-
-	// File:src/math/Matrix3.js
-
-	/**
-	 * @author alteredq / http://alteredqualia.com/
-	 * @author WestLangley / http://github.com/WestLangley
-	 * @author bhouston / http://exocortex.com
-	 */
-
-	THREE.Matrix3 = function () {
-
-		this.elements = new Float32Array( [
-
-			1, 0, 0,
-			0, 1, 0,
-			0, 0, 1
-
-		] );
-
-		if ( arguments.length > 0 ) {
-
-			console.error( 'THREE.Matrix3: the constructor no longer reads arguments. use .set() instead.' );
-
-		}
-
-	};
-
-	THREE.Matrix3.prototype = {
-
-		constructor: THREE.Matrix3,
-
-		set: function ( n11, n12, n13, n21, n22, n23, n31, n32, n33 ) {
-
-			var te = this.elements;
-
-			te[ 0 ] = n11; te[ 3 ] = n12; te[ 6 ] = n13;
-			te[ 1 ] = n21; te[ 4 ] = n22; te[ 7 ] = n23;
-			te[ 2 ] = n31; te[ 5 ] = n32; te[ 8 ] = n33;
-
-			return this;
-
-		},
-
-		identity: function () {
-
-			this.set(
-
-				1, 0, 0,
-				0, 1, 0,
-				0, 0, 1
-
-			);
-
-			return this;
-
-		},
-
-		copy: function ( m ) {
-
-			var me = m.elements;
-
-			this.set(
-
-				me[ 0 ], me[ 3 ], me[ 6 ],
-				me[ 1 ], me[ 4 ], me[ 7 ],
-				me[ 2 ], me[ 5 ], me[ 8 ]
-
-			);
-
-			return this;
-
-		},
-
-		multiplyVector3: function ( vector ) {
-
-			console.warn( 'THREE.Matrix3: .multiplyVector3() has been removed. Use vector.applyMatrix3( matrix ) instead.' );
-			return vector.applyMatrix3( this );
-
-		},
-
-		multiplyVector3Array: function ( a ) {
-
-			console.warn( 'THREE.Matrix3: .multiplyVector3Array() has been renamed. Use matrix.applyToVector3Array( array ) instead.' );
-			return this.applyToVector3Array( a );
-
-		},
-
-		applyToVector3Array: function () {
-
-			var v1 = new THREE.Vector3();
-
-			return function ( array, offset, length ) {
-
-				if ( offset === undefined ) offset = 0;
-				if ( length === undefined ) length = array.length;
-
-				for ( var i = 0, j = offset, il; i < length; i += 3, j += 3 ) {
-
-					v1.x = array[ j ];
-					v1.y = array[ j + 1 ];
-					v1.z = array[ j + 2 ];
-
-					v1.applyMatrix3( this );
-
-					array[ j ]     = v1.x;
-					array[ j + 1 ] = v1.y;
-					array[ j + 2 ] = v1.z;
-
-				}
-
-				return array;
-
-			};
-
-		}(),
-
-		multiplyScalar: function ( s ) {
-
-			var te = this.elements;
-
-			te[ 0 ] *= s; te[ 3 ] *= s; te[ 6 ] *= s;
-			te[ 1 ] *= s; te[ 4 ] *= s; te[ 7 ] *= s;
-			te[ 2 ] *= s; te[ 5 ] *= s; te[ 8 ] *= s;
-
-			return this;
-
-		},
-
-		determinant: function () {
-
-			var te = this.elements;
-
-			var a = te[ 0 ], b = te[ 1 ], c = te[ 2 ],
-				d = te[ 3 ], e = te[ 4 ], f = te[ 5 ],
-				g = te[ 6 ], h = te[ 7 ], i = te[ 8 ];
-
-			return a * e * i - a * f * h - b * d * i + b * f * g + c * d * h - c * e * g;
-
-		},
-
-		getInverse: function ( matrix, throwOnInvertible ) {
-
-			// input: THREE.Matrix4
-			// ( based on http://code.google.com/p/webgl-mjs/ )
-
-			var me = matrix.elements;
-			var te = this.elements;
-
-			te[ 0 ] =   me[ 10 ] * me[ 5 ] - me[ 6 ] * me[ 9 ];
-			te[ 1 ] = - me[ 10 ] * me[ 1 ] + me[ 2 ] * me[ 9 ];
-			te[ 2 ] =   me[ 6 ] * me[ 1 ] - me[ 2 ] * me[ 5 ];
-			te[ 3 ] = - me[ 10 ] * me[ 4 ] + me[ 6 ] * me[ 8 ];
-			te[ 4 ] =   me[ 10 ] * me[ 0 ] - me[ 2 ] * me[ 8 ];
-			te[ 5 ] = - me[ 6 ] * me[ 0 ] + me[ 2 ] * me[ 4 ];
-			te[ 6 ] =   me[ 9 ] * me[ 4 ] - me[ 5 ] * me[ 8 ];
-			te[ 7 ] = - me[ 9 ] * me[ 0 ] + me[ 1 ] * me[ 8 ];
-			te[ 8 ] =   me[ 5 ] * me[ 0 ] - me[ 1 ] * me[ 4 ];
-
-			var det = me[ 0 ] * te[ 0 ] + me[ 1 ] * te[ 3 ] + me[ 2 ] * te[ 6 ];
-
-			// no inverse
-
-			if ( det === 0 ) {
-
-				var msg = "Matrix3.getInverse(): can't invert matrix, determinant is 0";
-
-				if ( throwOnInvertible || false ) {
-
-					throw new Error( msg );
-
-				} else {
-
-					console.warn( msg );
-
-				}
-
-				this.identity();
-
-				return this;
-
-			}
-
-			this.multiplyScalar( 1.0 / det );
-
-			return this;
-
-		},
-
-		transpose: function () {
-
-			var tmp, m = this.elements;
-
-			tmp = m[ 1 ]; m[ 1 ] = m[ 3 ]; m[ 3 ] = tmp;
-			tmp = m[ 2 ]; m[ 2 ] = m[ 6 ]; m[ 6 ] = tmp;
-			tmp = m[ 5 ]; m[ 5 ] = m[ 7 ]; m[ 7 ] = tmp;
-
-			return this;
-
-		},
-
-		flattenToArrayOffset: function ( array, offset ) {
-
-			var te = this.elements;
-
-			array[ offset     ] = te[ 0 ];
-			array[ offset + 1 ] = te[ 1 ];
-			array[ offset + 2 ] = te[ 2 ];
-
-			array[ offset + 3 ] = te[ 3 ];
-			array[ offset + 4 ] = te[ 4 ];
-			array[ offset + 5 ] = te[ 5 ];
-
-			array[ offset + 6 ] = te[ 6 ];
-			array[ offset + 7 ] = te[ 7 ];
-			array[ offset + 8 ]  = te[ 8 ];
-
-			return array;
-
-		},
-
-		getNormalMatrix: function ( m ) {
-
-			// input: THREE.Matrix4
-
-			this.getInverse( m ).transpose();
-
-			return this;
-
-		},
-
-		transposeIntoArray: function ( r ) {
-
-			var m = this.elements;
-
-			r[ 0 ] = m[ 0 ];
-			r[ 1 ] = m[ 3 ];
-			r[ 2 ] = m[ 6 ];
-			r[ 3 ] = m[ 1 ];
-			r[ 4 ] = m[ 4 ];
-			r[ 5 ] = m[ 7 ];
-			r[ 6 ] = m[ 2 ];
-			r[ 7 ] = m[ 5 ];
-			r[ 8 ] = m[ 8 ];
-
-			return this;
-
-		},
-
-		fromArray: function ( array ) {
-
-			this.elements.set( array );
-
-			return this;
-
-		},
-
-		toArray: function () {
-
-			var te = this.elements;
-
-			return [
-				te[ 0 ], te[ 1 ], te[ 2 ],
-				te[ 3 ], te[ 4 ], te[ 5 ],
-				te[ 6 ], te[ 7 ], te[ 8 ]
-			];
-
-		},
-
-		clone: function () {
-
-			return new THREE.Matrix3().fromArray( this.elements );
-
-		}
-
-	};
-
-	// File:src/math/Matrix4.js
-
-	/**
-	 * @author mrdoob / http://mrdoob.com/
-	 * @author supereggbert / http://www.paulbrunt.co.uk/
-	 * @author philogb / http://blog.thejit.org/
-	 * @author jordi_ros / http://plattsoft.com
-	 * @author D1plo1d / http://github.com/D1plo1d
-	 * @author alteredq / http://alteredqualia.com/
-	 * @author mikael emtinger / http://gomo.se/
-	 * @author timknip / http://www.floorplanner.com/
-	 * @author bhouston / http://exocortex.com
-	 * @author WestLangley / http://github.com/WestLangley
-	 */
-
-	THREE.Matrix4 = function () {
-
-		this.elements = new Float32Array( [
-
-			1, 0, 0, 0,
-			0, 1, 0, 0,
-			0, 0, 1, 0,
-			0, 0, 0, 1
-
-		] );
-
-		if ( arguments.length > 0 ) {
-
-			console.error( 'THREE.Matrix4: the constructor no longer reads arguments. use .set() instead.' );
-
-		}
-
-	};
-
-	THREE.Matrix4.prototype = {
-
-		constructor: THREE.Matrix4,
-
-		set: function ( n11, n12, n13, n14, n21, n22, n23, n24, n31, n32, n33, n34, n41, n42, n43, n44 ) {
-
-			var te = this.elements;
-
-			te[ 0 ] = n11; te[ 4 ] = n12; te[ 8 ] = n13; te[ 12 ] = n14;
-			te[ 1 ] = n21; te[ 5 ] = n22; te[ 9 ] = n23; te[ 13 ] = n24;
-			te[ 2 ] = n31; te[ 6 ] = n32; te[ 10 ] = n33; te[ 14 ] = n34;
-			te[ 3 ] = n41; te[ 7 ] = n42; te[ 11 ] = n43; te[ 15 ] = n44;
-
-			return this;
-
-		},
-
-		identity: function () {
-
-			this.set(
-
-				1, 0, 0, 0,
-				0, 1, 0, 0,
-				0, 0, 1, 0,
-				0, 0, 0, 1
-
-			);
-
-			return this;
-
-		},
-
-		copy: function ( m ) {
-
-			this.elements.set( m.elements );
-
-			return this;
-
-		},
-
-		extractPosition: function ( m ) {
-
-			console.warn( 'THREE.Matrix4: .extractPosition() has been renamed to .copyPosition().' );
-			return this.copyPosition( m );
-
-		},
-
-		copyPosition: function ( m ) {
-
-			var te = this.elements;
-			var me = m.elements;
-
-			te[ 12 ] = me[ 12 ];
-			te[ 13 ] = me[ 13 ];
-			te[ 14 ] = me[ 14 ];
-
-			return this;
-
-		},
-
-		extractRotation: function () {
-
-			var v1 = new THREE.Vector3();
-
-			return function ( m ) {
-
-				var te = this.elements;
-				var me = m.elements;
-
-				var scaleX = 1 / v1.set( me[ 0 ], me[ 1 ], me[ 2 ] ).length();
-				var scaleY = 1 / v1.set( me[ 4 ], me[ 5 ], me[ 6 ] ).length();
-				var scaleZ = 1 / v1.set( me[ 8 ], me[ 9 ], me[ 10 ] ).length();
-
-				te[ 0 ] = me[ 0 ] * scaleX;
-				te[ 1 ] = me[ 1 ] * scaleX;
-				te[ 2 ] = me[ 2 ] * scaleX;
-
-				te[ 4 ] = me[ 4 ] * scaleY;
-				te[ 5 ] = me[ 5 ] * scaleY;
-				te[ 6 ] = me[ 6 ] * scaleY;
-
-				te[ 8 ] = me[ 8 ] * scaleZ;
-				te[ 9 ] = me[ 9 ] * scaleZ;
-				te[ 10 ] = me[ 10 ] * scaleZ;
-
-				return this;
-
-			};
-
-		}(),
-
-		makeRotationFromEuler: function ( euler ) {
-
-			if ( euler instanceof THREE.Euler === false ) {
-
-				console.error( 'THREE.Matrix: .makeRotationFromEuler() now expects a Euler rotation rather than a Vector3 and order.' );
-
-			}
-
-			var te = this.elements;
-
-			var x = euler.x, y = euler.y, z = euler.z;
-			var a = Math.cos( x ), b = Math.sin( x );
-			var c = Math.cos( y ), d = Math.sin( y );
-			var e = Math.cos( z ), f = Math.sin( z );
-
-			if ( euler.order === 'XYZ' ) {
-
-				var ae = a * e, af = a * f, be = b * e, bf = b * f;
-
-				te[ 0 ] = c * e;
-				te[ 4 ] = - c * f;
-				te[ 8 ] = d;
-
-				te[ 1 ] = af + be * d;
-				te[ 5 ] = ae - bf * d;
-				te[ 9 ] = - b * c;
-
-				te[ 2 ] = bf - ae * d;
-				te[ 6 ] = be + af * d;
-				te[ 10 ] = a * c;
-
-			} else if ( euler.order === 'YXZ' ) {
-
-				var ce = c * e, cf = c * f, de = d * e, df = d * f;
-
-				te[ 0 ] = ce + df * b;
-				te[ 4 ] = de * b - cf;
-				te[ 8 ] = a * d;
-
-				te[ 1 ] = a * f;
-				te[ 5 ] = a * e;
-				te[ 9 ] = - b;
-
-				te[ 2 ] = cf * b - de;
-				te[ 6 ] = df + ce * b;
-				te[ 10 ] = a * c;
-
-			} else if ( euler.order === 'ZXY' ) {
-
-				var ce = c * e, cf = c * f, de = d * e, df = d * f;
-
-				te[ 0 ] = ce - df * b;
-				te[ 4 ] = - a * f;
-				te[ 8 ] = de + cf * b;
-
-				te[ 1 ] = cf + de * b;
-				te[ 5 ] = a * e;
-				te[ 9 ] = df - ce * b;
-
-				te[ 2 ] = - a * d;
-				te[ 6 ] = b;
-				te[ 10 ] = a * c;
-
-			} else if ( euler.order === 'ZYX' ) {
-
-				var ae = a * e, af = a * f, be = b * e, bf = b * f;
-
-				te[ 0 ] = c * e;
-				te[ 4 ] = be * d - af;
-				te[ 8 ] = ae * d + bf;
-
-				te[ 1 ] = c * f;
-				te[ 5 ] = bf * d + ae;
-				te[ 9 ] = af * d - be;
-
-				te[ 2 ] = - d;
-				te[ 6 ] = b * c;
-				te[ 10 ] = a * c;
-
-			} else if ( euler.order === 'YZX' ) {
-
-				var ac = a * c, ad = a * d, bc = b * c, bd = b * d;
-
-				te[ 0 ] = c * e;
-				te[ 4 ] = bd - ac * f;
-				te[ 8 ] = bc * f + ad;
-
-				te[ 1 ] = f;
-				te[ 5 ] = a * e;
-				te[ 9 ] = - b * e;
-
-				te[ 2 ] = - d * e;
-				te[ 6 ] = ad * f + bc;
-				te[ 10 ] = ac - bd * f;
-
-			} else if ( euler.order === 'XZY' ) {
-
-				var ac = a * c, ad = a * d, bc = b * c, bd = b * d;
-
-				te[ 0 ] = c * e;
-				te[ 4 ] = - f;
-				te[ 8 ] = d * e;
-
-				te[ 1 ] = ac * f + bd;
-				te[ 5 ] = a * e;
-				te[ 9 ] = ad * f - bc;
-
-				te[ 2 ] = bc * f - ad;
-				te[ 6 ] = b * e;
-				te[ 10 ] = bd * f + ac;
-
-			}
-
-			// last column
-			te[ 3 ] = 0;
-			te[ 7 ] = 0;
-			te[ 11 ] = 0;
-
-			// bottom row
-			te[ 12 ] = 0;
-			te[ 13 ] = 0;
-			te[ 14 ] = 0;
-			te[ 15 ] = 1;
-
-			return this;
-
-		},
-
-		setRotationFromQuaternion: function ( q ) {
-
-			console.warn( 'THREE.Matrix4: .setRotationFromQuaternion() has been renamed to .makeRotationFromQuaternion().' );
-
-			return this.makeRotationFromQuaternion( q );
-
-		},
-
-		makeRotationFromQuaternion: function ( q ) {
-
-			var te = this.elements;
-
-			var x = q.x, y = q.y, z = q.z, w = q.w;
-			var x2 = x + x, y2 = y + y, z2 = z + z;
-			var xx = x * x2, xy = x * y2, xz = x * z2;
-			var yy = y * y2, yz = y * z2, zz = z * z2;
-			var wx = w * x2, wy = w * y2, wz = w * z2;
-
-			te[ 0 ] = 1 - ( yy + zz );
-			te[ 4 ] = xy - wz;
-			te[ 8 ] = xz + wy;
-
-			te[ 1 ] = xy + wz;
-			te[ 5 ] = 1 - ( xx + zz );
-			te[ 9 ] = yz - wx;
-
-			te[ 2 ] = xz - wy;
-			te[ 6 ] = yz + wx;
-			te[ 10 ] = 1 - ( xx + yy );
-
-			// last column
-			te[ 3 ] = 0;
-			te[ 7 ] = 0;
-			te[ 11 ] = 0;
-
-			// bottom row
-			te[ 12 ] = 0;
-			te[ 13 ] = 0;
-			te[ 14 ] = 0;
-			te[ 15 ] = 1;
-
-			return this;
-
-		},
-
-		lookAt: function () {
-
-			var x = new THREE.Vector3();
-			var y = new THREE.Vector3();
-			var z = new THREE.Vector3();
-
-			return function ( eye, target, up ) {
-
-				var te = this.elements;
-
-				z.subVectors( eye, target ).normalize();
-
-				if ( z.length() === 0 ) {
-
-					z.z = 1;
-
-				}
-
-				x.crossVectors( up, z ).normalize();
-
-				if ( x.length() === 0 ) {
-
-					z.x += 0.0001;
-					x.crossVectors( up, z ).normalize();
-
-				}
-
-				y.crossVectors( z, x );
-
-
-				te[ 0 ] = x.x; te[ 4 ] = y.x; te[ 8 ] = z.x;
-				te[ 1 ] = x.y; te[ 5 ] = y.y; te[ 9 ] = z.y;
-				te[ 2 ] = x.z; te[ 6 ] = y.z; te[ 10 ] = z.z;
-
-				return this;
-
-			};
-
-		}(),
-
-		multiply: function ( m, n ) {
-
-			if ( n !== undefined ) {
-
-				console.warn( 'THREE.Matrix4: .multiply() now only accepts one argument. Use .multiplyMatrices( a, b ) instead.' );
-				return this.multiplyMatrices( m, n );
-
-			}
-
-			return this.multiplyMatrices( this, m );
-
-		},
-
-		multiplyMatrices: function ( a, b ) {
-
-			var ae = a.elements;
-			var be = b.elements;
-			var te = this.elements;
-
-			var a11 = ae[ 0 ], a12 = ae[ 4 ], a13 = ae[ 8 ], a14 = ae[ 12 ];
-			var a21 = ae[ 1 ], a22 = ae[ 5 ], a23 = ae[ 9 ], a24 = ae[ 13 ];
-			var a31 = ae[ 2 ], a32 = ae[ 6 ], a33 = ae[ 10 ], a34 = ae[ 14 ];
-			var a41 = ae[ 3 ], a42 = ae[ 7 ], a43 = ae[ 11 ], a44 = ae[ 15 ];
-
-			var b11 = be[ 0 ], b12 = be[ 4 ], b13 = be[ 8 ], b14 = be[ 12 ];
-			var b21 = be[ 1 ], b22 = be[ 5 ], b23 = be[ 9 ], b24 = be[ 13 ];
-			var b31 = be[ 2 ], b32 = be[ 6 ], b33 = be[ 10 ], b34 = be[ 14 ];
-			var b41 = be[ 3 ], b42 = be[ 7 ], b43 = be[ 11 ], b44 = be[ 15 ];
-
-			te[ 0 ] = a11 * b11 + a12 * b21 + a13 * b31 + a14 * b41;
-			te[ 4 ] = a11 * b12 + a12 * b22 + a13 * b32 + a14 * b42;
-			te[ 8 ] = a11 * b13 + a12 * b23 + a13 * b33 + a14 * b43;
-			te[ 12 ] = a11 * b14 + a12 * b24 + a13 * b34 + a14 * b44;
-
-			te[ 1 ] = a21 * b11 + a22 * b21 + a23 * b31 + a24 * b41;
-			te[ 5 ] = a21 * b12 + a22 * b22 + a23 * b32 + a24 * b42;
-			te[ 9 ] = a21 * b13 + a22 * b23 + a23 * b33 + a24 * b43;
-			te[ 13 ] = a21 * b14 + a22 * b24 + a23 * b34 + a24 * b44;
-
-			te[ 2 ] = a31 * b11 + a32 * b21 + a33 * b31 + a34 * b41;
-			te[ 6 ] = a31 * b12 + a32 * b22 + a33 * b32 + a34 * b42;
-			te[ 10 ] = a31 * b13 + a32 * b23 + a33 * b33 + a34 * b43;
-			te[ 14 ] = a31 * b14 + a32 * b24 + a33 * b34 + a34 * b44;
-
-			te[ 3 ] = a41 * b11 + a42 * b21 + a43 * b31 + a44 * b41;
-			te[ 7 ] = a41 * b12 + a42 * b22 + a43 * b32 + a44 * b42;
-			te[ 11 ] = a41 * b13 + a42 * b23 + a43 * b33 + a44 * b43;
-			te[ 15 ] = a41 * b14 + a42 * b24 + a43 * b34 + a44 * b44;
-
-			return this;
-
-		},
-
-		multiplyToArray: function ( a, b, r ) {
-
-			var te = this.elements;
-
-			this.multiplyMatrices( a, b );
-
-			r[ 0 ] = te[ 0 ]; r[ 1 ] = te[ 1 ]; r[ 2 ] = te[ 2 ]; r[ 3 ] = te[ 3 ];
-			r[ 4 ] = te[ 4 ]; r[ 5 ] = te[ 5 ]; r[ 6 ] = te[ 6 ]; r[ 7 ] = te[ 7 ];
-			r[ 8 ]  = te[ 8 ]; r[ 9 ]  = te[ 9 ]; r[ 10 ] = te[ 10 ]; r[ 11 ] = te[ 11 ];
-			r[ 12 ] = te[ 12 ]; r[ 13 ] = te[ 13 ]; r[ 14 ] = te[ 14 ]; r[ 15 ] = te[ 15 ];
-
-			return this;
-
-		},
-
-		multiplyScalar: function ( s ) {
-
-			var te = this.elements;
-
-			te[ 0 ] *= s; te[ 4 ] *= s; te[ 8 ] *= s; te[ 12 ] *= s;
-			te[ 1 ] *= s; te[ 5 ] *= s; te[ 9 ] *= s; te[ 13 ] *= s;
-			te[ 2 ] *= s; te[ 6 ] *= s; te[ 10 ] *= s; te[ 14 ] *= s;
-			te[ 3 ] *= s; te[ 7 ] *= s; te[ 11 ] *= s; te[ 15 ] *= s;
-
-			return this;
-
-		},
-
-		multiplyVector3: function ( vector ) {
-
-			console.warn( 'THREE.Matrix4: .multiplyVector3() has been removed. Use vector.applyMatrix4( matrix ) or vector.applyProjection( matrix ) instead.' );
-			return vector.applyProjection( this );
-
-		},
-
-		multiplyVector4: function ( vector ) {
-
-			console.warn( 'THREE.Matrix4: .multiplyVector4() has been removed. Use vector.applyMatrix4( matrix ) instead.' );
-			return vector.applyMatrix4( this );
-
-		},
-
-		multiplyVector3Array: function ( a ) {
-
-			console.warn( 'THREE.Matrix4: .multiplyVector3Array() has been renamed. Use matrix.applyToVector3Array( array ) instead.' );
-			return this.applyToVector3Array( a );
-
-		},
-
-		applyToVector3Array: function () {
-
-			var v1 = new THREE.Vector3();
-
-			return function ( array, offset, length ) {
-
-				if ( offset === undefined ) offset = 0;
-				if ( length === undefined ) length = array.length;
-
-				for ( var i = 0, j = offset, il; i < length; i += 3, j += 3 ) {
-
-					v1.x = array[ j ];
-					v1.y = array[ j + 1 ];
-					v1.z = array[ j + 2 ];
-
-					v1.applyMatrix4( this );
-
-					array[ j ]     = v1.x;
-					array[ j + 1 ] = v1.y;
-					array[ j + 2 ] = v1.z;
-
-				}
-
-				return array;
-
-			};
-
-		}(),
-
-		rotateAxis: function ( v ) {
-
-			console.warn( 'THREE.Matrix4: .rotateAxis() has been removed. Use Vector3.transformDirection( matrix ) instead.' );
-
-			v.transformDirection( this );
-
-		},
-
-		crossVector: function ( vector ) {
-
-			console.warn( 'THREE.Matrix4: .crossVector() has been removed. Use vector.applyMatrix4( matrix ) instead.' );
-			return vector.applyMatrix4( this );
-
-		},
-
-		determinant: function () {
-
-			var te = this.elements;
-
-			var n11 = te[ 0 ], n12 = te[ 4 ], n13 = te[ 8 ], n14 = te[ 12 ];
-			var n21 = te[ 1 ], n22 = te[ 5 ], n23 = te[ 9 ], n24 = te[ 13 ];
-			var n31 = te[ 2 ], n32 = te[ 6 ], n33 = te[ 10 ], n34 = te[ 14 ];
-			var n41 = te[ 3 ], n42 = te[ 7 ], n43 = te[ 11 ], n44 = te[ 15 ];
-
-			//TODO: make this more efficient
-			//( based on http://www.euclideanspace.com/maths/algebra/matrix/functions/inverse/fourD/index.htm )
-
-			return (
-				n41 * (
-					+ n14 * n23 * n32
-					 - n13 * n24 * n32
-					 - n14 * n22 * n33
-					 + n12 * n24 * n33
-					 + n13 * n22 * n34
-					 - n12 * n23 * n34
-				) +
-				n42 * (
-					+ n11 * n23 * n34
-					 - n11 * n24 * n33
-					 + n14 * n21 * n33
-					 - n13 * n21 * n34
-					 + n13 * n24 * n31
-					 - n14 * n23 * n31
-				) +
-				n43 * (
-					+ n11 * n24 * n32
-					 - n11 * n22 * n34
-					 - n14 * n21 * n32
-					 + n12 * n21 * n34
-					 + n14 * n22 * n31
-					 - n12 * n24 * n31
-				) +
-				n44 * (
-					- n13 * n22 * n31
-					 - n11 * n23 * n32
-					 + n11 * n22 * n33
-					 + n13 * n21 * n32
-					 - n12 * n21 * n33
-					 + n12 * n23 * n31
-				)
-
-			);
-
-		},
-
-		transpose: function () {
-
-			var te = this.elements;
-			var tmp;
-
-			tmp = te[ 1 ]; te[ 1 ] = te[ 4 ]; te[ 4 ] = tmp;
-			tmp = te[ 2 ]; te[ 2 ] = te[ 8 ]; te[ 8 ] = tmp;
-			tmp = te[ 6 ]; te[ 6 ] = te[ 9 ]; te[ 9 ] = tmp;
-
-			tmp = te[ 3 ]; te[ 3 ] = te[ 12 ]; te[ 12 ] = tmp;
-			tmp = te[ 7 ]; te[ 7 ] = te[ 13 ]; te[ 13 ] = tmp;
-			tmp = te[ 11 ]; te[ 11 ] = te[ 14 ]; te[ 14 ] = tmp;
-
-			return this;
-
-		},
-
-		flattenToArrayOffset: function ( array, offset ) {
-
-			var te = this.elements;
-
-			array[ offset     ] = te[ 0 ];
-			array[ offset + 1 ] = te[ 1 ];
-			array[ offset + 2 ] = te[ 2 ];
-			array[ offset + 3 ] = te[ 3 ];
-
-			array[ offset + 4 ] = te[ 4 ];
-			array[ offset + 5 ] = te[ 5 ];
-			array[ offset + 6 ] = te[ 6 ];
-			array[ offset + 7 ] = te[ 7 ];
-
-			array[ offset + 8 ]  = te[ 8 ];
-			array[ offset + 9 ]  = te[ 9 ];
-			array[ offset + 10 ] = te[ 10 ];
-			array[ offset + 11 ] = te[ 11 ];
-
-			array[ offset + 12 ] = te[ 12 ];
-			array[ offset + 13 ] = te[ 13 ];
-			array[ offset + 14 ] = te[ 14 ];
-			array[ offset + 15 ] = te[ 15 ];
-
-			return array;
-
-		},
-
-		getPosition: function () {
-
-			var v1 = new THREE.Vector3();
-
-			return function () {
-
-				console.warn( 'THREE.Matrix4: .getPosition() has been removed. Use Vector3.setFromMatrixPosition( matrix ) instead.' );
-
-				var te = this.elements;
-				return v1.set( te[ 12 ], te[ 13 ], te[ 14 ] );
-
-			};
-
-		}(),
-
-		setPosition: function ( v ) {
-
-			var te = this.elements;
-
-			te[ 12 ] = v.x;
-			te[ 13 ] = v.y;
-			te[ 14 ] = v.z;
-
-			return this;
-
-		},
-
-		getInverse: function ( m, throwOnInvertible ) {
-
-			// based on http://www.euclideanspace.com/maths/algebra/matrix/functions/inverse/fourD/index.htm
-			var te = this.elements;
-			var me = m.elements;
-
-			var n11 = me[ 0 ], n12 = me[ 4 ], n13 = me[ 8 ], n14 = me[ 12 ];
-			var n21 = me[ 1 ], n22 = me[ 5 ], n23 = me[ 9 ], n24 = me[ 13 ];
-			var n31 = me[ 2 ], n32 = me[ 6 ], n33 = me[ 10 ], n34 = me[ 14 ];
-			var n41 = me[ 3 ], n42 = me[ 7 ], n43 = me[ 11 ], n44 = me[ 15 ];
-
-			te[ 0 ] = n23 * n34 * n42 - n24 * n33 * n42 + n24 * n32 * n43 - n22 * n34 * n43 - n23 * n32 * n44 + n22 * n33 * n44;
-			te[ 4 ] = n14 * n33 * n42 - n13 * n34 * n42 - n14 * n32 * n43 + n12 * n34 * n43 + n13 * n32 * n44 - n12 * n33 * n44;
-			te[ 8 ] = n13 * n24 * n42 - n14 * n23 * n42 + n14 * n22 * n43 - n12 * n24 * n43 - n13 * n22 * n44 + n12 * n23 * n44;
-			te[ 12 ] = n14 * n23 * n32 - n13 * n24 * n32 - n14 * n22 * n33 + n12 * n24 * n33 + n13 * n22 * n34 - n12 * n23 * n34;
-			te[ 1 ] = n24 * n33 * n41 - n23 * n34 * n41 - n24 * n31 * n43 + n21 * n34 * n43 + n23 * n31 * n44 - n21 * n33 * n44;
-			te[ 5 ] = n13 * n34 * n41 - n14 * n33 * n41 + n14 * n31 * n43 - n11 * n34 * n43 - n13 * n31 * n44 + n11 * n33 * n44;
-			te[ 9 ] = n14 * n23 * n41 - n13 * n24 * n41 - n14 * n21 * n43 + n11 * n24 * n43 + n13 * n21 * n44 - n11 * n23 * n44;
-			te[ 13 ] = n13 * n24 * n31 - n14 * n23 * n31 + n14 * n21 * n33 - n11 * n24 * n33 - n13 * n21 * n34 + n11 * n23 * n34;
-			te[ 2 ] = n22 * n34 * n41 - n24 * n32 * n41 + n24 * n31 * n42 - n21 * n34 * n42 - n22 * n31 * n44 + n21 * n32 * n44;
-			te[ 6 ] = n14 * n32 * n41 - n12 * n34 * n41 - n14 * n31 * n42 + n11 * n34 * n42 + n12 * n31 * n44 - n11 * n32 * n44;
-			te[ 10 ] = n12 * n24 * n41 - n14 * n22 * n41 + n14 * n21 * n42 - n11 * n24 * n42 - n12 * n21 * n44 + n11 * n22 * n44;
-			te[ 14 ] = n14 * n22 * n31 - n12 * n24 * n31 - n14 * n21 * n32 + n11 * n24 * n32 + n12 * n21 * n34 - n11 * n22 * n34;
-			te[ 3 ] = n23 * n32 * n41 - n22 * n33 * n41 - n23 * n31 * n42 + n21 * n33 * n42 + n22 * n31 * n43 - n21 * n32 * n43;
-			te[ 7 ] = n12 * n33 * n41 - n13 * n32 * n41 + n13 * n31 * n42 - n11 * n33 * n42 - n12 * n31 * n43 + n11 * n32 * n43;
-			te[ 11 ] = n13 * n22 * n41 - n12 * n23 * n41 - n13 * n21 * n42 + n11 * n23 * n42 + n12 * n21 * n43 - n11 * n22 * n43;
-			te[ 15 ] = n12 * n23 * n31 - n13 * n22 * n31 + n13 * n21 * n32 - n11 * n23 * n32 - n12 * n21 * n33 + n11 * n22 * n33;
-
-			var det = n11 * te[ 0 ] + n21 * te[ 4 ] + n31 * te[ 8 ] + n41 * te[ 12 ];
-
-			if ( det == 0 ) {
-
-				var msg = "Matrix4.getInverse(): can't invert matrix, determinant is 0";
-
-				if ( throwOnInvertible || false ) {
-
-					throw new Error( msg );
-
-				} else {
-
-					console.warn( msg );
-
-				}
-
-				this.identity();
-
-				return this;
-			}
-
-			this.multiplyScalar( 1 / det );
-
-			return this;
-
-		},
-
-		translate: function ( v ) {
-
-			console.warn( 'THREE.Matrix4: .translate() has been removed.' );
-
-		},
-
-		rotateX: function ( angle ) {
-
-			console.warn( 'THREE.Matrix4: .rotateX() has been removed.' );
-
-		},
-
-		rotateY: function ( angle ) {
-
-			console.warn( 'THREE.Matrix4: .rotateY() has been removed.' );
-
-		},
-
-		rotateZ: function ( angle ) {
-
-			console.warn( 'THREE.Matrix4: .rotateZ() has been removed.' );
-
-		},
-
-		rotateByAxis: function ( axis, angle ) {
-
-			console.warn( 'THREE.Matrix4: .rotateByAxis() has been removed.' );
-
-		},
-
-		scale: function ( v ) {
-
-			var te = this.elements;
-			var x = v.x, y = v.y, z = v.z;
-
-			te[ 0 ] *= x; te[ 4 ] *= y; te[ 8 ] *= z;
-			te[ 1 ] *= x; te[ 5 ] *= y; te[ 9 ] *= z;
-			te[ 2 ] *= x; te[ 6 ] *= y; te[ 10 ] *= z;
-			te[ 3 ] *= x; te[ 7 ] *= y; te[ 11 ] *= z;
-
-			return this;
-
-		},
-
-		getMaxScaleOnAxis: function () {
-
-			var te = this.elements;
-
-			var scaleXSq = te[ 0 ] * te[ 0 ] + te[ 1 ] * te[ 1 ] + te[ 2 ] * te[ 2 ];
-			var scaleYSq = te[ 4 ] * te[ 4 ] + te[ 5 ] * te[ 5 ] + te[ 6 ] * te[ 6 ];
-			var scaleZSq = te[ 8 ] * te[ 8 ] + te[ 9 ] * te[ 9 ] + te[ 10 ] * te[ 10 ];
-
-			return Math.sqrt( Math.max( scaleXSq, Math.max( scaleYSq, scaleZSq ) ) );
-
-		},
-
-		makeTranslation: function ( x, y, z ) {
-
-			this.set(
-
-				1, 0, 0, x,
-				0, 1, 0, y,
-				0, 0, 1, z,
-				0, 0, 0, 1
-
-			);
-
-			return this;
-
-		},
-
-		makeRotationX: function ( theta ) {
-
-			var c = Math.cos( theta ), s = Math.sin( theta );
-
-			this.set(
-
-				1, 0,  0, 0,
-				0, c, - s, 0,
-				0, s,  c, 0,
-				0, 0,  0, 1
-
-			);
-
-			return this;
-
-		},
-
-		makeRotationY: function ( theta ) {
-
-			var c = Math.cos( theta ), s = Math.sin( theta );
-
-			this.set(
-
-				 c, 0, s, 0,
-				 0, 1, 0, 0,
-				- s, 0, c, 0,
-				 0, 0, 0, 1
-
-			);
-
-			return this;
-
-		},
-
-		makeRotationZ: function ( theta ) {
-
-			var c = Math.cos( theta ), s = Math.sin( theta );
-
-			this.set(
-
-				c, - s, 0, 0,
-				s,  c, 0, 0,
-				0,  0, 1, 0,
-				0,  0, 0, 1
-
-			);
-
-			return this;
-
-		},
-
-		makeRotationAxis: function ( axis, angle ) {
-
-			// Based on http://www.gamedev.net/reference/articles/article1199.asp
-
-			var c = Math.cos( angle );
-			var s = Math.sin( angle );
-			var t = 1 - c;
-			var x = axis.x, y = axis.y, z = axis.z;
-			var tx = t * x, ty = t * y;
-
-			this.set(
-
-				tx * x + c, tx * y - s * z, tx * z + s * y, 0,
-				tx * y + s * z, ty * y + c, ty * z - s * x, 0,
-				tx * z - s * y, ty * z + s * x, t * z * z + c, 0,
-				0, 0, 0, 1
-
-			);
-
-			 return this;
-
-		},
-
-		makeScale: function ( x, y, z ) {
-
-			this.set(
-
-				x, 0, 0, 0,
-				0, y, 0, 0,
-				0, 0, z, 0,
-				0, 0, 0, 1
-
-			);
-
-			return this;
-
-		},
-
-		compose: function ( position, quaternion, scale ) {
-
-			this.makeRotationFromQuaternion( quaternion );
-			this.scale( scale );
-			this.setPosition( position );
-
-			return this;
-
-		},
-
-		decompose: function () {
-
-			var vector = new THREE.Vector3();
-			var matrix = new THREE.Matrix4();
-
-			return function ( position, quaternion, scale ) {
-
-				var te = this.elements;
-
-				var sx = vector.set( te[ 0 ], te[ 1 ], te[ 2 ] ).length();
-				var sy = vector.set( te[ 4 ], te[ 5 ], te[ 6 ] ).length();
-				var sz = vector.set( te[ 8 ], te[ 9 ], te[ 10 ] ).length();
-
-				// if determine is negative, we need to invert one scale
-				var det = this.determinant();
-				if ( det < 0 ) {
-					sx = - sx;
-				}
-
-				position.x = te[ 12 ];
-				position.y = te[ 13 ];
-				position.z = te[ 14 ];
-
-				// scale the rotation part
-
-				matrix.elements.set( this.elements ); // at this point matrix is incomplete so we can't use .copy()
-
-				var invSX = 1 / sx;
-				var invSY = 1 / sy;
-				var invSZ = 1 / sz;
-
-				matrix.elements[ 0 ] *= invSX;
-				matrix.elements[ 1 ] *= invSX;
-				matrix.elements[ 2 ] *= invSX;
-
-				matrix.elements[ 4 ] *= invSY;
-				matrix.elements[ 5 ] *= invSY;
-				matrix.elements[ 6 ] *= invSY;
-
-				matrix.elements[ 8 ] *= invSZ;
-				matrix.elements[ 9 ] *= invSZ;
-				matrix.elements[ 10 ] *= invSZ;
-
-				quaternion.setFromRotationMatrix( matrix );
-
-				scale.x = sx;
-				scale.y = sy;
-				scale.z = sz;
-
-				return this;
-
-			};
-
-		}(),
-
-		makeFrustum: function ( left, right, bottom, top, near, far ) {
-
-			var te = this.elements;
-			var x = 2 * near / ( right - left );
-			var y = 2 * near / ( top - bottom );
-
-			var a = ( right + left ) / ( right - left );
-			var b = ( top + bottom ) / ( top - bottom );
-			var c = - ( far + near ) / ( far - near );
-			var d = - 2 * far * near / ( far - near );
-
-			te[ 0 ] = x;	te[ 4 ] = 0;	te[ 8 ] = a;	te[ 12 ] = 0;
-			te[ 1 ] = 0;	te[ 5 ] = y;	te[ 9 ] = b;	te[ 13 ] = 0;
-			te[ 2 ] = 0;	te[ 6 ] = 0;	te[ 10 ] = c;	te[ 14 ] = d;
-			te[ 3 ] = 0;	te[ 7 ] = 0;	te[ 11 ] = - 1;	te[ 15 ] = 0;
-
-			return this;
-
-		},
-
-		makePerspective: function ( fov, aspect, near, far ) {
-
-			var ymax = near * Math.tan( THREE.Math.degToRad( fov * 0.5 ) );
-			var ymin = - ymax;
-			var xmin = ymin * aspect;
-			var xmax = ymax * aspect;
-
-			return this.makeFrustum( xmin, xmax, ymin, ymax, near, far );
-
-		},
-
-		makeOrthographic: function ( left, right, top, bottom, near, far ) {
-
-			var te = this.elements;
-			var w = right - left;
-			var h = top - bottom;
-			var p = far - near;
-
-			var x = ( right + left ) / w;
-			var y = ( top + bottom ) / h;
-			var z = ( far + near ) / p;
-
-			te[ 0 ] = 2 / w;	te[ 4 ] = 0;	te[ 8 ] = 0;	te[ 12 ] = - x;
-			te[ 1 ] = 0;	te[ 5 ] = 2 / h;	te[ 9 ] = 0;	te[ 13 ] = - y;
-			te[ 2 ] = 0;	te[ 6 ] = 0;	te[ 10 ] = - 2 / p;	te[ 14 ] = - z;
-			te[ 3 ] = 0;	te[ 7 ] = 0;	te[ 11 ] = 0;	te[ 15 ] = 1;
-
-			return this;
-
-		},
-
-		fromArray: function ( array ) {
-
-			this.elements.set( array );
-
-			return this;
-
-		},
-
-		toArray: function () {
-
-			var te = this.elements;
-
-			return [
-				te[ 0 ], te[ 1 ], te[ 2 ], te[ 3 ],
-				te[ 4 ], te[ 5 ], te[ 6 ], te[ 7 ],
-				te[ 8 ], te[ 9 ], te[ 10 ], te[ 11 ],
-				te[ 12 ], te[ 13 ], te[ 14 ], te[ 15 ]
-			];
-
-		},
-
-		clone: function () {
-
-			return new THREE.Matrix4().fromArray( this.elements );
-
-		}
-
-	};
-
-	// File:src/math/Ray.js
-
-	/**
-	 * @author bhouston / http://exocortex.com
-	 */
-
-	THREE.Ray = function ( origin, direction ) {
-
-		this.origin = ( origin !== undefined ) ? origin : new THREE.Vector3();
-		this.direction = ( direction !== undefined ) ? direction : new THREE.Vector3();
-
-	};
-
-	THREE.Ray.prototype = {
-
-		constructor: THREE.Ray,
-
-		set: function ( origin, direction ) {
-
-			this.origin.copy( origin );
-			this.direction.copy( direction );
-
-			return this;
-
-		},
-
-		copy: function ( ray ) {
-
-			this.origin.copy( ray.origin );
-			this.direction.copy( ray.direction );
-
-			return this;
-
-		},
-
-		at: function ( t, optionalTarget ) {
-
-			var result = optionalTarget || new THREE.Vector3();
-
-			return result.copy( this.direction ).multiplyScalar( t ).add( this.origin );
-
-		},
-
-		recast: function () {
-
-			var v1 = new THREE.Vector3();
-
-			return function ( t ) {
-
-				this.origin.copy( this.at( t, v1 ) );
-
-				return this;
-
-			};
-
-		}(),
-
-		closestPointToPoint: function ( point, optionalTarget ) {
-
-			var result = optionalTarget || new THREE.Vector3();
-			result.subVectors( point, this.origin );
-			var directionDistance = result.dot( this.direction );
-
-			if ( directionDistance < 0 ) {
-
-				return result.copy( this.origin );
-
-			}
-
-			return result.copy( this.direction ).multiplyScalar( directionDistance ).add( this.origin );
-
-		},
-
-		distanceToPoint: function () {
-
-			var v1 = new THREE.Vector3();
-
-			return function ( point ) {
-
-				var directionDistance = v1.subVectors( point, this.origin ).dot( this.direction );
-
-				// point behind the ray
-
-				if ( directionDistance < 0 ) {
-
-					return this.origin.distanceTo( point );
-
-				}
-
-				v1.copy( this.direction ).multiplyScalar( directionDistance ).add( this.origin );
-
-				return v1.distanceTo( point );
-
-			};
-
-		}(),
-
-		distanceSqToSegment: function ( v0, v1, optionalPointOnRay, optionalPointOnSegment ) {
-
-			// from http://www.geometrictools.com/LibMathematics/Distance/Wm5DistRay3Segment3.cpp
-			// It returns the min distance between the ray and the segment
-			// defined by v0 and v1
-			// It can also set two optional targets :
-			// - The closest point on the ray
-			// - The closest point on the segment
-
-			var segCenter = v0.clone().add( v1 ).multiplyScalar( 0.5 );
-			var segDir = v1.clone().sub( v0 ).normalize();
-			var segExtent = v0.distanceTo( v1 ) * 0.5;
-			var diff = this.origin.clone().sub( segCenter );
-			var a01 = - this.direction.dot( segDir );
-			var b0 = diff.dot( this.direction );
-			var b1 = - diff.dot( segDir );
-			var c = diff.lengthSq();
-			var det = Math.abs( 1 - a01 * a01 );
-			var s0, s1, sqrDist, extDet;
-
-			if ( det >= 0 ) {
-
-				// The ray and segment are not parallel.
-
-				s0 = a01 * b1 - b0;
-				s1 = a01 * b0 - b1;
-				extDet = segExtent * det;
-
-				if ( s0 >= 0 ) {
-
-					if ( s1 >= - extDet ) {
-
-						if ( s1 <= extDet ) {
-
-							// region 0
-							// Minimum at interior points of ray and segment.
-
-							var invDet = 1 / det;
-							s0 *= invDet;
-							s1 *= invDet;
-							sqrDist = s0 * ( s0 + a01 * s1 + 2 * b0 ) + s1 * ( a01 * s0 + s1 + 2 * b1 ) + c;
-
-						} else {
-
-							// region 1
-
-							s1 = segExtent;
-							s0 = Math.max( 0, - ( a01 * s1 + b0 ) );
-							sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
-
-						}
-
-					} else {
-
-						// region 5
-
-						s1 = - segExtent;
-						s0 = Math.max( 0, - ( a01 * s1 + b0 ) );
-						sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
-
-					}
-
-				} else {
-
-					if ( s1 <= - extDet ) {
-
-						// region 4
-
-						s0 = Math.max( 0, - ( - a01 * segExtent + b0 ) );
-						s1 = ( s0 > 0 ) ? - segExtent : Math.min( Math.max( - segExtent, - b1 ), segExtent );
-						sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
-
-					} else if ( s1 <= extDet ) {
-
-						// region 3
-
-						s0 = 0;
-						s1 = Math.min( Math.max( - segExtent, - b1 ), segExtent );
-						sqrDist = s1 * ( s1 + 2 * b1 ) + c;
-
-					} else {
-
-						// region 2
-
-						s0 = Math.max( 0, - ( a01 * segExtent + b0 ) );
-						s1 = ( s0 > 0 ) ? segExtent : Math.min( Math.max( - segExtent, - b1 ), segExtent );
-						sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
-
-					}
-
-				}
-
-			} else {
-
-				// Ray and segment are parallel.
-
-				s1 = ( a01 > 0 ) ? - segExtent : segExtent;
-				s0 = Math.max( 0, - ( a01 * s1 + b0 ) );
-				sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
-
-			}
-
-			if ( optionalPointOnRay ) {
-
-				optionalPointOnRay.copy( this.direction.clone().multiplyScalar( s0 ).add( this.origin ) );
-
-			}
-
-			if ( optionalPointOnSegment ) {
-
-				optionalPointOnSegment.copy( segDir.clone().multiplyScalar( s1 ).add( segCenter ) );
-
-			}
-
-			return sqrDist;
-
-		},
-
-		isIntersectionSphere: function ( sphere ) {
-
-			return this.distanceToPoint( sphere.center ) <= sphere.radius;
-
-		},
-
-		intersectSphere: function () {
-
-			// from http://www.scratchapixel.com/lessons/3d-basic-lessons/lesson-7-intersecting-simple-shapes/ray-sphere-intersection/
-
-			var v1 = new THREE.Vector3();
-
-			return function ( sphere, optionalTarget ) {
-
-				v1.subVectors( sphere.center, this.origin );
-
-				var tca = v1.dot( this.direction );
-
-				var d2 = v1.dot( v1 ) - tca * tca;
-
-				var radius2 = sphere.radius * sphere.radius;
-
-				if ( d2 > radius2 ) return null;
-
-				var thc = Math.sqrt( radius2 - d2 );
-
-				// t0 = first intersect point - entrance on front of sphere
-				var t0 = tca - thc;
-
-				// t1 = second intersect point - exit point on back of sphere
-				var t1 = tca + thc;
-
-				// test to see if both t0 and t1 are behind the ray - if so, return null
-				if ( t0 < 0 && t1 < 0 ) return null;
-
-				// test to see if t0 is behind the ray:
-				// if it is, the ray is inside the sphere, so return the second exit point scaled by t1,
-				// in order to always return an intersect point that is in front of the ray.
-				if ( t0 < 0 ) return this.at( t1, optionalTarget );
-
-				// else t0 is in front of the ray, so return the first collision point scaled by t0 
-				return this.at( t0, optionalTarget );
-
-			}
-
-		}(),
-
-		isIntersectionPlane: function ( plane ) {
-
-			// check if the ray lies on the plane first
-
-			var distToPoint = plane.distanceToPoint( this.origin );
-
-			if ( distToPoint === 0 ) {
-
-				return true;
-
-			}
-
-			var denominator = plane.normal.dot( this.direction );
-
-			if ( denominator * distToPoint < 0 ) {
-
-				return true;
-
-			}
-
-			// ray origin is behind the plane (and is pointing behind it)
-
-			return false;
-
-		},
-
-		distanceToPlane: function ( plane ) {
-
-			var denominator = plane.normal.dot( this.direction );
-			if ( denominator == 0 ) {
-
-				// line is coplanar, return origin
-				if ( plane.distanceToPoint( this.origin ) == 0 ) {
-
-					return 0;
-
-				}
-
-				// Null is preferable to undefined since undefined means.... it is undefined
-
-				return null;
-
-			}
-
-			var t = - ( this.origin.dot( plane.normal ) + plane.constant ) / denominator;
-
-			// Return if the ray never intersects the plane
-
-			return t >= 0 ? t :  null;
-
-		},
-
-		intersectPlane: function ( plane, optionalTarget ) {
-
-			var t = this.distanceToPlane( plane );
-
-			if ( t === null ) {
-
-				return null;
-			}
-
-			return this.at( t, optionalTarget );
-
-		},
-
-		isIntersectionBox: function () {
-
-			var v = new THREE.Vector3();
-
-			return function ( box ) {
-
-				return this.intersectBox( box, v ) !== null;
-
-			};
-
-		}(),
-
-		intersectBox: function ( box , optionalTarget ) {
-
-			// http://www.scratchapixel.com/lessons/3d-basic-lessons/lesson-7-intersecting-simple-shapes/ray-box-intersection/
-
-			var tmin,tmax,tymin,tymax,tzmin,tzmax;
-
-			var invdirx = 1 / this.direction.x,
-				invdiry = 1 / this.direction.y,
-				invdirz = 1 / this.direction.z;
-
-			var origin = this.origin;
-
-			if ( invdirx >= 0 ) {
-
-				tmin = ( box.min.x - origin.x ) * invdirx;
-				tmax = ( box.max.x - origin.x ) * invdirx;
-
-			} else {
-
-				tmin = ( box.max.x - origin.x ) * invdirx;
-				tmax = ( box.min.x - origin.x ) * invdirx;
-			}
-
-			if ( invdiry >= 0 ) {
-
-				tymin = ( box.min.y - origin.y ) * invdiry;
-				tymax = ( box.max.y - origin.y ) * invdiry;
-
-			} else {
-
-				tymin = ( box.max.y - origin.y ) * invdiry;
-				tymax = ( box.min.y - origin.y ) * invdiry;
-			}
-
-			if ( ( tmin > tymax ) || ( tymin > tmax ) ) return null;
-
-			// These lines also handle the case where tmin or tmax is NaN
-			// (result of 0 * Infinity). x !== x returns true if x is NaN
-
-			if ( tymin > tmin || tmin !== tmin ) tmin = tymin;
-
-			if ( tymax < tmax || tmax !== tmax ) tmax = tymax;
-
-			if ( invdirz >= 0 ) {
-
-				tzmin = ( box.min.z - origin.z ) * invdirz;
-				tzmax = ( box.max.z - origin.z ) * invdirz;
-
-			} else {
-
-				tzmin = ( box.max.z - origin.z ) * invdirz;
-				tzmax = ( box.min.z - origin.z ) * invdirz;
-			}
-
-			if ( ( tmin > tzmax ) || ( tzmin > tmax ) ) return null;
-
-			if ( tzmin > tmin || tmin !== tmin ) tmin = tzmin;
-
-			if ( tzmax < tmax || tmax !== tmax ) tmax = tzmax;
-
-			//return point closest to the ray (positive side)
-
-			if ( tmax < 0 ) return null;
-
-			return this.at( tmin >= 0 ? tmin : tmax, optionalTarget );
-
-		},
-
-		intersectTriangle: function () {
-
-			// Compute the offset origin, edges, and normal.
-			var diff = new THREE.Vector3();
-			var edge1 = new THREE.Vector3();
-			var edge2 = new THREE.Vector3();
-			var normal = new THREE.Vector3();
-
-			return function ( a, b, c, backfaceCulling, optionalTarget ) {
-
-				// from http://www.geometrictools.com/LibMathematics/Intersection/Wm5IntrRay3Triangle3.cpp
-
-				edge1.subVectors( b, a );
-				edge2.subVectors( c, a );
-				normal.crossVectors( edge1, edge2 );
-
-				// Solve Q + t*D = b1*E1 + b2*E2 (Q = kDiff, D = ray direction,
-				// E1 = kEdge1, E2 = kEdge2, N = Cross(E1,E2)) by
-				//   |Dot(D,N)|*b1 = sign(Dot(D,N))*Dot(D,Cross(Q,E2))
-				//   |Dot(D,N)|*b2 = sign(Dot(D,N))*Dot(D,Cross(E1,Q))
-				//   |Dot(D,N)|*t = -sign(Dot(D,N))*Dot(Q,N)
-				var DdN = this.direction.dot( normal );
-				var sign;
-
-				if ( DdN > 0 ) {
-
-					if ( backfaceCulling ) return null;
-					sign = 1;
-
-				} else if ( DdN < 0 ) {
-
-					sign = - 1;
-					DdN = - DdN;
-
-				} else {
-
-					return null;
-
-				}
-
-				diff.subVectors( this.origin, a );
-				var DdQxE2 = sign * this.direction.dot( edge2.crossVectors( diff, edge2 ) );
-
-				// b1 < 0, no intersection
-				if ( DdQxE2 < 0 ) {
-
-					return null;
-
-				}
-
-				var DdE1xQ = sign * this.direction.dot( edge1.cross( diff ) );
-
-				// b2 < 0, no intersection
-				if ( DdE1xQ < 0 ) {
-
-					return null;
-
-				}
-
-				// b1+b2 > 1, no intersection
-				if ( DdQxE2 + DdE1xQ > DdN ) {
-
-					return null;
-
-				}
-
-				// Line intersects triangle, check if ray does.
-				var QdN = - sign * diff.dot( normal );
-
-				// t < 0, no intersection
-				if ( QdN < 0 ) {
-
-					return null;
-
-				}
-
-				// Ray intersects triangle.
-				return this.at( QdN / DdN, optionalTarget );
-
-			};
-
-		}(),
-
-		applyMatrix4: function ( matrix4 ) {
-
-			this.direction.add( this.origin ).applyMatrix4( matrix4 );
-			this.origin.applyMatrix4( matrix4 );
-			this.direction.sub( this.origin );
-			this.direction.normalize();
-
-			return this;
-		},
-
-		equals: function ( ray ) {
-
-			return ray.origin.equals( this.origin ) && ray.direction.equals( this.direction );
-
-		},
-
-		clone: function () {
-
-			return new THREE.Ray().copy( this );
-
-		}
-
-	};
-
-	// File:src/math/Sphere.js
-
-	/**
-	 * @author bhouston / http://exocortex.com
-	 * @author mrdoob / http://mrdoob.com/
-	 */
-
-	THREE.Sphere = function ( center, radius ) {
-
-		this.center = ( center !== undefined ) ? center : new THREE.Vector3();
-		this.radius = ( radius !== undefined ) ? radius : 0;
-
-	};
-
-	THREE.Sphere.prototype = {
-
-		constructor: THREE.Sphere,
-
-		set: function ( center, radius ) {
-
-			this.center.copy( center );
-			this.radius = radius;
-
-			return this;
-		},
-
-		setFromPoints: function () {
-
-			var box = new THREE.Box3();
-
-			return function ( points, optionalCenter )  {
-
-				var center = this.center;
-
-				if ( optionalCenter !== undefined ) {
-
-					center.copy( optionalCenter );
-
-				} else {
-
-					box.setFromPoints( points ).center( center );
-
-				}
-
-				var maxRadiusSq = 0;
-
-				for ( var i = 0, il = points.length; i < il; i ++ ) {
-
-					maxRadiusSq = Math.max( maxRadiusSq, center.distanceToSquared( points[ i ] ) );
-
-				}
-
-				this.radius = Math.sqrt( maxRadiusSq );
-
-				return this;
-
-	 		};
-
-		}(),
-
-		copy: function ( sphere ) {
-
-			this.center.copy( sphere.center );
-			this.radius = sphere.radius;
-
-			return this;
-
-		},
-
-		empty: function () {
-
-			return ( this.radius <= 0 );
-
-		},
-
-		containsPoint: function ( point ) {
-
-			return ( point.distanceToSquared( this.center ) <= ( this.radius * this.radius ) );
-
-		},
-
-		distanceToPoint: function ( point ) {
-
-			return ( point.distanceTo( this.center ) - this.radius );
-
-		},
-
-		intersectsSphere: function ( sphere ) {
-
-			var radiusSum = this.radius + sphere.radius;
-
-			return sphere.center.distanceToSquared( this.center ) <= ( radiusSum * radiusSum );
-
-		},
-
-		clampPoint: function ( point, optionalTarget ) {
-
-			var deltaLengthSq = this.center.distanceToSquared( point );
-
-			var result = optionalTarget || new THREE.Vector3();
-			result.copy( point );
-
-			if ( deltaLengthSq > ( this.radius * this.radius ) ) {
-
-				result.sub( this.center ).normalize();
-				result.multiplyScalar( this.radius ).add( this.center );
-
-			}
-
-			return result;
-
-		},
-
-		getBoundingBox: function ( optionalTarget ) {
-
-			var box = optionalTarget || new THREE.Box3();
-
-			box.set( this.center, this.center );
-			box.expandByScalar( this.radius );
-
-			return box;
-
-		},
-
-		applyMatrix4: function ( matrix ) {
-
-			this.center.applyMatrix4( matrix );
-			this.radius = this.radius * matrix.getMaxScaleOnAxis();
-
-			return this;
-
-		},
-
-		translate: function ( offset ) {
-
-			this.center.add( offset );
-
-			return this;
-
-		},
-
-		equals: function ( sphere ) {
-
-			return sphere.center.equals( this.center ) && ( sphere.radius === this.radius );
-
-		},
-
-		clone: function () {
-
-			return new THREE.Sphere().copy( this );
-
-		}
-
-	};
-
-	// File:src/math/Frustum.js
-
-	/**
-	 * @author mrdoob / http://mrdoob.com/
-	 * @author alteredq / http://alteredqualia.com/
-	 * @author bhouston / http://exocortex.com
-	 */
-
-	THREE.Frustum = function ( p0, p1, p2, p3, p4, p5 ) {
-
-		this.planes = [
-
-			( p0 !== undefined ) ? p0 : new THREE.Plane(),
-			( p1 !== undefined ) ? p1 : new THREE.Plane(),
-			( p2 !== undefined ) ? p2 : new THREE.Plane(),
-			( p3 !== undefined ) ? p3 : new THREE.Plane(),
-			( p4 !== undefined ) ? p4 : new THREE.Plane(),
-			( p5 !== undefined ) ? p5 : new THREE.Plane()
-
-		];
-
-	};
-
-	THREE.Frustum.prototype = {
-
-		constructor: THREE.Frustum,
-
-		set: function ( p0, p1, p2, p3, p4, p5 ) {
-
-			var planes = this.planes;
-
-			planes[ 0 ].copy( p0 );
-			planes[ 1 ].copy( p1 );
-			planes[ 2 ].copy( p2 );
-			planes[ 3 ].copy( p3 );
-			planes[ 4 ].copy( p4 );
-			planes[ 5 ].copy( p5 );
-
-			return this;
-
-		},
-
-		copy: function ( frustum ) {
-
-			var planes = this.planes;
-
-			for ( var i = 0; i < 6; i ++ ) {
-
-				planes[ i ].copy( frustum.planes[ i ] );
-
-			}
-
-			return this;
-
-		},
-
-		setFromMatrix: function ( m ) {
-
-			var planes = this.planes;
-			var me = m.elements;
-			var me0 = me[ 0 ], me1 = me[ 1 ], me2 = me[ 2 ], me3 = me[ 3 ];
-			var me4 = me[ 4 ], me5 = me[ 5 ], me6 = me[ 6 ], me7 = me[ 7 ];
-			var me8 = me[ 8 ], me9 = me[ 9 ], me10 = me[ 10 ], me11 = me[ 11 ];
-			var me12 = me[ 12 ], me13 = me[ 13 ], me14 = me[ 14 ], me15 = me[ 15 ];
-
-			planes[ 0 ].setComponents( me3 - me0, me7 - me4, me11 - me8, me15 - me12 ).normalize();
-			planes[ 1 ].setComponents( me3 + me0, me7 + me4, me11 + me8, me15 + me12 ).normalize();
-			planes[ 2 ].setComponents( me3 + me1, me7 + me5, me11 + me9, me15 + me13 ).normalize();
-			planes[ 3 ].setComponents( me3 - me1, me7 - me5, me11 - me9, me15 - me13 ).normalize();
-			planes[ 4 ].setComponents( me3 - me2, me7 - me6, me11 - me10, me15 - me14 ).normalize();
-			planes[ 5 ].setComponents( me3 + me2, me7 + me6, me11 + me10, me15 + me14 ).normalize();
-
-			return this;
-
-		},
-
-		intersectsObject: function () {
-
-			var sphere = new THREE.Sphere();
-
-			return function ( object ) {
-
-				var geometry = object.geometry;
-
-				if ( geometry.boundingSphere === null ) geometry.computeBoundingSphere();
-
-				sphere.copy( geometry.boundingSphere );
-				sphere.applyMatrix4( object.matrixWorld );
-
-				return this.intersectsSphere( sphere );
-
-			};
-
-		}(),
-
-		intersectsSphere: function ( sphere ) {
-
-			var planes = this.planes;
-			var center = sphere.center;
-			var negRadius = - sphere.radius;
-
-			for ( var i = 0; i < 6; i ++ ) {
-
-				var distance = planes[ i ].distanceToPoint( center );
-
-				if ( distance < negRadius ) {
-
-					return false;
-
-				}
-
-			}
-
-			return true;
-
-		},
-
-		intersectsBox: function () {
-
-			var p1 = new THREE.Vector3(),
-				p2 = new THREE.Vector3();
-
-			return function ( box ) {
-
-				var planes = this.planes;
-
-				for ( var i = 0; i < 6 ; i ++ ) {
-
-					var plane = planes[ i ];
-
-					p1.x = plane.normal.x > 0 ? box.min.x : box.max.x;
-					p2.x = plane.normal.x > 0 ? box.max.x : box.min.x;
-					p1.y = plane.normal.y > 0 ? box.min.y : box.max.y;
-					p2.y = plane.normal.y > 0 ? box.max.y : box.min.y;
-					p1.z = plane.normal.z > 0 ? box.min.z : box.max.z;
-					p2.z = plane.normal.z > 0 ? box.max.z : box.min.z;
-
-					var d1 = plane.distanceToPoint( p1 );
-					var d2 = plane.distanceToPoint( p2 );
-
-					// if both outside plane, no intersection
-
-					if ( d1 < 0 && d2 < 0 ) {
-
-						return false;
-
-					}
-				}
-
-				return true;
-			};
-
-		}(),
-
-
-		containsPoint: function ( point ) {
-
-			var planes = this.planes;
-
-			for ( var i = 0; i < 6; i ++ ) {
-
-				if ( planes[ i ].distanceToPoint( point ) < 0 ) {
-
-					return false;
-
-				}
-
-			}
-
-			return true;
-
-		},
-
-		clone: function () {
-
-			return new THREE.Frustum().copy( this );
-
-		}
-
-	};
-
-	// File:src/math/Plane.js
-
-	/**
-	 * @author bhouston / http://exocortex.com
-	 */
-
-	THREE.Plane = function ( normal, constant ) {
-
-		this.normal = ( normal !== undefined ) ? normal : new THREE.Vector3( 1, 0, 0 );
-		this.constant = ( constant !== undefined ) ? constant : 0;
-
-	};
-
-	THREE.Plane.prototype = {
-
-		constructor: THREE.Plane,
-
-		set: function ( normal, constant ) {
-
-			this.normal.copy( normal );
-			this.constant = constant;
-
-			return this;
-
-		},
-
-		setComponents: function ( x, y, z, w ) {
-
-			this.normal.set( x, y, z );
-			this.constant = w;
-
-			return this;
-
-		},
-
-		setFromNormalAndCoplanarPoint: function ( normal, point ) {
-
-			this.normal.copy( normal );
-			this.constant = - point.dot( this.normal );	// must be this.normal, not normal, as this.normal is normalized
-
-			return this;
-
-		},
-
-		setFromCoplanarPoints: function () {
-
-			var v1 = new THREE.Vector3();
-			var v2 = new THREE.Vector3();
-
-			return function ( a, b, c ) {
-
-				var normal = v1.subVectors( c, b ).cross( v2.subVectors( a, b ) ).normalize();
-
-				// Q: should an error be thrown if normal is zero (e.g. degenerate plane)?
-
-				this.setFromNormalAndCoplanarPoint( normal, a );
-
-				return this;
-
-			};
-
-		}(),
-
-
-		copy: function ( plane ) {
-
-			this.normal.copy( plane.normal );
-			this.constant = plane.constant;
-
-			return this;
-
-		},
-
-		normalize: function () {
-
-			// Note: will lead to a divide by zero if the plane is invalid.
-
-			var inverseNormalLength = 1.0 / this.normal.length();
-			this.normal.multiplyScalar( inverseNormalLength );
-			this.constant *= inverseNormalLength;
-
-			return this;
-
-		},
-
-		negate: function () {
-
-			this.constant *= - 1;
-			this.normal.negate();
-
-			return this;
-
-		},
-
-		distanceToPoint: function ( point ) {
-
-			return this.normal.dot( point ) + this.constant;
-
-		},
-
-		distanceToSphere: function ( sphere ) {
-
-			return this.distanceToPoint( sphere.center ) - sphere.radius;
-
-		},
-
-		projectPoint: function ( point, optionalTarget ) {
-
-			return this.orthoPoint( point, optionalTarget ).sub( point ).negate();
-
-		},
-
-		orthoPoint: function ( point, optionalTarget ) {
-
-			var perpendicularMagnitude = this.distanceToPoint( point );
-
-			var result = optionalTarget || new THREE.Vector3();
-			return result.copy( this.normal ).multiplyScalar( perpendicularMagnitude );
-
-		},
-
-		isIntersectionLine: function ( line ) {
-
-			// Note: this tests if a line intersects the plane, not whether it (or its end-points) are coplanar with it.
-
-			var startSign = this.distanceToPoint( line.start );
-			var endSign = this.distanceToPoint( line.end );
-
-			return ( startSign < 0 && endSign > 0 ) || ( endSign < 0 && startSign > 0 );
-
-		},
-
-		intersectLine: function () {
-
-			var v1 = new THREE.Vector3();
-
-			return function ( line, optionalTarget ) {
-
-				var result = optionalTarget || new THREE.Vector3();
-
-				var direction = line.delta( v1 );
-
-				var denominator = this.normal.dot( direction );
-
-				if ( denominator == 0 ) {
-
-					// line is coplanar, return origin
-					if ( this.distanceToPoint( line.start ) == 0 ) {
-
-						return result.copy( line.start );
-
-					}
-
-					// Unsure if this is the correct method to handle this case.
-					return undefined;
-
-				}
-
-				var t = - ( line.start.dot( this.normal ) + this.constant ) / denominator;
-
-				if ( t < 0 || t > 1 ) {
-
-					return undefined;
-
-				}
-
-				return result.copy( direction ).multiplyScalar( t ).add( line.start );
-
-			};
-
-		}(),
-
-
-		coplanarPoint: function ( optionalTarget ) {
-
-			var result = optionalTarget || new THREE.Vector3();
-			return result.copy( this.normal ).multiplyScalar( - this.constant );
-
-		},
-
-		applyMatrix4: function () {
-
-			var v1 = new THREE.Vector3();
-			var v2 = new THREE.Vector3();
-			var m1 = new THREE.Matrix3();
-
-			return function ( matrix, optionalNormalMatrix ) {
-
-				// compute new normal based on theory here:
-				// http://www.songho.ca/opengl/gl_normaltransform.html
-				var normalMatrix = optionalNormalMatrix || m1.getNormalMatrix( matrix );
-				var newNormal = v1.copy( this.normal ).applyMatrix3( normalMatrix );
-
-				var newCoplanarPoint = this.coplanarPoint( v2 );
-				newCoplanarPoint.applyMatrix4( matrix );
-
-				this.setFromNormalAndCoplanarPoint( newNormal, newCoplanarPoint );
-
-				return this;
-
-			};
-
-		}(),
-
-		translate: function ( offset ) {
-
-			this.constant = this.constant - offset.dot( this.normal );
-
-			return this;
-
-		},
-
-		equals: function ( plane ) {
-
-			return plane.normal.equals( this.normal ) && ( plane.constant == this.constant );
-
-		},
-
-		clone: function () {
-
-			return new THREE.Plane().copy( this );
-
-		}
-
-	};
-
-	// File:src/math/Math.js
-
-	/**
-	 * @author alteredq / http://alteredqualia.com/
-	 * @author mrdoob / http://mrdoob.com/
-	 */
-
-	THREE.Math = {
-
-		generateUUID: function () {
-
-			// http://www.broofa.com/Tools/Math.uuid.htm
-
-			var chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'.split( '' );
-			var uuid = new Array( 36 );
-			var rnd = 0, r;
-
-			return function () {
-
-				for ( var i = 0; i < 36; i ++ ) {
-
-					if ( i == 8 || i == 13 || i == 18 || i == 23 ) {
-
-						uuid[ i ] = '-';
-
-					} else if ( i == 14 ) {
-
-						uuid[ i ] = '4';
-
-					} else {
-
-						if ( rnd <= 0x02 ) rnd = 0x2000000 + ( Math.random() * 0x1000000 ) | 0;
-						r = rnd & 0xf;
-						rnd = rnd >> 4;
-						uuid[ i ] = chars[ ( i == 19 ) ? ( r & 0x3 ) | 0x8 : r ];
-
-					}
-				}
-
-				return uuid.join( '' );
-
-			};
-
-		}(),
-
-		// Clamp value to range <a, b>
-
-		clamp: function ( x, a, b ) {
-
-			return ( x < a ) ? a : ( ( x > b ) ? b : x );
-
-		},
-
-		// Clamp value to range <a, inf)
-
-		clampBottom: function ( x, a ) {
-
-			return x < a ? a : x;
-
-		},
-
-		// Linear mapping from range <a1, a2> to range <b1, b2>
-
-		mapLinear: function ( x, a1, a2, b1, b2 ) {
-
-			return b1 + ( x - a1 ) * ( b2 - b1 ) / ( a2 - a1 );
-
-		},
-
-		// http://en.wikipedia.org/wiki/Smoothstep
-
-		smoothstep: function ( x, min, max ) {
-
-			if ( x <= min ) return 0;
-			if ( x >= max ) return 1;
-
-			x = ( x - min ) / ( max - min );
-
-			return x * x * ( 3 - 2 * x );
-
-		},
-
-		smootherstep: function ( x, min, max ) {
-
-			if ( x <= min ) return 0;
-			if ( x >= max ) return 1;
-
-			x = ( x - min ) / ( max - min );
-
-			return x * x * x * ( x * ( x * 6 - 15 ) + 10 );
-
-		},
-
-		// Random float from <0, 1> with 16 bits of randomness
-		// (standard Math.random() creates repetitive patterns when applied over larger space)
-
-		random16: function () {
-
-			return ( 65280 * Math.random() + 255 * Math.random() ) / 65535;
-
-		},
-
-		// Random integer from <low, high> interval
-
-		randInt: function ( low, high ) {
-
-			return low + Math.floor( Math.random() * ( high - low + 1 ) );
-
-		},
-
-		// Random float from <low, high> interval
-
-		randFloat: function ( low, high ) {
-
-			return low + Math.random() * ( high - low );
-
-		},
-
-		// Random float from <-range/2, range/2> interval
-
-		randFloatSpread: function ( range ) {
-
-			return range * ( 0.5 - Math.random() );
-
-		},
-
-		degToRad: function () {
-
-			var degreeToRadiansFactor = Math.PI / 180;
-
-			return function ( degrees ) {
-
-				return degrees * degreeToRadiansFactor;
-
-			};
-
-		}(),
-
-		radToDeg: function () {
-
-			var radianToDegreesFactor = 180 / Math.PI;
-
-			return function ( radians ) {
-
-				return radians * radianToDegreesFactor;
-
-			};
-
-		}(),
-
-		isPowerOfTwo: function ( value ) {
-
-			return ( value & ( value - 1 ) ) === 0 && value !== 0;
-
-		}
-
-	};
-
-	// File:src/math/Spline.js
-
-	/**
-	 * Spline from Tween.js, slightly optimized (and trashed)
-	 * http://sole.github.com/tween.js/examples/05_spline.html
-	 *
-	 * @author mrdoob / http://mrdoob.com/
-	 * @author alteredq / http://alteredqualia.com/
-	 */
-
-	THREE.Spline = function ( points ) {
-
-		this.points = points;
-
-		var c = [], v3 = { x: 0, y: 0, z: 0 },
-		point, intPoint, weight, w2, w3,
-		pa, pb, pc, pd;
-
-		this.initFromArray = function ( a ) {
-
-			this.points = [];
-
-			for ( var i = 0; i < a.length; i ++ ) {
-
-				this.points[ i ] = { x: a[ i ][ 0 ], y: a[ i ][ 1 ], z: a[ i ][ 2 ] };
-
-			}
-
-		};
-
-		this.getPoint = function ( k ) {
-
-			point = ( this.points.length - 1 ) * k;
-			intPoint = Math.floor( point );
-			weight = point - intPoint;
-
-			c[ 0 ] = intPoint === 0 ? intPoint : intPoint - 1;
-			c[ 1 ] = intPoint;
-			c[ 2 ] = intPoint  > this.points.length - 2 ? this.points.length - 1 : intPoint + 1;
-			c[ 3 ] = intPoint  > this.points.length - 3 ? this.points.length - 1 : intPoint + 2;
-
-			pa = this.points[ c[ 0 ] ];
-			pb = this.points[ c[ 1 ] ];
-			pc = this.points[ c[ 2 ] ];
-			pd = this.points[ c[ 3 ] ];
-
-			w2 = weight * weight;
-			w3 = weight * w2;
-
-			v3.x = interpolate( pa.x, pb.x, pc.x, pd.x, weight, w2, w3 );
-			v3.y = interpolate( pa.y, pb.y, pc.y, pd.y, weight, w2, w3 );
-			v3.z = interpolate( pa.z, pb.z, pc.z, pd.z, weight, w2, w3 );
-
-			return v3;
-
-		};
-
-		this.getControlPointsArray = function () {
-
-			var i, p, l = this.points.length,
-				coords = [];
-
-			for ( i = 0; i < l; i ++ ) {
-
-				p = this.points[ i ];
-				coords[ i ] = [ p.x, p.y, p.z ];
-
-			}
-
-			return coords;
-
-		};
-
-		// approximate length by summing linear segments
-
-		this.getLength = function ( nSubDivisions ) {
-
-			var i, index, nSamples, position,
-				point = 0, intPoint = 0, oldIntPoint = 0,
-				oldPosition = new THREE.Vector3(),
-				tmpVec = new THREE.Vector3(),
-				chunkLengths = [],
-				totalLength = 0;
-
-			// first point has 0 length
-
-			chunkLengths[ 0 ] = 0;
-
-			if ( ! nSubDivisions ) nSubDivisions = 100;
-
-			nSamples = this.points.length * nSubDivisions;
-
-			oldPosition.copy( this.points[ 0 ] );
-
-			for ( i = 1; i < nSamples; i ++ ) {
-
-				index = i / nSamples;
-
-				position = this.getPoint( index );
-				tmpVec.copy( position );
-
-				totalLength += tmpVec.distanceTo( oldPosition );
-
-				oldPosition.copy( position );
-
-				point = ( this.points.length - 1 ) * index;
-				intPoint = Math.floor( point );
-
-				if ( intPoint != oldIntPoint ) {
-
-					chunkLengths[ intPoint ] = totalLength;
-					oldIntPoint = intPoint;
-
-				}
-
-			}
-
-			// last point ends with total length
-
-			chunkLengths[ chunkLengths.length ] = totalLength;
-
-			return { chunks: chunkLengths, total: totalLength };
-
-		};
-
-		this.reparametrizeByArcLength = function ( samplingCoef ) {
-
-			var i, j,
-				index, indexCurrent, indexNext,
-				linearDistance, realDistance,
-				sampling, position,
-				newpoints = [],
-				tmpVec = new THREE.Vector3(),
-				sl = this.getLength();
-
-			newpoints.push( tmpVec.copy( this.points[ 0 ] ).clone() );
-
-			for ( i = 1; i < this.points.length; i ++ ) {
-
-				//tmpVec.copy( this.points[ i - 1 ] );
-				//linearDistance = tmpVec.distanceTo( this.points[ i ] );
-
-				realDistance = sl.chunks[ i ] - sl.chunks[ i - 1 ];
-
-				sampling = Math.ceil( samplingCoef * realDistance / sl.total );
-
-				indexCurrent = ( i - 1 ) / ( this.points.length - 1 );
-				indexNext = i / ( this.points.length - 1 );
-
-				for ( j = 1; j < sampling - 1; j ++ ) {
-
-					index = indexCurrent + j * ( 1 / sampling ) * ( indexNext - indexCurrent );
-
-					position = this.getPoint( index );
-					newpoints.push( tmpVec.copy( position ).clone() );
-
-				}
-
-				newpoints.push( tmpVec.copy( this.points[ i ] ).clone() );
-
-			}
-
-			this.points = newpoints;
-
-		};
-
-		// Catmull-Rom
-
-		function interpolate( p0, p1, p2, p3, t, t2, t3 ) {
-
-			var v0 = ( p2 - p0 ) * 0.5,
-				v1 = ( p3 - p1 ) * 0.5;
-
-			return ( 2 * ( p1 - p2 ) + v0 + v1 ) * t3 + ( - 3 * ( p1 - p2 ) - 2 * v0 - v1 ) * t2 + v0 * t + p1;
-
-		};
-
-	};
-
-	// File:src/math/Triangle.js
-
-	/**
-	 * @author bhouston / http://exocortex.com
-	 * @author mrdoob / http://mrdoob.com/
-	 */
-
-	THREE.Triangle = function ( a, b, c ) {
-
-		this.a = ( a !== undefined ) ? a : new THREE.Vector3();
-		this.b = ( b !== undefined ) ? b : new THREE.Vector3();
-		this.c = ( c !== undefined ) ? c : new THREE.Vector3();
-
-	};
-
-	THREE.Triangle.normal = function () {
-
-		var v0 = new THREE.Vector3();
-
-		return function ( a, b, c, optionalTarget ) {
-
-			var result = optionalTarget || new THREE.Vector3();
-
-			result.subVectors( c, b );
-			v0.subVectors( a, b );
-			result.cross( v0 );
-
-			var resultLengthSq = result.lengthSq();
-			if ( resultLengthSq > 0 ) {
-
-				return result.multiplyScalar( 1 / Math.sqrt( resultLengthSq ) );
-
-			}
-
-			return result.set( 0, 0, 0 );
-
-		};
-
-	}();
-
-	// static/instance method to calculate barycoordinates
-	// based on: http://www.blackpawn.com/texts/pointinpoly/default.html
-	THREE.Triangle.barycoordFromPoint = function () {
-
-		var v0 = new THREE.Vector3();
-		var v1 = new THREE.Vector3();
-		var v2 = new THREE.Vector3();
-
-		return function ( point, a, b, c, optionalTarget ) {
-
-			v0.subVectors( c, a );
-			v1.subVectors( b, a );
-			v2.subVectors( point, a );
-
-			var dot00 = v0.dot( v0 );
-			var dot01 = v0.dot( v1 );
-			var dot02 = v0.dot( v2 );
-			var dot11 = v1.dot( v1 );
-			var dot12 = v1.dot( v2 );
-
-			var denom = ( dot00 * dot11 - dot01 * dot01 );
-
-			var result = optionalTarget || new THREE.Vector3();
-
-			// colinear or singular triangle
-			if ( denom == 0 ) {
-				// arbitrary location outside of triangle?
-				// not sure if this is the best idea, maybe should be returning undefined
-				return result.set( - 2, - 1, - 1 );
-			}
-
-			var invDenom = 1 / denom;
-			var u = ( dot11 * dot02 - dot01 * dot12 ) * invDenom;
-			var v = ( dot00 * dot12 - dot01 * dot02 ) * invDenom;
-
-			// barycoordinates must always sum to 1
-			return result.set( 1 - u - v, v, u );
-
-		};
-
-	}();
-
-	THREE.Triangle.containsPoint = function () {
-
-		var v1 = new THREE.Vector3();
-
-		return function ( point, a, b, c ) {
-
-			var result = THREE.Triangle.barycoordFromPoint( point, a, b, c, v1 );
-
-			return ( result.x >= 0 ) && ( result.y >= 0 ) && ( ( result.x + result.y ) <= 1 );
-
-		};
-
-	}();
-
-	THREE.Triangle.prototype = {
-
-		constructor: THREE.Triangle,
-
-		set: function ( a, b, c ) {
-
-			this.a.copy( a );
-			this.b.copy( b );
-			this.c.copy( c );
-
-			return this;
-
-		},
-
-		setFromPointsAndIndices: function ( points, i0, i1, i2 ) {
-
-			this.a.copy( points[ i0 ] );
-			this.b.copy( points[ i1 ] );
-			this.c.copy( points[ i2 ] );
-
-			return this;
-
-		},
-
-		copy: function ( triangle ) {
-
-			this.a.copy( triangle.a );
-			this.b.copy( triangle.b );
-			this.c.copy( triangle.c );
-
-			return this;
-
-		},
-
-		area: function () {
-
-			var v0 = new THREE.Vector3();
-			var v1 = new THREE.Vector3();
-
-			return function () {
-
-				v0.subVectors( this.c, this.b );
-				v1.subVectors( this.a, this.b );
-
-				return v0.cross( v1 ).length() * 0.5;
-
-			};
-
-		}(),
-
-		midpoint: function ( optionalTarget ) {
-
-			var result = optionalTarget || new THREE.Vector3();
-			return result.addVectors( this.a, this.b ).add( this.c ).multiplyScalar( 1 / 3 );
-
-		},
-
-		normal: function ( optionalTarget ) {
-
-			return THREE.Triangle.normal( this.a, this.b, this.c, optionalTarget );
-
-		},
-
-		plane: function ( optionalTarget ) {
-
-			var result = optionalTarget || new THREE.Plane();
-
-			return result.setFromCoplanarPoints( this.a, this.b, this.c );
-
-		},
-
-		barycoordFromPoint: function ( point, optionalTarget ) {
-
-			return THREE.Triangle.barycoordFromPoint( point, this.a, this.b, this.c, optionalTarget );
-
-		},
-
-		containsPoint: function ( point ) {
-
-			return THREE.Triangle.containsPoint( point, this.a, this.b, this.c );
-
-		},
-
-		equals: function ( triangle ) {
-
-			return triangle.a.equals( this.a ) && triangle.b.equals( this.b ) && triangle.c.equals( this.c );
-
-		},
-
-		clone: function () {
-
-			return new THREE.Triangle().copy( this );
-
-		}
-
-	};
-
-
-	// Export the THREE object for **Node.js**, with
-	// backwards-compatibility for the old `require()` API. If we're in
-	// the browser, add `_` as a global object via a string identifier,
-	// for Closure Compiler "advanced" mode.
-	if (true) {
-	  if (typeof module !== 'undefined' && module.exports) {
-	    exports = module.exports = THREE;
-	  }
-	  exports.THREE = THREE;
-	} else {
-	  this['THREE'] = THREE;
-	}
-
+	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(11)))
 
 /***/ },
-/* 8 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;//     Underscore.js 1.8.3
-	//     http://underscorejs.org
-	//     (c) 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
-	//     Underscore may be freely distributed under the MIT license.
-
-	(function() {
-
-	  // Baseline setup
-	  // --------------
-
-	  // Establish the root object, `window` in the browser, or `exports` on the server.
-	  var root = this;
-
-	  // Save the previous value of the `_` variable.
-	  var previousUnderscore = root._;
-
-	  // Save bytes in the minified (but not gzipped) version:
-	  var ArrayProto = Array.prototype, ObjProto = Object.prototype, FuncProto = Function.prototype;
-
-	  // Create quick reference variables for speed access to core prototypes.
-	  var
-	    push             = ArrayProto.push,
-	    slice            = ArrayProto.slice,
-	    toString         = ObjProto.toString,
-	    hasOwnProperty   = ObjProto.hasOwnProperty;
-
-	  // All **ECMAScript 5** native function implementations that we hope to use
-	  // are declared here.
-	  var
-	    nativeIsArray      = Array.isArray,
-	    nativeKeys         = Object.keys,
-	    nativeBind         = FuncProto.bind,
-	    nativeCreate       = Object.create;
-
-	  // Naked function reference for surrogate-prototype-swapping.
-	  var Ctor = function(){};
-
-	  // Create a safe reference to the Underscore object for use below.
-	  var _ = function(obj) {
-	    if (obj instanceof _) return obj;
-	    if (!(this instanceof _)) return new _(obj);
-	    this._wrapped = obj;
-	  };
-
-	  // Export the Underscore object for **Node.js**, with
-	  // backwards-compatibility for the old `require()` API. If we're in
-	  // the browser, add `_` as a global object.
-	  if (true) {
-	    if (typeof module !== 'undefined' && module.exports) {
-	      exports = module.exports = _;
-	    }
-	    exports._ = _;
-	  } else {
-	    root._ = _;
-	  }
-
-	  // Current version.
-	  _.VERSION = '1.8.3';
-
-	  // Internal function that returns an efficient (for current engines) version
-	  // of the passed-in callback, to be repeatedly applied in other Underscore
-	  // functions.
-	  var optimizeCb = function(func, context, argCount) {
-	    if (context === void 0) return func;
-	    switch (argCount == null ? 3 : argCount) {
-	      case 1: return function(value) {
-	        return func.call(context, value);
-	      };
-	      case 2: return function(value, other) {
-	        return func.call(context, value, other);
-	      };
-	      case 3: return function(value, index, collection) {
-	        return func.call(context, value, index, collection);
-	      };
-	      case 4: return function(accumulator, value, index, collection) {
-	        return func.call(context, accumulator, value, index, collection);
-	      };
-	    }
-	    return function() {
-	      return func.apply(context, arguments);
-	    };
-	  };
-
-	  // A mostly-internal function to generate callbacks that can be applied
-	  // to each element in a collection, returning the desired result — either
-	  // identity, an arbitrary callback, a property matcher, or a property accessor.
-	  var cb = function(value, context, argCount) {
-	    if (value == null) return _.identity;
-	    if (_.isFunction(value)) return optimizeCb(value, context, argCount);
-	    if (_.isObject(value)) return _.matcher(value);
-	    return _.property(value);
-	  };
-	  _.iteratee = function(value, context) {
-	    return cb(value, context, Infinity);
-	  };
-
-	  // An internal function for creating assigner functions.
-	  var createAssigner = function(keysFunc, undefinedOnly) {
-	    return function(obj) {
-	      var length = arguments.length;
-	      if (length < 2 || obj == null) return obj;
-	      for (var index = 1; index < length; index++) {
-	        var source = arguments[index],
-	            keys = keysFunc(source),
-	            l = keys.length;
-	        for (var i = 0; i < l; i++) {
-	          var key = keys[i];
-	          if (!undefinedOnly || obj[key] === void 0) obj[key] = source[key];
-	        }
-	      }
-	      return obj;
-	    };
-	  };
-
-	  // An internal function for creating a new object that inherits from another.
-	  var baseCreate = function(prototype) {
-	    if (!_.isObject(prototype)) return {};
-	    if (nativeCreate) return nativeCreate(prototype);
-	    Ctor.prototype = prototype;
-	    var result = new Ctor;
-	    Ctor.prototype = null;
-	    return result;
-	  };
-
-	  var property = function(key) {
-	    return function(obj) {
-	      return obj == null ? void 0 : obj[key];
-	    };
-	  };
-
-	  // Helper for collection methods to determine whether a collection
-	  // should be iterated as an array or as an object
-	  // Related: http://people.mozilla.org/~jorendorff/es6-draft.html#sec-tolength
-	  // Avoids a very nasty iOS 8 JIT bug on ARM-64. #2094
-	  var MAX_ARRAY_INDEX = Math.pow(2, 53) - 1;
-	  var getLength = property('length');
-	  var isArrayLike = function(collection) {
-	    var length = getLength(collection);
-	    return typeof length == 'number' && length >= 0 && length <= MAX_ARRAY_INDEX;
-	  };
-
-	  // Collection Functions
-	  // --------------------
-
-	  // The cornerstone, an `each` implementation, aka `forEach`.
-	  // Handles raw objects in addition to array-likes. Treats all
-	  // sparse array-likes as if they were dense.
-	  _.each = _.forEach = function(obj, iteratee, context) {
-	    iteratee = optimizeCb(iteratee, context);
-	    var i, length;
-	    if (isArrayLike(obj)) {
-	      for (i = 0, length = obj.length; i < length; i++) {
-	        iteratee(obj[i], i, obj);
-	      }
-	    } else {
-	      var keys = _.keys(obj);
-	      for (i = 0, length = keys.length; i < length; i++) {
-	        iteratee(obj[keys[i]], keys[i], obj);
-	      }
-	    }
-	    return obj;
-	  };
-
-	  // Return the results of applying the iteratee to each element.
-	  _.map = _.collect = function(obj, iteratee, context) {
-	    iteratee = cb(iteratee, context);
-	    var keys = !isArrayLike(obj) && _.keys(obj),
-	        length = (keys || obj).length,
-	        results = Array(length);
-	    for (var index = 0; index < length; index++) {
-	      var currentKey = keys ? keys[index] : index;
-	      results[index] = iteratee(obj[currentKey], currentKey, obj);
-	    }
-	    return results;
-	  };
-
-	  // Create a reducing function iterating left or right.
-	  function createReduce(dir) {
-	    // Optimized iterator function as using arguments.length
-	    // in the main function will deoptimize the, see #1991.
-	    function iterator(obj, iteratee, memo, keys, index, length) {
-	      for (; index >= 0 && index < length; index += dir) {
-	        var currentKey = keys ? keys[index] : index;
-	        memo = iteratee(memo, obj[currentKey], currentKey, obj);
-	      }
-	      return memo;
-	    }
-
-	    return function(obj, iteratee, memo, context) {
-	      iteratee = optimizeCb(iteratee, context, 4);
-	      var keys = !isArrayLike(obj) && _.keys(obj),
-	          length = (keys || obj).length,
-	          index = dir > 0 ? 0 : length - 1;
-	      // Determine the initial value if none is provided.
-	      if (arguments.length < 3) {
-	        memo = obj[keys ? keys[index] : index];
-	        index += dir;
-	      }
-	      return iterator(obj, iteratee, memo, keys, index, length);
-	    };
-	  }
-
-	  // **Reduce** builds up a single result from a list of values, aka `inject`,
-	  // or `foldl`.
-	  _.reduce = _.foldl = _.inject = createReduce(1);
-
-	  // The right-associative version of reduce, also known as `foldr`.
-	  _.reduceRight = _.foldr = createReduce(-1);
-
-	  // Return the first value which passes a truth test. Aliased as `detect`.
-	  _.find = _.detect = function(obj, predicate, context) {
-	    var key;
-	    if (isArrayLike(obj)) {
-	      key = _.findIndex(obj, predicate, context);
-	    } else {
-	      key = _.findKey(obj, predicate, context);
-	    }
-	    if (key !== void 0 && key !== -1) return obj[key];
-	  };
-
-	  // Return all the elements that pass a truth test.
-	  // Aliased as `select`.
-	  _.filter = _.select = function(obj, predicate, context) {
-	    var results = [];
-	    predicate = cb(predicate, context);
-	    _.each(obj, function(value, index, list) {
-	      if (predicate(value, index, list)) results.push(value);
-	    });
-	    return results;
-	  };
-
-	  // Return all the elements for which a truth test fails.
-	  _.reject = function(obj, predicate, context) {
-	    return _.filter(obj, _.negate(cb(predicate)), context);
-	  };
-
-	  // Determine whether all of the elements match a truth test.
-	  // Aliased as `all`.
-	  _.every = _.all = function(obj, predicate, context) {
-	    predicate = cb(predicate, context);
-	    var keys = !isArrayLike(obj) && _.keys(obj),
-	        length = (keys || obj).length;
-	    for (var index = 0; index < length; index++) {
-	      var currentKey = keys ? keys[index] : index;
-	      if (!predicate(obj[currentKey], currentKey, obj)) return false;
-	    }
-	    return true;
-	  };
-
-	  // Determine if at least one element in the object matches a truth test.
-	  // Aliased as `any`.
-	  _.some = _.any = function(obj, predicate, context) {
-	    predicate = cb(predicate, context);
-	    var keys = !isArrayLike(obj) && _.keys(obj),
-	        length = (keys || obj).length;
-	    for (var index = 0; index < length; index++) {
-	      var currentKey = keys ? keys[index] : index;
-	      if (predicate(obj[currentKey], currentKey, obj)) return true;
-	    }
-	    return false;
-	  };
-
-	  // Determine if the array or object contains a given item (using `===`).
-	  // Aliased as `includes` and `include`.
-	  _.contains = _.includes = _.include = function(obj, item, fromIndex, guard) {
-	    if (!isArrayLike(obj)) obj = _.values(obj);
-	    if (typeof fromIndex != 'number' || guard) fromIndex = 0;
-	    return _.indexOf(obj, item, fromIndex) >= 0;
-	  };
-
-	  // Invoke a method (with arguments) on every item in a collection.
-	  _.invoke = function(obj, method) {
-	    var args = slice.call(arguments, 2);
-	    var isFunc = _.isFunction(method);
-	    return _.map(obj, function(value) {
-	      var func = isFunc ? method : value[method];
-	      return func == null ? func : func.apply(value, args);
-	    });
-	  };
-
-	  // Convenience version of a common use case of `map`: fetching a property.
-	  _.pluck = function(obj, key) {
-	    return _.map(obj, _.property(key));
-	  };
-
-	  // Convenience version of a common use case of `filter`: selecting only objects
-	  // containing specific `key:value` pairs.
-	  _.where = function(obj, attrs) {
-	    return _.filter(obj, _.matcher(attrs));
-	  };
-
-	  // Convenience version of a common use case of `find`: getting the first object
-	  // containing specific `key:value` pairs.
-	  _.findWhere = function(obj, attrs) {
-	    return _.find(obj, _.matcher(attrs));
-	  };
-
-	  // Return the maximum element (or element-based computation).
-	  _.max = function(obj, iteratee, context) {
-	    var result = -Infinity, lastComputed = -Infinity,
-	        value, computed;
-	    if (iteratee == null && obj != null) {
-	      obj = isArrayLike(obj) ? obj : _.values(obj);
-	      for (var i = 0, length = obj.length; i < length; i++) {
-	        value = obj[i];
-	        if (value > result) {
-	          result = value;
-	        }
-	      }
-	    } else {
-	      iteratee = cb(iteratee, context);
-	      _.each(obj, function(value, index, list) {
-	        computed = iteratee(value, index, list);
-	        if (computed > lastComputed || computed === -Infinity && result === -Infinity) {
-	          result = value;
-	          lastComputed = computed;
-	        }
-	      });
-	    }
-	    return result;
-	  };
-
-	  // Return the minimum element (or element-based computation).
-	  _.min = function(obj, iteratee, context) {
-	    var result = Infinity, lastComputed = Infinity,
-	        value, computed;
-	    if (iteratee == null && obj != null) {
-	      obj = isArrayLike(obj) ? obj : _.values(obj);
-	      for (var i = 0, length = obj.length; i < length; i++) {
-	        value = obj[i];
-	        if (value < result) {
-	          result = value;
-	        }
-	      }
-	    } else {
-	      iteratee = cb(iteratee, context);
-	      _.each(obj, function(value, index, list) {
-	        computed = iteratee(value, index, list);
-	        if (computed < lastComputed || computed === Infinity && result === Infinity) {
-	          result = value;
-	          lastComputed = computed;
-	        }
-	      });
-	    }
-	    return result;
-	  };
-
-	  // Shuffle a collection, using the modern version of the
-	  // [Fisher-Yates shuffle](http://en.wikipedia.org/wiki/Fisher–Yates_shuffle).
-	  _.shuffle = function(obj) {
-	    var set = isArrayLike(obj) ? obj : _.values(obj);
-	    var length = set.length;
-	    var shuffled = Array(length);
-	    for (var index = 0, rand; index < length; index++) {
-	      rand = _.random(0, index);
-	      if (rand !== index) shuffled[index] = shuffled[rand];
-	      shuffled[rand] = set[index];
-	    }
-	    return shuffled;
-	  };
-
-	  // Sample **n** random values from a collection.
-	  // If **n** is not specified, returns a single random element.
-	  // The internal `guard` argument allows it to work with `map`.
-	  _.sample = function(obj, n, guard) {
-	    if (n == null || guard) {
-	      if (!isArrayLike(obj)) obj = _.values(obj);
-	      return obj[_.random(obj.length - 1)];
-	    }
-	    return _.shuffle(obj).slice(0, Math.max(0, n));
-	  };
-
-	  // Sort the object's values by a criterion produced by an iteratee.
-	  _.sortBy = function(obj, iteratee, context) {
-	    iteratee = cb(iteratee, context);
-	    return _.pluck(_.map(obj, function(value, index, list) {
-	      return {
-	        value: value,
-	        index: index,
-	        criteria: iteratee(value, index, list)
-	      };
-	    }).sort(function(left, right) {
-	      var a = left.criteria;
-	      var b = right.criteria;
-	      if (a !== b) {
-	        if (a > b || a === void 0) return 1;
-	        if (a < b || b === void 0) return -1;
-	      }
-	      return left.index - right.index;
-	    }), 'value');
-	  };
-
-	  // An internal function used for aggregate "group by" operations.
-	  var group = function(behavior) {
-	    return function(obj, iteratee, context) {
-	      var result = {};
-	      iteratee = cb(iteratee, context);
-	      _.each(obj, function(value, index) {
-	        var key = iteratee(value, index, obj);
-	        behavior(result, value, key);
-	      });
-	      return result;
-	    };
-	  };
-
-	  // Groups the object's values by a criterion. Pass either a string attribute
-	  // to group by, or a function that returns the criterion.
-	  _.groupBy = group(function(result, value, key) {
-	    if (_.has(result, key)) result[key].push(value); else result[key] = [value];
-	  });
-
-	  // Indexes the object's values by a criterion, similar to `groupBy`, but for
-	  // when you know that your index values will be unique.
-	  _.indexBy = group(function(result, value, key) {
-	    result[key] = value;
-	  });
-
-	  // Counts instances of an object that group by a certain criterion. Pass
-	  // either a string attribute to count by, or a function that returns the
-	  // criterion.
-	  _.countBy = group(function(result, value, key) {
-	    if (_.has(result, key)) result[key]++; else result[key] = 1;
-	  });
-
-	  // Safely create a real, live array from anything iterable.
-	  _.toArray = function(obj) {
-	    if (!obj) return [];
-	    if (_.isArray(obj)) return slice.call(obj);
-	    if (isArrayLike(obj)) return _.map(obj, _.identity);
-	    return _.values(obj);
-	  };
-
-	  // Return the number of elements in an object.
-	  _.size = function(obj) {
-	    if (obj == null) return 0;
-	    return isArrayLike(obj) ? obj.length : _.keys(obj).length;
-	  };
-
-	  // Split a collection into two arrays: one whose elements all satisfy the given
-	  // predicate, and one whose elements all do not satisfy the predicate.
-	  _.partition = function(obj, predicate, context) {
-	    predicate = cb(predicate, context);
-	    var pass = [], fail = [];
-	    _.each(obj, function(value, key, obj) {
-	      (predicate(value, key, obj) ? pass : fail).push(value);
-	    });
-	    return [pass, fail];
-	  };
-
-	  // Array Functions
-	  // ---------------
-
-	  // Get the first element of an array. Passing **n** will return the first N
-	  // values in the array. Aliased as `head` and `take`. The **guard** check
-	  // allows it to work with `_.map`.
-	  _.first = _.head = _.take = function(array, n, guard) {
-	    if (array == null) return void 0;
-	    if (n == null || guard) return array[0];
-	    return _.initial(array, array.length - n);
-	  };
-
-	  // Returns everything but the last entry of the array. Especially useful on
-	  // the arguments object. Passing **n** will return all the values in
-	  // the array, excluding the last N.
-	  _.initial = function(array, n, guard) {
-	    return slice.call(array, 0, Math.max(0, array.length - (n == null || guard ? 1 : n)));
-	  };
-
-	  // Get the last element of an array. Passing **n** will return the last N
-	  // values in the array.
-	  _.last = function(array, n, guard) {
-	    if (array == null) return void 0;
-	    if (n == null || guard) return array[array.length - 1];
-	    return _.rest(array, Math.max(0, array.length - n));
-	  };
-
-	  // Returns everything but the first entry of the array. Aliased as `tail` and `drop`.
-	  // Especially useful on the arguments object. Passing an **n** will return
-	  // the rest N values in the array.
-	  _.rest = _.tail = _.drop = function(array, n, guard) {
-	    return slice.call(array, n == null || guard ? 1 : n);
-	  };
-
-	  // Trim out all falsy values from an array.
-	  _.compact = function(array) {
-	    return _.filter(array, _.identity);
-	  };
-
-	  // Internal implementation of a recursive `flatten` function.
-	  var flatten = function(input, shallow, strict, startIndex) {
-	    var output = [], idx = 0;
-	    for (var i = startIndex || 0, length = getLength(input); i < length; i++) {
-	      var value = input[i];
-	      if (isArrayLike(value) && (_.isArray(value) || _.isArguments(value))) {
-	        //flatten current level of array or arguments object
-	        if (!shallow) value = flatten(value, shallow, strict);
-	        var j = 0, len = value.length;
-	        output.length += len;
-	        while (j < len) {
-	          output[idx++] = value[j++];
-	        }
-	      } else if (!strict) {
-	        output[idx++] = value;
-	      }
-	    }
-	    return output;
-	  };
-
-	  // Flatten out an array, either recursively (by default), or just one level.
-	  _.flatten = function(array, shallow) {
-	    return flatten(array, shallow, false);
-	  };
-
-	  // Return a version of the array that does not contain the specified value(s).
-	  _.without = function(array) {
-	    return _.difference(array, slice.call(arguments, 1));
-	  };
-
-	  // Produce a duplicate-free version of the array. If the array has already
-	  // been sorted, you have the option of using a faster algorithm.
-	  // Aliased as `unique`.
-	  _.uniq = _.unique = function(array, isSorted, iteratee, context) {
-	    if (!_.isBoolean(isSorted)) {
-	      context = iteratee;
-	      iteratee = isSorted;
-	      isSorted = false;
-	    }
-	    if (iteratee != null) iteratee = cb(iteratee, context);
-	    var result = [];
-	    var seen = [];
-	    for (var i = 0, length = getLength(array); i < length; i++) {
-	      var value = array[i],
-	          computed = iteratee ? iteratee(value, i, array) : value;
-	      if (isSorted) {
-	        if (!i || seen !== computed) result.push(value);
-	        seen = computed;
-	      } else if (iteratee) {
-	        if (!_.contains(seen, computed)) {
-	          seen.push(computed);
-	          result.push(value);
-	        }
-	      } else if (!_.contains(result, value)) {
-	        result.push(value);
-	      }
-	    }
-	    return result;
-	  };
-
-	  // Produce an array that contains the union: each distinct element from all of
-	  // the passed-in arrays.
-	  _.union = function() {
-	    return _.uniq(flatten(arguments, true, true));
-	  };
-
-	  // Produce an array that contains every item shared between all the
-	  // passed-in arrays.
-	  _.intersection = function(array) {
-	    var result = [];
-	    var argsLength = arguments.length;
-	    for (var i = 0, length = getLength(array); i < length; i++) {
-	      var item = array[i];
-	      if (_.contains(result, item)) continue;
-	      for (var j = 1; j < argsLength; j++) {
-	        if (!_.contains(arguments[j], item)) break;
-	      }
-	      if (j === argsLength) result.push(item);
-	    }
-	    return result;
-	  };
-
-	  // Take the difference between one array and a number of other arrays.
-	  // Only the elements present in just the first array will remain.
-	  _.difference = function(array) {
-	    var rest = flatten(arguments, true, true, 1);
-	    return _.filter(array, function(value){
-	      return !_.contains(rest, value);
-	    });
-	  };
-
-	  // Zip together multiple lists into a single array -- elements that share
-	  // an index go together.
-	  _.zip = function() {
-	    return _.unzip(arguments);
-	  };
-
-	  // Complement of _.zip. Unzip accepts an array of arrays and groups
-	  // each array's elements on shared indices
-	  _.unzip = function(array) {
-	    var length = array && _.max(array, getLength).length || 0;
-	    var result = Array(length);
-
-	    for (var index = 0; index < length; index++) {
-	      result[index] = _.pluck(array, index);
-	    }
-	    return result;
-	  };
-
-	  // Converts lists into objects. Pass either a single array of `[key, value]`
-	  // pairs, or two parallel arrays of the same length -- one of keys, and one of
-	  // the corresponding values.
-	  _.object = function(list, values) {
-	    var result = {};
-	    for (var i = 0, length = getLength(list); i < length; i++) {
-	      if (values) {
-	        result[list[i]] = values[i];
-	      } else {
-	        result[list[i][0]] = list[i][1];
-	      }
-	    }
-	    return result;
-	  };
-
-	  // Generator function to create the findIndex and findLastIndex functions
-	  function createPredicateIndexFinder(dir) {
-	    return function(array, predicate, context) {
-	      predicate = cb(predicate, context);
-	      var length = getLength(array);
-	      var index = dir > 0 ? 0 : length - 1;
-	      for (; index >= 0 && index < length; index += dir) {
-	        if (predicate(array[index], index, array)) return index;
-	      }
-	      return -1;
-	    };
-	  }
-
-	  // Returns the first index on an array-like that passes a predicate test
-	  _.findIndex = createPredicateIndexFinder(1);
-	  _.findLastIndex = createPredicateIndexFinder(-1);
-
-	  // Use a comparator function to figure out the smallest index at which
-	  // an object should be inserted so as to maintain order. Uses binary search.
-	  _.sortedIndex = function(array, obj, iteratee, context) {
-	    iteratee = cb(iteratee, context, 1);
-	    var value = iteratee(obj);
-	    var low = 0, high = getLength(array);
-	    while (low < high) {
-	      var mid = Math.floor((low + high) / 2);
-	      if (iteratee(array[mid]) < value) low = mid + 1; else high = mid;
-	    }
-	    return low;
-	  };
-
-	  // Generator function to create the indexOf and lastIndexOf functions
-	  function createIndexFinder(dir, predicateFind, sortedIndex) {
-	    return function(array, item, idx) {
-	      var i = 0, length = getLength(array);
-	      if (typeof idx == 'number') {
-	        if (dir > 0) {
-	            i = idx >= 0 ? idx : Math.max(idx + length, i);
-	        } else {
-	            length = idx >= 0 ? Math.min(idx + 1, length) : idx + length + 1;
-	        }
-	      } else if (sortedIndex && idx && length) {
-	        idx = sortedIndex(array, item);
-	        return array[idx] === item ? idx : -1;
-	      }
-	      if (item !== item) {
-	        idx = predicateFind(slice.call(array, i, length), _.isNaN);
-	        return idx >= 0 ? idx + i : -1;
-	      }
-	      for (idx = dir > 0 ? i : length - 1; idx >= 0 && idx < length; idx += dir) {
-	        if (array[idx] === item) return idx;
-	      }
-	      return -1;
-	    };
-	  }
-
-	  // Return the position of the first occurrence of an item in an array,
-	  // or -1 if the item is not included in the array.
-	  // If the array is large and already in sort order, pass `true`
-	  // for **isSorted** to use binary search.
-	  _.indexOf = createIndexFinder(1, _.findIndex, _.sortedIndex);
-	  _.lastIndexOf = createIndexFinder(-1, _.findLastIndex);
-
-	  // Generate an integer Array containing an arithmetic progression. A port of
-	  // the native Python `range()` function. See
-	  // [the Python documentation](http://docs.python.org/library/functions.html#range).
-	  _.range = function(start, stop, step) {
-	    if (stop == null) {
-	      stop = start || 0;
-	      start = 0;
-	    }
-	    step = step || 1;
-
-	    var length = Math.max(Math.ceil((stop - start) / step), 0);
-	    var range = Array(length);
-
-	    for (var idx = 0; idx < length; idx++, start += step) {
-	      range[idx] = start;
-	    }
-
-	    return range;
-	  };
-
-	  // Function (ahem) Functions
-	  // ------------------
-
-	  // Determines whether to execute a function as a constructor
-	  // or a normal function with the provided arguments
-	  var executeBound = function(sourceFunc, boundFunc, context, callingContext, args) {
-	    if (!(callingContext instanceof boundFunc)) return sourceFunc.apply(context, args);
-	    var self = baseCreate(sourceFunc.prototype);
-	    var result = sourceFunc.apply(self, args);
-	    if (_.isObject(result)) return result;
-	    return self;
-	  };
-
-	  // Create a function bound to a given object (assigning `this`, and arguments,
-	  // optionally). Delegates to **ECMAScript 5**'s native `Function.bind` if
-	  // available.
-	  _.bind = function(func, context) {
-	    if (nativeBind && func.bind === nativeBind) return nativeBind.apply(func, slice.call(arguments, 1));
-	    if (!_.isFunction(func)) throw new TypeError('Bind must be called on a function');
-	    var args = slice.call(arguments, 2);
-	    var bound = function() {
-	      return executeBound(func, bound, context, this, args.concat(slice.call(arguments)));
-	    };
-	    return bound;
-	  };
-
-	  // Partially apply a function by creating a version that has had some of its
-	  // arguments pre-filled, without changing its dynamic `this` context. _ acts
-	  // as a placeholder, allowing any combination of arguments to be pre-filled.
-	  _.partial = function(func) {
-	    var boundArgs = slice.call(arguments, 1);
-	    var bound = function() {
-	      var position = 0, length = boundArgs.length;
-	      var args = Array(length);
-	      for (var i = 0; i < length; i++) {
-	        args[i] = boundArgs[i] === _ ? arguments[position++] : boundArgs[i];
-	      }
-	      while (position < arguments.length) args.push(arguments[position++]);
-	      return executeBound(func, bound, this, this, args);
-	    };
-	    return bound;
-	  };
-
-	  // Bind a number of an object's methods to that object. Remaining arguments
-	  // are the method names to be bound. Useful for ensuring that all callbacks
-	  // defined on an object belong to it.
-	  _.bindAll = function(obj) {
-	    var i, length = arguments.length, key;
-	    if (length <= 1) throw new Error('bindAll must be passed function names');
-	    for (i = 1; i < length; i++) {
-	      key = arguments[i];
-	      obj[key] = _.bind(obj[key], obj);
-	    }
-	    return obj;
-	  };
-
-	  // Memoize an expensive function by storing its results.
-	  _.memoize = function(func, hasher) {
-	    var memoize = function(key) {
-	      var cache = memoize.cache;
-	      var address = '' + (hasher ? hasher.apply(this, arguments) : key);
-	      if (!_.has(cache, address)) cache[address] = func.apply(this, arguments);
-	      return cache[address];
-	    };
-	    memoize.cache = {};
-	    return memoize;
-	  };
-
-	  // Delays a function for the given number of milliseconds, and then calls
-	  // it with the arguments supplied.
-	  _.delay = function(func, wait) {
-	    var args = slice.call(arguments, 2);
-	    return setTimeout(function(){
-	      return func.apply(null, args);
-	    }, wait);
-	  };
-
-	  // Defers a function, scheduling it to run after the current call stack has
-	  // cleared.
-	  _.defer = _.partial(_.delay, _, 1);
-
-	  // Returns a function, that, when invoked, will only be triggered at most once
-	  // during a given window of time. Normally, the throttled function will run
-	  // as much as it can, without ever going more than once per `wait` duration;
-	  // but if you'd like to disable the execution on the leading edge, pass
-	  // `{leading: false}`. To disable execution on the trailing edge, ditto.
-	  _.throttle = function(func, wait, options) {
-	    var context, args, result;
-	    var timeout = null;
-	    var previous = 0;
-	    if (!options) options = {};
-	    var later = function() {
-	      previous = options.leading === false ? 0 : _.now();
-	      timeout = null;
-	      result = func.apply(context, args);
-	      if (!timeout) context = args = null;
-	    };
-	    return function() {
-	      var now = _.now();
-	      if (!previous && options.leading === false) previous = now;
-	      var remaining = wait - (now - previous);
-	      context = this;
-	      args = arguments;
-	      if (remaining <= 0 || remaining > wait) {
-	        if (timeout) {
-	          clearTimeout(timeout);
-	          timeout = null;
-	        }
-	        previous = now;
-	        result = func.apply(context, args);
-	        if (!timeout) context = args = null;
-	      } else if (!timeout && options.trailing !== false) {
-	        timeout = setTimeout(later, remaining);
-	      }
-	      return result;
-	    };
-	  };
-
-	  // Returns a function, that, as long as it continues to be invoked, will not
-	  // be triggered. The function will be called after it stops being called for
-	  // N milliseconds. If `immediate` is passed, trigger the function on the
-	  // leading edge, instead of the trailing.
-	  _.debounce = function(func, wait, immediate) {
-	    var timeout, args, context, timestamp, result;
-
-	    var later = function() {
-	      var last = _.now() - timestamp;
-
-	      if (last < wait && last >= 0) {
-	        timeout = setTimeout(later, wait - last);
-	      } else {
-	        timeout = null;
-	        if (!immediate) {
-	          result = func.apply(context, args);
-	          if (!timeout) context = args = null;
-	        }
-	      }
-	    };
-
-	    return function() {
-	      context = this;
-	      args = arguments;
-	      timestamp = _.now();
-	      var callNow = immediate && !timeout;
-	      if (!timeout) timeout = setTimeout(later, wait);
-	      if (callNow) {
-	        result = func.apply(context, args);
-	        context = args = null;
-	      }
-
-	      return result;
-	    };
-	  };
-
-	  // Returns the first function passed as an argument to the second,
-	  // allowing you to adjust arguments, run code before and after, and
-	  // conditionally execute the original function.
-	  _.wrap = function(func, wrapper) {
-	    return _.partial(wrapper, func);
-	  };
-
-	  // Returns a negated version of the passed-in predicate.
-	  _.negate = function(predicate) {
-	    return function() {
-	      return !predicate.apply(this, arguments);
-	    };
-	  };
-
-	  // Returns a function that is the composition of a list of functions, each
-	  // consuming the return value of the function that follows.
-	  _.compose = function() {
-	    var args = arguments;
-	    var start = args.length - 1;
-	    return function() {
-	      var i = start;
-	      var result = args[start].apply(this, arguments);
-	      while (i--) result = args[i].call(this, result);
-	      return result;
-	    };
-	  };
-
-	  // Returns a function that will only be executed on and after the Nth call.
-	  _.after = function(times, func) {
-	    return function() {
-	      if (--times < 1) {
-	        return func.apply(this, arguments);
-	      }
-	    };
-	  };
-
-	  // Returns a function that will only be executed up to (but not including) the Nth call.
-	  _.before = function(times, func) {
-	    var memo;
-	    return function() {
-	      if (--times > 0) {
-	        memo = func.apply(this, arguments);
-	      }
-	      if (times <= 1) func = null;
-	      return memo;
-	    };
-	  };
-
-	  // Returns a function that will be executed at most one time, no matter how
-	  // often you call it. Useful for lazy initialization.
-	  _.once = _.partial(_.before, 2);
-
-	  // Object Functions
-	  // ----------------
-
-	  // Keys in IE < 9 that won't be iterated by `for key in ...` and thus missed.
-	  var hasEnumBug = !{toString: null}.propertyIsEnumerable('toString');
-	  var nonEnumerableProps = ['valueOf', 'isPrototypeOf', 'toString',
-	                      'propertyIsEnumerable', 'hasOwnProperty', 'toLocaleString'];
-
-	  function collectNonEnumProps(obj, keys) {
-	    var nonEnumIdx = nonEnumerableProps.length;
-	    var constructor = obj.constructor;
-	    var proto = (_.isFunction(constructor) && constructor.prototype) || ObjProto;
-
-	    // Constructor is a special case.
-	    var prop = 'constructor';
-	    if (_.has(obj, prop) && !_.contains(keys, prop)) keys.push(prop);
-
-	    while (nonEnumIdx--) {
-	      prop = nonEnumerableProps[nonEnumIdx];
-	      if (prop in obj && obj[prop] !== proto[prop] && !_.contains(keys, prop)) {
-	        keys.push(prop);
-	      }
-	    }
-	  }
-
-	  // Retrieve the names of an object's own properties.
-	  // Delegates to **ECMAScript 5**'s native `Object.keys`
-	  _.keys = function(obj) {
-	    if (!_.isObject(obj)) return [];
-	    if (nativeKeys) return nativeKeys(obj);
-	    var keys = [];
-	    for (var key in obj) if (_.has(obj, key)) keys.push(key);
-	    // Ahem, IE < 9.
-	    if (hasEnumBug) collectNonEnumProps(obj, keys);
-	    return keys;
-	  };
-
-	  // Retrieve all the property names of an object.
-	  _.allKeys = function(obj) {
-	    if (!_.isObject(obj)) return [];
-	    var keys = [];
-	    for (var key in obj) keys.push(key);
-	    // Ahem, IE < 9.
-	    if (hasEnumBug) collectNonEnumProps(obj, keys);
-	    return keys;
-	  };
-
-	  // Retrieve the values of an object's properties.
-	  _.values = function(obj) {
-	    var keys = _.keys(obj);
-	    var length = keys.length;
-	    var values = Array(length);
-	    for (var i = 0; i < length; i++) {
-	      values[i] = obj[keys[i]];
-	    }
-	    return values;
-	  };
-
-	  // Returns the results of applying the iteratee to each element of the object
-	  // In contrast to _.map it returns an object
-	  _.mapObject = function(obj, iteratee, context) {
-	    iteratee = cb(iteratee, context);
-	    var keys =  _.keys(obj),
-	          length = keys.length,
-	          results = {},
-	          currentKey;
-	      for (var index = 0; index < length; index++) {
-	        currentKey = keys[index];
-	        results[currentKey] = iteratee(obj[currentKey], currentKey, obj);
-	      }
-	      return results;
-	  };
-
-	  // Convert an object into a list of `[key, value]` pairs.
-	  _.pairs = function(obj) {
-	    var keys = _.keys(obj);
-	    var length = keys.length;
-	    var pairs = Array(length);
-	    for (var i = 0; i < length; i++) {
-	      pairs[i] = [keys[i], obj[keys[i]]];
-	    }
-	    return pairs;
-	  };
-
-	  // Invert the keys and values of an object. The values must be serializable.
-	  _.invert = function(obj) {
-	    var result = {};
-	    var keys = _.keys(obj);
-	    for (var i = 0, length = keys.length; i < length; i++) {
-	      result[obj[keys[i]]] = keys[i];
-	    }
-	    return result;
-	  };
-
-	  // Return a sorted list of the function names available on the object.
-	  // Aliased as `methods`
-	  _.functions = _.methods = function(obj) {
-	    var names = [];
-	    for (var key in obj) {
-	      if (_.isFunction(obj[key])) names.push(key);
-	    }
-	    return names.sort();
-	  };
-
-	  // Extend a given object with all the properties in passed-in object(s).
-	  _.extend = createAssigner(_.allKeys);
-
-	  // Assigns a given object with all the own properties in the passed-in object(s)
-	  // (https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/assign)
-	  _.extendOwn = _.assign = createAssigner(_.keys);
-
-	  // Returns the first key on an object that passes a predicate test
-	  _.findKey = function(obj, predicate, context) {
-	    predicate = cb(predicate, context);
-	    var keys = _.keys(obj), key;
-	    for (var i = 0, length = keys.length; i < length; i++) {
-	      key = keys[i];
-	      if (predicate(obj[key], key, obj)) return key;
-	    }
-	  };
-
-	  // Return a copy of the object only containing the whitelisted properties.
-	  _.pick = function(object, oiteratee, context) {
-	    var result = {}, obj = object, iteratee, keys;
-	    if (obj == null) return result;
-	    if (_.isFunction(oiteratee)) {
-	      keys = _.allKeys(obj);
-	      iteratee = optimizeCb(oiteratee, context);
-	    } else {
-	      keys = flatten(arguments, false, false, 1);
-	      iteratee = function(value, key, obj) { return key in obj; };
-	      obj = Object(obj);
-	    }
-	    for (var i = 0, length = keys.length; i < length; i++) {
-	      var key = keys[i];
-	      var value = obj[key];
-	      if (iteratee(value, key, obj)) result[key] = value;
-	    }
-	    return result;
-	  };
-
-	   // Return a copy of the object without the blacklisted properties.
-	  _.omit = function(obj, iteratee, context) {
-	    if (_.isFunction(iteratee)) {
-	      iteratee = _.negate(iteratee);
-	    } else {
-	      var keys = _.map(flatten(arguments, false, false, 1), String);
-	      iteratee = function(value, key) {
-	        return !_.contains(keys, key);
-	      };
-	    }
-	    return _.pick(obj, iteratee, context);
-	  };
-
-	  // Fill in a given object with default properties.
-	  _.defaults = createAssigner(_.allKeys, true);
-
-	  // Creates an object that inherits from the given prototype object.
-	  // If additional properties are provided then they will be added to the
-	  // created object.
-	  _.create = function(prototype, props) {
-	    var result = baseCreate(prototype);
-	    if (props) _.extendOwn(result, props);
-	    return result;
-	  };
-
-	  // Create a (shallow-cloned) duplicate of an object.
-	  _.clone = function(obj) {
-	    if (!_.isObject(obj)) return obj;
-	    return _.isArray(obj) ? obj.slice() : _.extend({}, obj);
-	  };
-
-	  // Invokes interceptor with the obj, and then returns obj.
-	  // The primary purpose of this method is to "tap into" a method chain, in
-	  // order to perform operations on intermediate results within the chain.
-	  _.tap = function(obj, interceptor) {
-	    interceptor(obj);
-	    return obj;
-	  };
-
-	  // Returns whether an object has a given set of `key:value` pairs.
-	  _.isMatch = function(object, attrs) {
-	    var keys = _.keys(attrs), length = keys.length;
-	    if (object == null) return !length;
-	    var obj = Object(object);
-	    for (var i = 0; i < length; i++) {
-	      var key = keys[i];
-	      if (attrs[key] !== obj[key] || !(key in obj)) return false;
-	    }
-	    return true;
-	  };
-
-
-	  // Internal recursive comparison function for `isEqual`.
-	  var eq = function(a, b, aStack, bStack) {
-	    // Identical objects are equal. `0 === -0`, but they aren't identical.
-	    // See the [Harmony `egal` proposal](http://wiki.ecmascript.org/doku.php?id=harmony:egal).
-	    if (a === b) return a !== 0 || 1 / a === 1 / b;
-	    // A strict comparison is necessary because `null == undefined`.
-	    if (a == null || b == null) return a === b;
-	    // Unwrap any wrapped objects.
-	    if (a instanceof _) a = a._wrapped;
-	    if (b instanceof _) b = b._wrapped;
-	    // Compare `[[Class]]` names.
-	    var className = toString.call(a);
-	    if (className !== toString.call(b)) return false;
-	    switch (className) {
-	      // Strings, numbers, regular expressions, dates, and booleans are compared by value.
-	      case '[object RegExp]':
-	      // RegExps are coerced to strings for comparison (Note: '' + /a/i === '/a/i')
-	      case '[object String]':
-	        // Primitives and their corresponding object wrappers are equivalent; thus, `"5"` is
-	        // equivalent to `new String("5")`.
-	        return '' + a === '' + b;
-	      case '[object Number]':
-	        // `NaN`s are equivalent, but non-reflexive.
-	        // Object(NaN) is equivalent to NaN
-	        if (+a !== +a) return +b !== +b;
-	        // An `egal` comparison is performed for other numeric values.
-	        return +a === 0 ? 1 / +a === 1 / b : +a === +b;
-	      case '[object Date]':
-	      case '[object Boolean]':
-	        // Coerce dates and booleans to numeric primitive values. Dates are compared by their
-	        // millisecond representations. Note that invalid dates with millisecond representations
-	        // of `NaN` are not equivalent.
-	        return +a === +b;
-	    }
-
-	    var areArrays = className === '[object Array]';
-	    if (!areArrays) {
-	      if (typeof a != 'object' || typeof b != 'object') return false;
-
-	      // Objects with different constructors are not equivalent, but `Object`s or `Array`s
-	      // from different frames are.
-	      var aCtor = a.constructor, bCtor = b.constructor;
-	      if (aCtor !== bCtor && !(_.isFunction(aCtor) && aCtor instanceof aCtor &&
-	                               _.isFunction(bCtor) && bCtor instanceof bCtor)
-	                          && ('constructor' in a && 'constructor' in b)) {
-	        return false;
-	      }
-	    }
-	    // Assume equality for cyclic structures. The algorithm for detecting cyclic
-	    // structures is adapted from ES 5.1 section 15.12.3, abstract operation `JO`.
-
-	    // Initializing stack of traversed objects.
-	    // It's done here since we only need them for objects and arrays comparison.
-	    aStack = aStack || [];
-	    bStack = bStack || [];
-	    var length = aStack.length;
-	    while (length--) {
-	      // Linear search. Performance is inversely proportional to the number of
-	      // unique nested structures.
-	      if (aStack[length] === a) return bStack[length] === b;
-	    }
-
-	    // Add the first object to the stack of traversed objects.
-	    aStack.push(a);
-	    bStack.push(b);
-
-	    // Recursively compare objects and arrays.
-	    if (areArrays) {
-	      // Compare array lengths to determine if a deep comparison is necessary.
-	      length = a.length;
-	      if (length !== b.length) return false;
-	      // Deep compare the contents, ignoring non-numeric properties.
-	      while (length--) {
-	        if (!eq(a[length], b[length], aStack, bStack)) return false;
-	      }
-	    } else {
-	      // Deep compare objects.
-	      var keys = _.keys(a), key;
-	      length = keys.length;
-	      // Ensure that both objects contain the same number of properties before comparing deep equality.
-	      if (_.keys(b).length !== length) return false;
-	      while (length--) {
-	        // Deep compare each member
-	        key = keys[length];
-	        if (!(_.has(b, key) && eq(a[key], b[key], aStack, bStack))) return false;
-	      }
-	    }
-	    // Remove the first object from the stack of traversed objects.
-	    aStack.pop();
-	    bStack.pop();
-	    return true;
-	  };
-
-	  // Perform a deep comparison to check if two objects are equal.
-	  _.isEqual = function(a, b) {
-	    return eq(a, b);
-	  };
-
-	  // Is a given array, string, or object empty?
-	  // An "empty" object has no enumerable own-properties.
-	  _.isEmpty = function(obj) {
-	    if (obj == null) return true;
-	    if (isArrayLike(obj) && (_.isArray(obj) || _.isString(obj) || _.isArguments(obj))) return obj.length === 0;
-	    return _.keys(obj).length === 0;
-	  };
-
-	  // Is a given value a DOM element?
-	  _.isElement = function(obj) {
-	    return !!(obj && obj.nodeType === 1);
-	  };
-
-	  // Is a given value an array?
-	  // Delegates to ECMA5's native Array.isArray
-	  _.isArray = nativeIsArray || function(obj) {
-	    return toString.call(obj) === '[object Array]';
-	  };
-
-	  // Is a given variable an object?
-	  _.isObject = function(obj) {
-	    var type = typeof obj;
-	    return type === 'function' || type === 'object' && !!obj;
-	  };
-
-	  // Add some isType methods: isArguments, isFunction, isString, isNumber, isDate, isRegExp, isError.
-	  _.each(['Arguments', 'Function', 'String', 'Number', 'Date', 'RegExp', 'Error'], function(name) {
-	    _['is' + name] = function(obj) {
-	      return toString.call(obj) === '[object ' + name + ']';
-	    };
-	  });
-
-	  // Define a fallback version of the method in browsers (ahem, IE < 9), where
-	  // there isn't any inspectable "Arguments" type.
-	  if (!_.isArguments(arguments)) {
-	    _.isArguments = function(obj) {
-	      return _.has(obj, 'callee');
-	    };
-	  }
-
-	  // Optimize `isFunction` if appropriate. Work around some typeof bugs in old v8,
-	  // IE 11 (#1621), and in Safari 8 (#1929).
-	  if (typeof /./ != 'function' && typeof Int8Array != 'object') {
-	    _.isFunction = function(obj) {
-	      return typeof obj == 'function' || false;
-	    };
-	  }
-
-	  // Is a given object a finite number?
-	  _.isFinite = function(obj) {
-	    return isFinite(obj) && !isNaN(parseFloat(obj));
-	  };
-
-	  // Is the given value `NaN`? (NaN is the only number which does not equal itself).
-	  _.isNaN = function(obj) {
-	    return _.isNumber(obj) && obj !== +obj;
-	  };
-
-	  // Is a given value a boolean?
-	  _.isBoolean = function(obj) {
-	    return obj === true || obj === false || toString.call(obj) === '[object Boolean]';
-	  };
-
-	  // Is a given value equal to null?
-	  _.isNull = function(obj) {
-	    return obj === null;
-	  };
-
-	  // Is a given variable undefined?
-	  _.isUndefined = function(obj) {
-	    return obj === void 0;
-	  };
-
-	  // Shortcut function for checking if an object has a given property directly
-	  // on itself (in other words, not on a prototype).
-	  _.has = function(obj, key) {
-	    return obj != null && hasOwnProperty.call(obj, key);
-	  };
-
-	  // Utility Functions
-	  // -----------------
-
-	  // Run Underscore.js in *noConflict* mode, returning the `_` variable to its
-	  // previous owner. Returns a reference to the Underscore object.
-	  _.noConflict = function() {
-	    root._ = previousUnderscore;
-	    return this;
-	  };
-
-	  // Keep the identity function around for default iteratees.
-	  _.identity = function(value) {
-	    return value;
-	  };
-
-	  // Predicate-generating functions. Often useful outside of Underscore.
-	  _.constant = function(value) {
-	    return function() {
-	      return value;
-	    };
-	  };
-
-	  _.noop = function(){};
-
-	  _.property = property;
-
-	  // Generates a function for a given object that returns a given property.
-	  _.propertyOf = function(obj) {
-	    return obj == null ? function(){} : function(key) {
-	      return obj[key];
-	    };
-	  };
-
-	  // Returns a predicate for checking whether an object has a given set of
-	  // `key:value` pairs.
-	  _.matcher = _.matches = function(attrs) {
-	    attrs = _.extendOwn({}, attrs);
-	    return function(obj) {
-	      return _.isMatch(obj, attrs);
-	    };
-	  };
-
-	  // Run a function **n** times.
-	  _.times = function(n, iteratee, context) {
-	    var accum = Array(Math.max(0, n));
-	    iteratee = optimizeCb(iteratee, context, 1);
-	    for (var i = 0; i < n; i++) accum[i] = iteratee(i);
-	    return accum;
-	  };
-
-	  // Return a random integer between min and max (inclusive).
-	  _.random = function(min, max) {
-	    if (max == null) {
-	      max = min;
-	      min = 0;
-	    }
-	    return min + Math.floor(Math.random() * (max - min + 1));
-	  };
-
-	  // A (possibly faster) way to get the current timestamp as an integer.
-	  _.now = Date.now || function() {
-	    return new Date().getTime();
-	  };
-
-	   // List of HTML entities for escaping.
-	  var escapeMap = {
-	    '&': '&amp;',
-	    '<': '&lt;',
-	    '>': '&gt;',
-	    '"': '&quot;',
-	    "'": '&#x27;',
-	    '`': '&#x60;'
-	  };
-	  var unescapeMap = _.invert(escapeMap);
-
-	  // Functions for escaping and unescaping strings to/from HTML interpolation.
-	  var createEscaper = function(map) {
-	    var escaper = function(match) {
-	      return map[match];
-	    };
-	    // Regexes for identifying a key that needs to be escaped
-	    var source = '(?:' + _.keys(map).join('|') + ')';
-	    var testRegexp = RegExp(source);
-	    var replaceRegexp = RegExp(source, 'g');
-	    return function(string) {
-	      string = string == null ? '' : '' + string;
-	      return testRegexp.test(string) ? string.replace(replaceRegexp, escaper) : string;
-	    };
-	  };
-	  _.escape = createEscaper(escapeMap);
-	  _.unescape = createEscaper(unescapeMap);
-
-	  // If the value of the named `property` is a function then invoke it with the
-	  // `object` as context; otherwise, return it.
-	  _.result = function(object, property, fallback) {
-	    var value = object == null ? void 0 : object[property];
-	    if (value === void 0) {
-	      value = fallback;
-	    }
-	    return _.isFunction(value) ? value.call(object) : value;
-	  };
-
-	  // Generate a unique integer id (unique within the entire client session).
-	  // Useful for temporary DOM ids.
-	  var idCounter = 0;
-	  _.uniqueId = function(prefix) {
-	    var id = ++idCounter + '';
-	    return prefix ? prefix + id : id;
-	  };
-
-	  // By default, Underscore uses ERB-style template delimiters, change the
-	  // following template settings to use alternative delimiters.
-	  _.templateSettings = {
-	    evaluate    : /<%([\s\S]+?)%>/g,
-	    interpolate : /<%=([\s\S]+?)%>/g,
-	    escape      : /<%-([\s\S]+?)%>/g
-	  };
-
-	  // When customizing `templateSettings`, if you don't want to define an
-	  // interpolation, evaluation or escaping regex, we need one that is
-	  // guaranteed not to match.
-	  var noMatch = /(.)^/;
-
-	  // Certain characters need to be escaped so that they can be put into a
-	  // string literal.
-	  var escapes = {
-	    "'":      "'",
-	    '\\':     '\\',
-	    '\r':     'r',
-	    '\n':     'n',
-	    '\u2028': 'u2028',
-	    '\u2029': 'u2029'
-	  };
-
-	  var escaper = /\\|'|\r|\n|\u2028|\u2029/g;
-
-	  var escapeChar = function(match) {
-	    return '\\' + escapes[match];
-	  };
-
-	  // JavaScript micro-templating, similar to John Resig's implementation.
-	  // Underscore templating handles arbitrary delimiters, preserves whitespace,
-	  // and correctly escapes quotes within interpolated code.
-	  // NB: `oldSettings` only exists for backwards compatibility.
-	  _.template = function(text, settings, oldSettings) {
-	    if (!settings && oldSettings) settings = oldSettings;
-	    settings = _.defaults({}, settings, _.templateSettings);
-
-	    // Combine delimiters into one regular expression via alternation.
-	    var matcher = RegExp([
-	      (settings.escape || noMatch).source,
-	      (settings.interpolate || noMatch).source,
-	      (settings.evaluate || noMatch).source
-	    ].join('|') + '|$', 'g');
-
-	    // Compile the template source, escaping string literals appropriately.
-	    var index = 0;
-	    var source = "__p+='";
-	    text.replace(matcher, function(match, escape, interpolate, evaluate, offset) {
-	      source += text.slice(index, offset).replace(escaper, escapeChar);
-	      index = offset + match.length;
-
-	      if (escape) {
-	        source += "'+\n((__t=(" + escape + "))==null?'':_.escape(__t))+\n'";
-	      } else if (interpolate) {
-	        source += "'+\n((__t=(" + interpolate + "))==null?'':__t)+\n'";
-	      } else if (evaluate) {
-	        source += "';\n" + evaluate + "\n__p+='";
-	      }
-
-	      // Adobe VMs need the match returned to produce the correct offest.
-	      return match;
-	    });
-	    source += "';\n";
-
-	    // If a variable is not specified, place data values in local scope.
-	    if (!settings.variable) source = 'with(obj||{}){\n' + source + '}\n';
-
-	    source = "var __t,__p='',__j=Array.prototype.join," +
-	      "print=function(){__p+=__j.call(arguments,'');};\n" +
-	      source + 'return __p;\n';
-
+/* 11 */
+/***/ function(module, exports) {
+
+	// shim for using process in browser
+	var process = module.exports = {};
+
+	// cached from whatever global is present so that test runners that stub it
+	// don't break things.  But we need to wrap it in a try catch in case it is
+	// wrapped in strict mode code which doesn't define any globals.  It's inside a
+	// function because try/catches deoptimize in certain engines.
+
+	var cachedSetTimeout;
+	var cachedClearTimeout;
+
+	function defaultSetTimout() {
+	    throw new Error('setTimeout has not been defined');
+	}
+	function defaultClearTimeout () {
+	    throw new Error('clearTimeout has not been defined');
+	}
+	(function () {
 	    try {
-	      var render = new Function(settings.variable || 'obj', '_', source);
+	        if (typeof setTimeout === 'function') {
+	            cachedSetTimeout = setTimeout;
+	        } else {
+	            cachedSetTimeout = defaultSetTimout;
+	        }
 	    } catch (e) {
-	      e.source = source;
-	      throw e;
+	        cachedSetTimeout = defaultSetTimout;
+	    }
+	    try {
+	        if (typeof clearTimeout === 'function') {
+	            cachedClearTimeout = clearTimeout;
+	        } else {
+	            cachedClearTimeout = defaultClearTimeout;
+	        }
+	    } catch (e) {
+	        cachedClearTimeout = defaultClearTimeout;
+	    }
+	} ())
+	function runTimeout(fun) {
+	    if (cachedSetTimeout === setTimeout) {
+	        //normal enviroments in sane situations
+	        return setTimeout(fun, 0);
+	    }
+	    // if setTimeout wasn't available but was latter defined
+	    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
+	        cachedSetTimeout = setTimeout;
+	        return setTimeout(fun, 0);
+	    }
+	    try {
+	        // when when somebody has screwed with setTimeout but no I.E. maddness
+	        return cachedSetTimeout(fun, 0);
+	    } catch(e){
+	        try {
+	            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
+	            return cachedSetTimeout.call(null, fun, 0);
+	        } catch(e){
+	            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
+	            return cachedSetTimeout.call(this, fun, 0);
+	        }
 	    }
 
-	    var template = function(data) {
-	      return render.call(this, data, _);
-	    };
 
-	    // Provide the compiled source as a convenience for precompilation.
-	    var argument = settings.variable || 'obj';
-	    template.source = 'function(' + argument + '){\n' + source + '}';
+	}
+	function runClearTimeout(marker) {
+	    if (cachedClearTimeout === clearTimeout) {
+	        //normal enviroments in sane situations
+	        return clearTimeout(marker);
+	    }
+	    // if clearTimeout wasn't available but was latter defined
+	    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
+	        cachedClearTimeout = clearTimeout;
+	        return clearTimeout(marker);
+	    }
+	    try {
+	        // when when somebody has screwed with setTimeout but no I.E. maddness
+	        return cachedClearTimeout(marker);
+	    } catch (e){
+	        try {
+	            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
+	            return cachedClearTimeout.call(null, marker);
+	        } catch (e){
+	            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
+	            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
+	            return cachedClearTimeout.call(this, marker);
+	        }
+	    }
 
-	    return template;
-	  };
 
-	  // Add a "chain" function. Start chaining a wrapped Underscore object.
-	  _.chain = function(obj) {
-	    var instance = _(obj);
-	    instance._chain = true;
-	    return instance;
-	  };
 
-	  // OOP
-	  // ---------------
-	  // If Underscore is called as a function, it returns a wrapped object that
-	  // can be used OO-style. This wrapper holds altered versions of all the
-	  // underscore functions. Wrapped objects may be chained.
+	}
+	var queue = [];
+	var draining = false;
+	var currentQueue;
+	var queueIndex = -1;
 
-	  // Helper function to continue chaining intermediate results.
-	  var result = function(instance, obj) {
-	    return instance._chain ? _(obj).chain() : obj;
-	  };
+	function cleanUpNextTick() {
+	    if (!draining || !currentQueue) {
+	        return;
+	    }
+	    draining = false;
+	    if (currentQueue.length) {
+	        queue = currentQueue.concat(queue);
+	    } else {
+	        queueIndex = -1;
+	    }
+	    if (queue.length) {
+	        drainQueue();
+	    }
+	}
 
-	  // Add your own custom functions to the Underscore object.
-	  _.mixin = function(obj) {
-	    _.each(_.functions(obj), function(name) {
-	      var func = _[name] = obj[name];
-	      _.prototype[name] = function() {
-	        var args = [this._wrapped];
-	        push.apply(args, arguments);
-	        return result(this, func.apply(_, args));
-	      };
-	    });
-	  };
+	function drainQueue() {
+	    if (draining) {
+	        return;
+	    }
+	    var timeout = runTimeout(cleanUpNextTick);
+	    draining = true;
 
-	  // Add all of the Underscore functions to the wrapper object.
-	  _.mixin(_);
+	    var len = queue.length;
+	    while(len) {
+	        currentQueue = queue;
+	        queue = [];
+	        while (++queueIndex < len) {
+	            if (currentQueue) {
+	                currentQueue[queueIndex].run();
+	            }
+	        }
+	        queueIndex = -1;
+	        len = queue.length;
+	    }
+	    currentQueue = null;
+	    draining = false;
+	    runClearTimeout(timeout);
+	}
 
-	  // Add all mutator Array functions to the wrapper.
-	  _.each(['pop', 'push', 'reverse', 'shift', 'sort', 'splice', 'unshift'], function(name) {
-	    var method = ArrayProto[name];
-	    _.prototype[name] = function() {
-	      var obj = this._wrapped;
-	      method.apply(obj, arguments);
-	      if ((name === 'shift' || name === 'splice') && obj.length === 0) delete obj[0];
-	      return result(this, obj);
-	    };
-	  });
+	process.nextTick = function (fun) {
+	    var args = new Array(arguments.length - 1);
+	    if (arguments.length > 1) {
+	        for (var i = 1; i < arguments.length; i++) {
+	            args[i - 1] = arguments[i];
+	        }
+	    }
+	    queue.push(new Item(fun, args));
+	    if (queue.length === 1 && !draining) {
+	        runTimeout(drainQueue);
+	    }
+	};
 
-	  // Add all accessor Array functions to the wrapper.
-	  _.each(['concat', 'join', 'slice'], function(name) {
-	    var method = ArrayProto[name];
-	    _.prototype[name] = function() {
-	      return result(this, method.apply(this._wrapped, arguments));
-	    };
-	  });
+	// v8 likes predictible objects
+	function Item(fun, array) {
+	    this.fun = fun;
+	    this.array = array;
+	}
+	Item.prototype.run = function () {
+	    this.fun.apply(null, this.array);
+	};
+	process.title = 'browser';
+	process.browser = true;
+	process.env = {};
+	process.argv = [];
+	process.version = ''; // empty string to avoid regexp issues
+	process.versions = {};
 
-	  // Extracts the result from a wrapped and chained object.
-	  _.prototype.value = function() {
-	    return this._wrapped;
-	  };
+	function noop() {}
 
-	  // Provide unwrapping proxy for some methods used in engine operations
-	  // such as arithmetic and JSON stringification.
-	  _.prototype.valueOf = _.prototype.toJSON = _.prototype.value;
+	process.on = noop;
+	process.addListener = noop;
+	process.once = noop;
+	process.off = noop;
+	process.removeListener = noop;
+	process.removeAllListeners = noop;
+	process.emit = noop;
 
-	  _.prototype.toString = function() {
-	    return '' + this._wrapped;
-	  };
+	process.binding = function (name) {
+	    throw new Error('process.binding is not supported');
+	};
 
-	  // AMD registration happens at the end for compatibility with AMD loaders
-	  // that may not enforce next-turn semantics on modules. Even though general
-	  // practice for AMD registration is to be anonymous, underscore registers
-	  // as a named module because, like jQuery, it is a base library that is
-	  // popular enough to be bundled in a third party lib, but not be part of
-	  // an AMD load request. Those cases could generate an error when an
-	  // anonymous define() is called outside of a loader request.
-	  if (true) {
-	    !(__WEBPACK_AMD_DEFINE_ARRAY__ = [], __WEBPACK_AMD_DEFINE_RESULT__ = function() {
-	      return _;
-	    }.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	  }
-	}.call(this));
+	process.cwd = function () { return '/' };
+	process.chdir = function (dir) {
+	    throw new Error('process.chdir is not supported');
+	};
+	process.umask = function() { return 0; };
 
 
 /***/ },
-/* 9 */
+/* 12 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var core = __webpack_require__(10);
+	var core = __webpack_require__(13);
 
 	/**
 	 * math.js factory function. Creates a new instance of math.js
@@ -62223,7 +62565,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	  math.create = create;
 
 	  // import data types, functions, constants, expression parser, etc.
-	  math['import'](__webpack_require__(22));
+	  math['import'](__webpack_require__(25));
 
 	  return math;
 	}
@@ -62233,22 +62575,22 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 10 */
+/* 13 */
 /***/ function(module, exports, __webpack_require__) {
 
-	module.exports = __webpack_require__(11);
+	module.exports = __webpack_require__(14);
 
 /***/ },
-/* 11 */
+/* 14 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var isFactory = __webpack_require__(12).isFactory;
-	var deepExtend = __webpack_require__(12).deepExtend;
-	var typedFactory = __webpack_require__(13);
-	var emitter = __webpack_require__(17);
+	var isFactory = __webpack_require__(15).isFactory;
+	var deepExtend = __webpack_require__(15).deepExtend;
+	var typedFactory = __webpack_require__(16);
+	var emitter = __webpack_require__(20);
 
-	var importFactory = __webpack_require__(19);
-	var configFactory = __webpack_require__(21);
+	var importFactory = __webpack_require__(22);
+	var configFactory = __webpack_require__(24);
 
 	/**
 	 * Math.js core. Creates a new, empty math.js instance
@@ -62369,7 +62711,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 12 */
+/* 15 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -62616,11 +62958,11 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 13 */
+/* 16 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var typedFunction = __webpack_require__(14);
-	var digits = __webpack_require__(15).digits;
+	var typedFunction = __webpack_require__(17);
+	var digits = __webpack_require__(18).digits;
 
 	// returns a new instance of typed-function
 	var createTyped = function () {
@@ -62811,7 +63153,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 14 */
+/* 17 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_FACTORY__, __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;/**
@@ -64204,12 +64546,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 15 */
+/* 18 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var NumberFormatter = __webpack_require__(16);
+	var NumberFormatter = __webpack_require__(19);
 
 	/**
 	 * Test whether value is a number
@@ -64495,7 +64837,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 16 */
+/* 19 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -64749,10 +65091,10 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 17 */
+/* 20 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var Emitter = __webpack_require__(18);
+	var Emitter = __webpack_require__(21);
 
 	/**
 	 * Extend given object with emitter functions `on`, `off`, `once`, `emit`
@@ -64774,7 +65116,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 18 */
+/* 21 */
 /***/ function(module, exports) {
 
 	function E () {
@@ -64846,16 +65188,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 19 */
+/* 22 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var lazy = __webpack_require__(12).lazy;
-	var isFactory = __webpack_require__(12).isFactory;
-	var traverse = __webpack_require__(12).traverse;
-	var extend = __webpack_require__(12).extend;
-	var ArgumentsError = __webpack_require__(20);
+	var lazy = __webpack_require__(15).lazy;
+	var isFactory = __webpack_require__(15).isFactory;
+	var traverse = __webpack_require__(15).traverse;
+	var extend = __webpack_require__(15).extend;
+	var ArgumentsError = __webpack_require__(23);
 
 	function factory (type, config, load, typed, math) {
 	  /**
@@ -65114,7 +65456,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 20 */
+/* 23 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -65154,12 +65496,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 21 */
+/* 24 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var object = __webpack_require__(12);
+	var object = __webpack_require__(15);
 
 	function factory (type, config, load, typed, math) {
 	  var MATRIX = ['Matrix', 'Array'];                   // valid values for option matrix
@@ -65279,55 +65621,55 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 22 */
+/* 25 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(23),        // data types (Matrix, Complex, Unit, ...)
-	  __webpack_require__(108),   // constants
-	  __webpack_require__(110),  // expression parsing
-	  __webpack_require__(347),    // functions
-	  __webpack_require__(514),        // serialization utility (math.json.reviver)
-	  __webpack_require__(516)        // errors
+	  __webpack_require__(26),        // data types (Matrix, Complex, Unit, ...)
+	  __webpack_require__(111),   // constants
+	  __webpack_require__(113),  // expression parsing
+	  __webpack_require__(350),    // functions
+	  __webpack_require__(517),        // serialization utility (math.json.reviver)
+	  __webpack_require__(519)        // errors
 	];
 
 
 /***/ },
-/* 23 */
+/* 26 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(24),
-	  __webpack_require__(29),
-	  __webpack_require__(30),
-	  __webpack_require__(35),
-	  __webpack_require__(42),
-	  __webpack_require__(46),
-	  __webpack_require__(79),
-	  __webpack_require__(80),
+	  __webpack_require__(27),
+	  __webpack_require__(32),
+	  __webpack_require__(33),
+	  __webpack_require__(38),
+	  __webpack_require__(45),
+	  __webpack_require__(49),
 	  __webpack_require__(82),
-	  __webpack_require__(83)
+	  __webpack_require__(83),
+	  __webpack_require__(85),
+	  __webpack_require__(86)
 	];
 
 
 /***/ },
-/* 24 */
+/* 27 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
 	  // type
-	  __webpack_require__(25),
+	  __webpack_require__(28),
 
 	  // construction function
-	  __webpack_require__(27)
+	  __webpack_require__(30)
 	];
 
 
 /***/ },
-/* 25 */
+/* 28 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var Decimal = __webpack_require__(26);
+	var Decimal = __webpack_require__(29);
 
 	function factory (type, config, load, typed, math) {
 	  var BigNumber = Decimal.clone({precision: config.precision});
@@ -65377,7 +65719,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	exports.math = true; // request access to the math namespace
 
 /***/ },
-/* 26 */
+/* 29 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/*! decimal.js v5.0.8 https://github.com/MikeMcl/decimal.js/LICENCE */
@@ -70404,12 +70746,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 27 */
+/* 30 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -70478,7 +70820,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 28 */
+/* 31 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -70509,12 +70851,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 29 */
+/* 32 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -70593,26 +70935,26 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 30 */
+/* 33 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
 	  // type
-	  __webpack_require__(31),
+	  __webpack_require__(34),
 
 	  // construction function
-	  __webpack_require__(34)
+	  __webpack_require__(37)
 	];
 
 
 /***/ },
-/* 31 */
+/* 34 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var format = __webpack_require__(32).format;
-	var lazy = __webpack_require__(12).lazy;
+	var format = __webpack_require__(35).format;
+	var lazy = __webpack_require__(15).lazy;
 
 	function factory (type, config, load, typed, math) {
 	  /**
@@ -70777,13 +71119,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 32 */
+/* 35 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var formatNumber = __webpack_require__(15).format;
-	var formatBigNumber = __webpack_require__(33).format;
+	var formatNumber = __webpack_require__(18).format;
+	var formatBigNumber = __webpack_require__(36).format;
 
 	/**
 	 * Test whether value is a string
@@ -70926,7 +71268,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 33 */
+/* 36 */
 /***/ function(module, exports) {
 
 	/**
@@ -71115,7 +71457,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 34 */
+/* 37 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -71172,25 +71514,25 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 35 */
+/* 38 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
 	  // type
-	  __webpack_require__(36),
+	  __webpack_require__(39),
 
 	  // construction function
-	  __webpack_require__(40)
+	  __webpack_require__(43)
 	];
 
 
 /***/ },
-/* 36 */
+/* 39 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var Complex = __webpack_require__(37);
-	var format = __webpack_require__(15).format;
-	var isNumber = __webpack_require__(15).isNumber;
+	var Complex = __webpack_require__(40);
+	var format = __webpack_require__(18).format;
+	var isNumber = __webpack_require__(18).isNumber;
 
 	function factory (type, config, load, typed, math) {
 
@@ -71363,7 +71705,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 37 */
+/* 40 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;/* WEBPACK VAR INJECTION */(function(module) {/**
@@ -72538,7 +72880,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	  Complex["E"] = new Complex(Math.E, 0);
 	  Complex['EPSILON'] = 1e-16;
 
-	  if ("function" === "function" && __webpack_require__(39)["amd"]) {
+	  if ("function" === "function" && __webpack_require__(42)["amd"]) {
 	    !(__WEBPACK_AMD_DEFINE_ARRAY__ = [], __WEBPACK_AMD_DEFINE_RESULT__ = function() {
 	      return Complex;
 	    }.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
@@ -72550,10 +72892,10 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	  
 	})(this);
 
-	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(38)(module)))
+	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(41)(module)))
 
 /***/ },
-/* 38 */
+/* 41 */
 /***/ function(module, exports) {
 
 	module.exports = function(module) {
@@ -72569,22 +72911,22 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 39 */
+/* 42 */
 /***/ function(module, exports) {
 
 	module.exports = function() { throw new Error("define cannot be used indirect"); };
 
 
 /***/ },
-/* 40 */
+/* 43 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
 	  /**
 	   * Create a complex value or convert a value to a complex value.
@@ -72682,7 +73024,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 41 */
+/* 44 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -72792,23 +73134,23 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 42 */
+/* 45 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
 	  // type
-	  __webpack_require__(43),
+	  __webpack_require__(46),
 
 	  // construction function
-	  __webpack_require__(45)
+	  __webpack_require__(48)
 	];
 
 
 /***/ },
-/* 43 */
+/* 46 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var Fraction = __webpack_require__(44);
+	var Fraction = __webpack_require__(47);
 
 	/**
 	 * Attach type information
@@ -72850,7 +73192,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 44 */
+/* 47 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;/* WEBPACK VAR INJECTION */(function(module) {/**
@@ -73621,7 +73963,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	    }
 	  };
 
-	  if ("function" === "function" && __webpack_require__(39)["amd"]) {
+	  if ("function" === "function" && __webpack_require__(42)["amd"]) {
 	    !(__WEBPACK_AMD_DEFINE_ARRAY__ = [], __WEBPACK_AMD_DEFINE_RESULT__ = function() {
 	      return Fraction;
 	    }.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
@@ -73633,15 +73975,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 	})(this);
 
-	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(38)(module)))
+	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(41)(module)))
 
 /***/ },
-/* 45 */
+/* 48 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -73711,34 +74053,34 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 46 */
+/* 49 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
 	  // types
-	  __webpack_require__(47),
-	  __webpack_require__(55),
-	  __webpack_require__(56),
+	  __webpack_require__(50),
+	  __webpack_require__(58),
 	  __webpack_require__(59),
-	  __webpack_require__(68),
-	  __webpack_require__(74),
-	  __webpack_require__(75),
-	  __webpack_require__(76),
+	  __webpack_require__(62),
+	  __webpack_require__(71),
+	  __webpack_require__(77),
+	  __webpack_require__(78),
+	  __webpack_require__(79),
 
 	  // construction functions
-	  __webpack_require__(77),
-	  __webpack_require__(61),
-	  __webpack_require__(78)
+	  __webpack_require__(80),
+	  __webpack_require__(64),
+	  __webpack_require__(81)
 	];
 
 
 /***/ },
-/* 47 */
+/* 50 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var util = __webpack_require__(48);
+	var util = __webpack_require__(51);
 
 	var string = util.string;
 
@@ -73991,34 +74333,34 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 48 */
+/* 51 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	exports.array = __webpack_require__(49);
-	exports['boolean'] = __webpack_require__(53);
-	exports['function'] = __webpack_require__(54);
-	exports.number = __webpack_require__(15);
-	exports.object = __webpack_require__(12);
-	exports.string = __webpack_require__(32);
-	exports.types = __webpack_require__(50);
-	exports.emitter = __webpack_require__(17);
+	exports.array = __webpack_require__(52);
+	exports['boolean'] = __webpack_require__(56);
+	exports['function'] = __webpack_require__(57);
+	exports.number = __webpack_require__(18);
+	exports.object = __webpack_require__(15);
+	exports.string = __webpack_require__(35);
+	exports.types = __webpack_require__(53);
+	exports.emitter = __webpack_require__(20);
 
 
 /***/ },
-/* 49 */
+/* 52 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var number = __webpack_require__(15);
-	var string = __webpack_require__(32);
-	var object = __webpack_require__(12);
-	var types = __webpack_require__(50);
+	var number = __webpack_require__(18);
+	var string = __webpack_require__(35);
+	var object = __webpack_require__(15);
+	var types = __webpack_require__(53);
 
-	var DimensionError = __webpack_require__(51);
-	var IndexError = __webpack_require__(52);
+	var DimensionError = __webpack_require__(54);
+	var IndexError = __webpack_require__(55);
 
 	/**
 	 * Calculate the size of a multi dimensional array.
@@ -74360,7 +74702,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 50 */
+/* 53 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -74420,7 +74762,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 51 */
+/* 54 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -74461,7 +74803,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 52 */
+/* 55 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -74513,7 +74855,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 53 */
+/* 56 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -74529,7 +74871,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 54 */
+/* 57 */
 /***/ function(module, exports) {
 
 	// function utils
@@ -74580,13 +74922,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 55 */
+/* 58 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var util = __webpack_require__(48);
-	var DimensionError = __webpack_require__(51);
+	var util = __webpack_require__(51);
+	var DimensionError = __webpack_require__(54);
 
 	var string = util.string;
 	var array = util.array;
@@ -74601,7 +74943,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	var validateIndex = array.validateIndex;
 
 	function factory (type, config, load, typed) {
-	  var Matrix = load(__webpack_require__(47)); // force loading Matrix (do not use via type.Matrix)
+	  var Matrix = load(__webpack_require__(50)); // force loading Matrix (do not use via type.Matrix)
 
 	  /**
 	   * Dense Matrix implementation. A regular, dense matrix, supporting multi-dimensional matrices. This is the default matrix type.
@@ -75443,13 +75785,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	exports.lazy = false;  // no lazy loading, as we alter type.Matrix._storage
 
 /***/ },
-/* 56 */
+/* 59 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var util = __webpack_require__(48);
-	var DimensionError = __webpack_require__(51);
+	var util = __webpack_require__(51);
+	var DimensionError = __webpack_require__(54);
 
 	var array = util.array;
 	var object = util.object;
@@ -75464,8 +75806,8 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	var validateIndex = array.validateIndex;
 
 	function factory (type, config, load, typed) {
-	  var Matrix = load(__webpack_require__(47)); // force loading Matrix (do not use via type.Matrix)
-	  var equalScalar = load(__webpack_require__(57));
+	  var Matrix = load(__webpack_require__(50)); // force loading Matrix (do not use via type.Matrix)
+	  var equalScalar = load(__webpack_require__(60));
 
 	  /**
 	   * Sparse Matrix implementation. This type implements a Compressed Column Storage format
@@ -76787,13 +77129,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 57 */
+/* 60 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var nearlyEqual = __webpack_require__(15).nearlyEqual;
-	var bigNearlyEqual = __webpack_require__(58);
+	var nearlyEqual = __webpack_require__(18).nearlyEqual;
+	var bigNearlyEqual = __webpack_require__(61);
 
 	function factory (type, config, load, typed) {
 	  
@@ -76846,7 +77188,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 58 */
+/* 61 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -76897,15 +77239,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 59 */
+/* 62 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load) {
 	  
-	  var add = load(__webpack_require__(60));
-	  var equalScalar = load(__webpack_require__(57));
+	  var add = load(__webpack_require__(63));
+	  var equalScalar = load(__webpack_require__(60));
 	  
 	  /**
 	   * An ordered Sparse Accumulator is a representation for a sparse vector that includes a dense array 
@@ -77044,24 +77386,24 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 60 */
+/* 63 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var extend = __webpack_require__(12).extend;
+	var extend = __webpack_require__(15).extend;
 
 	function factory (type, config, load, typed) {
 
-	  var matrix = load(__webpack_require__(61));
-	  var addScalar = load(__webpack_require__(62));
-	  var latex = __webpack_require__(41);
+	  var matrix = load(__webpack_require__(64));
+	  var addScalar = load(__webpack_require__(65));
+	  var latex = __webpack_require__(44);
 	  
-	  var algorithm01 = load(__webpack_require__(63));
-	  var algorithm04 = load(__webpack_require__(64));
-	  var algorithm10 = load(__webpack_require__(65));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm01 = load(__webpack_require__(66));
+	  var algorithm04 = load(__webpack_require__(67));
+	  var algorithm10 = load(__webpack_require__(68));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
 	  /**
 	   * Add two or more values, `x + y`.
@@ -77214,7 +77556,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 61 */
+/* 64 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -77308,7 +77650,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 62 */
+/* 65 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -77365,12 +77707,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 63 */
+/* 66 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var DimensionError = __webpack_require__(51);
+	var DimensionError = __webpack_require__(54);
 
 	function factory (type, config, load, typed) {
 
@@ -77485,16 +77827,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 64 */
+/* 67 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var DimensionError = __webpack_require__(51);
+	var DimensionError = __webpack_require__(54);
 
 	function factory (type, config, load, typed) {
 
-	  var equalScalar = load(__webpack_require__(57));
+	  var equalScalar = load(__webpack_require__(60));
 
 	  var SparseMatrix = type.SparseMatrix;
 
@@ -77678,7 +78020,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 65 */
+/* 68 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -77794,13 +78136,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 66 */
+/* 69 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var util = __webpack_require__(48);
-	var DimensionError = __webpack_require__(51);
+	var util = __webpack_require__(51);
+	var DimensionError = __webpack_require__(54);
 
 	var string = util.string,
 	    isString = string.isString;
@@ -77904,12 +78246,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 67 */
+/* 70 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var clone = __webpack_require__(12).clone;
+	var clone = __webpack_require__(15).clone;
 
 	function factory (type, config, load, typed) {
 
@@ -77992,15 +78334,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 68 */
+/* 71 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
 	  
-	  var smaller = load(__webpack_require__(69));
-	  var larger = load(__webpack_require__(73));
+	  var smaller = load(__webpack_require__(72));
+	  var larger = load(__webpack_require__(76));
 	  
 	  var oneOverLogPhi = 1.0 / Math.log((1.0 + Math.sqrt(5.0)) / 2.0);
 	  
@@ -78347,25 +78689,25 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 69 */
+/* 72 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var nearlyEqual = __webpack_require__(15).nearlyEqual;
-	var bigNearlyEqual = __webpack_require__(58);
+	var nearlyEqual = __webpack_require__(18).nearlyEqual;
+	var bigNearlyEqual = __webpack_require__(61);
 
 	function factory (type, config, load, typed) {
 
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
-	  var algorithm03 = load(__webpack_require__(70));
-	  var algorithm07 = load(__webpack_require__(71));
-	  var algorithm12 = load(__webpack_require__(72));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm03 = load(__webpack_require__(73));
+	  var algorithm07 = load(__webpack_require__(74));
+	  var algorithm12 = load(__webpack_require__(75));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
 	  /**
 	   * Test whether value x is smaller than y.
@@ -78532,12 +78874,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 70 */
+/* 73 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var DimensionError = __webpack_require__(51);
+	var DimensionError = __webpack_require__(54);
 
 	function factory (type, config, load, typed) {
 
@@ -78663,12 +79005,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 71 */
+/* 74 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var DimensionError = __webpack_require__(51);
+	var DimensionError = __webpack_require__(54);
 
 	function factory (type, config, load, typed) {
 
@@ -78793,7 +79135,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 72 */
+/* 75 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -78909,25 +79251,25 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 73 */
+/* 76 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var nearlyEqual = __webpack_require__(15).nearlyEqual;
-	var bigNearlyEqual = __webpack_require__(58);
+	var nearlyEqual = __webpack_require__(18).nearlyEqual;
+	var bigNearlyEqual = __webpack_require__(61);
 
 	function factory (type, config, load, typed) {
 	  
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
-	  var algorithm03 = load(__webpack_require__(70));
-	  var algorithm07 = load(__webpack_require__(71));
-	  var algorithm12 = load(__webpack_require__(72));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm03 = load(__webpack_require__(73));
+	  var algorithm07 = load(__webpack_require__(74));
+	  var algorithm12 = load(__webpack_require__(75));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
 	  /**
 	   * Test whether value x is larger than y.
@@ -79094,12 +79436,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 74 */
+/* 77 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var util = __webpack_require__(48);
+	var util = __webpack_require__(51);
 
 	var string = util.string;
 	var object = util.object;
@@ -79109,9 +79451,9 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 	function factory (type, config, load) {
 
-	  var DenseMatrix = load(__webpack_require__(55));
+	  var DenseMatrix = load(__webpack_require__(58));
 
-	  var smaller = load(__webpack_require__(69));
+	  var smaller = load(__webpack_require__(72));
 
 	  function ImmutableDenseMatrix(data, datatype) {
 	    if (!(this instanceof ImmutableDenseMatrix))
@@ -79324,13 +79666,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 75 */
+/* 78 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var clone = __webpack_require__(12).clone;
-	var isInteger = __webpack_require__(15).isInteger;
+	var clone = __webpack_require__(15).clone;
+	var isInteger = __webpack_require__(18).isInteger;
 
 	function factory (type) {
 	  
@@ -79613,12 +79955,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 76 */
+/* 79 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var number = __webpack_require__(15);
+	var number = __webpack_require__(18);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -79935,7 +80277,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 77 */
+/* 80 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -80005,7 +80347,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 78 */
+/* 81 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -80072,12 +80414,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 79 */
+/* 82 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -80157,17 +80499,17 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 80 */
+/* 83 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
 	  // type
-	  __webpack_require__(81)
+	  __webpack_require__(84)
 	];
 
 
 /***/ },
-/* 81 */
+/* 84 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -80244,13 +80586,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 82 */
+/* 85 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
-	var number = __webpack_require__(15);
+	var deepMap = __webpack_require__(31);
+	var number = __webpack_require__(18);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -80319,51 +80661,51 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 83 */
+/* 86 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
 	  // type
-	  __webpack_require__(84),
+	  __webpack_require__(87),
 
 	  // construction function
-	  __webpack_require__(104),
+	  __webpack_require__(107),
 
 	  // create new units
-	  __webpack_require__(105),
+	  __webpack_require__(108),
 
 	  // split units
-	  __webpack_require__(106),
+	  __webpack_require__(109),
 
 	  // physical constants
-	  __webpack_require__(107)
+	  __webpack_require__(110)
 	];
 
 
 /***/ },
-/* 84 */
+/* 87 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var endsWith = __webpack_require__(32).endsWith;
-	var clone = __webpack_require__(12).clone;
-	var constants = __webpack_require__(85);
+	var endsWith = __webpack_require__(35).endsWith;
+	var clone = __webpack_require__(15).clone;
+	var constants = __webpack_require__(88);
 
 	function factory (type, config, load, typed, math) {
-	  var add       = load(__webpack_require__(62));
-	  var subtract  = load(__webpack_require__(86));
-	  var multiply  = load(__webpack_require__(89));
-	  var divide    = load(__webpack_require__(90));
-	  var pow       = load(__webpack_require__(91));
-	  var abs       = load(__webpack_require__(95));
-	  var fix       = load(__webpack_require__(96));
-	  var equal     = load(__webpack_require__(97));
-	  var isNumeric = load(__webpack_require__(98));
-	  var format    = load(__webpack_require__(99));
-	  var getTypeOf = load(__webpack_require__(100));
-	  var toNumber  = load(__webpack_require__(79));
-	  var Complex   = load(__webpack_require__(36));
+	  var add       = load(__webpack_require__(65));
+	  var subtract  = load(__webpack_require__(89));
+	  var multiply  = load(__webpack_require__(92));
+	  var divide    = load(__webpack_require__(93));
+	  var pow       = load(__webpack_require__(94));
+	  var abs       = load(__webpack_require__(98));
+	  var fix       = load(__webpack_require__(99));
+	  var equal     = load(__webpack_require__(100));
+	  var isNumeric = load(__webpack_require__(101));
+	  var format    = load(__webpack_require__(102));
+	  var getTypeOf = load(__webpack_require__(103));
+	  var toNumber  = load(__webpack_require__(82));
+	  var Complex   = load(__webpack_require__(39));
 
 	  /**
 	   * A unit can be constructed in the following ways:
@@ -81323,7 +81665,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	            }
 	          }
 	        }
-	        var util = __webpack_require__(101);
+	        var util = __webpack_require__(104);
 
 	        // Is the proposed unit list "simpler" than the existing one?
 	        if(proposedUnitList.length < this.units.length && !missingBaseDim) {
@@ -83562,10 +83904,10 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 85 */
+/* 88 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var memoize = __webpack_require__(54).memoize;
+	var memoize = __webpack_require__(57).memoize;
 
 	/**
 	 * Calculate BigNumber e
@@ -83617,26 +83959,26 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 86 */
+/* 89 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var DimensionError = __webpack_require__(51);
+	var DimensionError = __webpack_require__(54);
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
-	  var matrix = load(__webpack_require__(61));
-	  var addScalar = load(__webpack_require__(62));
-	  var unaryMinus = load(__webpack_require__(87));
+	  var matrix = load(__webpack_require__(64));
+	  var addScalar = load(__webpack_require__(65));
+	  var unaryMinus = load(__webpack_require__(90));
 
-	  var algorithm01 = load(__webpack_require__(63));
-	  var algorithm03 = load(__webpack_require__(70));
-	  var algorithm05 = load(__webpack_require__(88));
-	  var algorithm10 = load(__webpack_require__(65));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm01 = load(__webpack_require__(66));
+	  var algorithm03 = load(__webpack_require__(73));
+	  var algorithm05 = load(__webpack_require__(91));
+	  var algorithm10 = load(__webpack_require__(68));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
 	  // TODO: split function subtract in two: subtract and subtractScalar
 
@@ -83822,15 +84164,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 87 */
+/* 90 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
 	  /**
 	   * Inverse the sign of a value, apply a unary minus operation.
@@ -83898,16 +84240,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 88 */
+/* 91 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var DimensionError = __webpack_require__(51);
+	var DimensionError = __webpack_require__(54);
 
 	function factory (type, config, load, typed) {
 
-	  var equalScalar = load(__webpack_require__(57));
+	  var equalScalar = load(__webpack_require__(60));
 	  
 	  var SparseMatrix = type.SparseMatrix;
 
@@ -84080,7 +84422,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 89 */
+/* 92 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -84143,13 +84485,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 90 */
+/* 93 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory(type, config, load, typed) {
-	  var multiplyScalar = load(__webpack_require__(89));
+	  var multiplyScalar = load(__webpack_require__(92));
 
 	  /**
 	   * Divide two scalar values, `x / y`.
@@ -84208,21 +84550,21 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 91 */
+/* 94 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isInteger = __webpack_require__(15).isInteger;
-	var size = __webpack_require__(49).size;
+	var isInteger = __webpack_require__(18).isInteger;
+	var size = __webpack_require__(52).size;
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
-	  var eye = load(__webpack_require__(92));
-	  var multiply = load(__webpack_require__(93));
-	  var matrix = load(__webpack_require__(61));
-	  var fraction = load(__webpack_require__(45));
-	  var number = load(__webpack_require__(79));
+	  var latex = __webpack_require__(44);
+	  var eye = load(__webpack_require__(95));
+	  var multiply = load(__webpack_require__(96));
+	  var matrix = load(__webpack_require__(64));
+	  var fraction = load(__webpack_require__(48));
+	  var number = load(__webpack_require__(82));
 
 	  /**
 	   * Calculates the power of x to y, `x ^ y`.
@@ -84398,17 +84740,17 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 92 */
+/* 95 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var array = __webpack_require__(49);
-	var isInteger = __webpack_require__(15).isInteger;
+	var array = __webpack_require__(52);
+	var isInteger = __webpack_require__(18).isInteger;
 
 	function factory (type, config, load, typed) {
 	  
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 	  
 	  /**
 	   * Create a 2-dimensional identity matrix with size m x n or n x n.
@@ -84550,24 +84892,24 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 93 */
+/* 96 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var extend = __webpack_require__(12).extend;
-	var array = __webpack_require__(49);
+	var extend = __webpack_require__(15).extend;
+	var array = __webpack_require__(52);
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
-	  var matrix = load(__webpack_require__(61));
-	  var addScalar = load(__webpack_require__(62));
-	  var multiplyScalar = load(__webpack_require__(89));
-	  var equalScalar = load(__webpack_require__(57));
+	  var matrix = load(__webpack_require__(64));
+	  var addScalar = load(__webpack_require__(65));
+	  var multiplyScalar = load(__webpack_require__(92));
+	  var equalScalar = load(__webpack_require__(60));
 
-	  var algorithm11 = load(__webpack_require__(94));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm11 = load(__webpack_require__(97));
+	  var algorithm14 = load(__webpack_require__(70));
 	  
 	  var DenseMatrix = type.DenseMatrix;
 	  var SparseMatrix = type.SparseMatrix;
@@ -85526,14 +85868,14 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 94 */
+/* 97 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
 
-	  var equalScalar = load(__webpack_require__(57));
+	  var equalScalar = load(__webpack_require__(60));
 
 	  var SparseMatrix = type.SparseMatrix;
 
@@ -85641,12 +85983,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 95 */
+/* 98 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -85708,12 +86050,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 96 */
+/* 99 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -85779,23 +86121,23 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 97 */
+/* 100 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
 	  
-	  var matrix = load(__webpack_require__(61));
-	  var equalScalar = load(__webpack_require__(57));
+	  var matrix = load(__webpack_require__(64));
+	  var equalScalar = load(__webpack_require__(60));
 
-	  var algorithm03 = load(__webpack_require__(70));
-	  var algorithm07 = load(__webpack_require__(71));
-	  var algorithm12 = load(__webpack_require__(72));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm03 = load(__webpack_require__(73));
+	  var algorithm07 = load(__webpack_require__(74));
+	  var algorithm12 = load(__webpack_require__(75));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
 	  /**
 	   * Test whether two values are equal.
@@ -85954,13 +86296,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 98 */
+/* 101 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
-	var number = __webpack_require__(15);
+	var deepMap = __webpack_require__(31);
+	var number = __webpack_require__(18);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -86013,12 +86355,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 99 */
+/* 102 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var string = __webpack_require__(32);
+	var string = __webpack_require__(35);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -86133,12 +86475,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 100 */
+/* 103 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var types = __webpack_require__(50);
+	var types = __webpack_require__(53);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -86216,7 +86558,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 101 */
+/* 104 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global, process) {// Copyright Joyent, Inc. and other Node contributors.
@@ -86744,7 +87086,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	}
 	exports.isPrimitive = isPrimitive;
 
-	exports.isBuffer = __webpack_require__(102);
+	exports.isBuffer = __webpack_require__(105);
 
 	function objectToString(o) {
 	  return Object.prototype.toString.call(o);
@@ -86788,7 +87130,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	 *     prototype.
 	 * @param {function} superCtor Constructor function to inherit prototype from.
 	 */
-	exports.inherits = __webpack_require__(103);
+	exports.inherits = __webpack_require__(106);
 
 	exports._extend = function(origin, add) {
 	  // Don't do anything if add isn't an object
@@ -86806,10 +87148,10 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	  return Object.prototype.hasOwnProperty.call(obj, prop);
 	}
 
-	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }()), __webpack_require__(2)))
+	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }()), __webpack_require__(11)))
 
 /***/ },
-/* 102 */
+/* 105 */
 /***/ function(module, exports) {
 
 	module.exports = function isBuffer(arg) {
@@ -86820,7 +87162,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	}
 
 /***/ },
-/* 103 */
+/* 106 */
 /***/ function(module, exports) {
 
 	if (typeof Object.create === 'function') {
@@ -86849,12 +87191,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 104 */
+/* 107 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -86916,12 +87258,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 105 */
+/* 108 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -87007,12 +87349,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 106 */
+/* 109 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 
@@ -87050,10 +87392,10 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 107 */
+/* 110 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var lazy = __webpack_require__(12).lazy;
+	var lazy = __webpack_require__(15).lazy;
 
 
 	function factory (type, config, load, typed, math) {
@@ -87140,13 +87482,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 108 */
+/* 111 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var object = __webpack_require__(12);
-	var bigConstants = __webpack_require__(85);
+	var object = __webpack_require__(15);
+	var bigConstants = __webpack_require__(88);
 
 	function factory (type, config, load, typed, math) {
 	  // listen for changed in the configuration, automatically reload
@@ -87160,7 +87502,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	  math['true']     = true;
 	  math['false']    = false;
 	  math['null']     = null;
-	  math['uninitialized'] = __webpack_require__(49).UNINITIALIZED;
+	  math['uninitialized'] = __webpack_require__(52).UNINITIALIZED;
 
 	  if (config.number === 'BigNumber') {
 	    math['Infinity'] = new type.BigNumber(Infinity);
@@ -87205,7 +87547,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	  math.i = type.Complex.I;
 
 	  // meta information
-	  math.version = __webpack_require__(109);
+	  math.version = __webpack_require__(112);
 	}
 
 	exports.factory = factory;
@@ -87213,7 +87555,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	exports.math = true;   // request access to the math namespace
 
 /***/ },
-/* 109 */
+/* 112 */
 /***/ function(module, exports) {
 
 	module.exports = '3.8.1';
@@ -87222,23 +87564,23 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 110 */
+/* 113 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(111),
-	  __webpack_require__(289),
-	  __webpack_require__(318),
-	  __webpack_require__(320),
+	  __webpack_require__(114),
+	  __webpack_require__(292),
+	  __webpack_require__(321),
+	  __webpack_require__(323),
 
-	  __webpack_require__(346),
-	  __webpack_require__(291),
-	  __webpack_require__(317)
+	  __webpack_require__(349),
+	  __webpack_require__(294),
+	  __webpack_require__(320)
 	];
 
 
 /***/ },
-/* 111 */
+/* 114 */
 /***/ function(module, exports, __webpack_require__) {
 
 	function factory (construction, config, load, typed) {
@@ -87246,39 +87588,39 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 	  // construction functions
-	  docs.bignumber = __webpack_require__(112);
-	  docs['boolean'] = __webpack_require__(113);
-	  docs.complex = __webpack_require__(114);
-	  docs.createUnit = __webpack_require__(115);
-	  docs.fraction = __webpack_require__(116);
-	  docs.index = __webpack_require__(117);
-	  docs.matrix = __webpack_require__(118);
-	  docs.number = __webpack_require__(119);
-	  docs.sparse = __webpack_require__(120);
-	  docs.splitUnit = __webpack_require__(121);
-	  docs.string = __webpack_require__(122);
-	  docs.unit = __webpack_require__(123);
+	  docs.bignumber = __webpack_require__(115);
+	  docs['boolean'] = __webpack_require__(116);
+	  docs.complex = __webpack_require__(117);
+	  docs.createUnit = __webpack_require__(118);
+	  docs.fraction = __webpack_require__(119);
+	  docs.index = __webpack_require__(120);
+	  docs.matrix = __webpack_require__(121);
+	  docs.number = __webpack_require__(122);
+	  docs.sparse = __webpack_require__(123);
+	  docs.splitUnit = __webpack_require__(124);
+	  docs.string = __webpack_require__(125);
+	  docs.unit = __webpack_require__(126);
 
 	  // constants
-	  docs.e = __webpack_require__(124);
-	  docs.E = __webpack_require__(124);
-	  docs['false'] = __webpack_require__(125);
-	  docs.i = __webpack_require__(126);
-	  docs['Infinity'] = __webpack_require__(127);
-	  docs.LN2 = __webpack_require__(128);
-	  docs.LN10 = __webpack_require__(129);
-	  docs.LOG2E = __webpack_require__(130);
-	  docs.LOG10E = __webpack_require__(131);
-	  docs.NaN = __webpack_require__(132);
-	  docs['null'] = __webpack_require__(133);
-	  docs.pi = __webpack_require__(134);
-	  docs.PI = __webpack_require__(134);
-	  docs.phi = __webpack_require__(135);
-	  docs.SQRT1_2 = __webpack_require__(136);
-	  docs.SQRT2 = __webpack_require__(137);
-	  docs.tau = __webpack_require__(138);
-	  docs['true'] = __webpack_require__(139);
-	  docs.version = __webpack_require__(140);
+	  docs.e = __webpack_require__(127);
+	  docs.E = __webpack_require__(127);
+	  docs['false'] = __webpack_require__(128);
+	  docs.i = __webpack_require__(129);
+	  docs['Infinity'] = __webpack_require__(130);
+	  docs.LN2 = __webpack_require__(131);
+	  docs.LN10 = __webpack_require__(132);
+	  docs.LOG2E = __webpack_require__(133);
+	  docs.LOG10E = __webpack_require__(134);
+	  docs.NaN = __webpack_require__(135);
+	  docs['null'] = __webpack_require__(136);
+	  docs.pi = __webpack_require__(137);
+	  docs.PI = __webpack_require__(137);
+	  docs.phi = __webpack_require__(138);
+	  docs.SQRT1_2 = __webpack_require__(139);
+	  docs.SQRT2 = __webpack_require__(140);
+	  docs.tau = __webpack_require__(141);
+	  docs['true'] = __webpack_require__(142);
+	  docs.version = __webpack_require__(143);
 
 	  // physical constants
 	  // TODO: more detailed docs for physical constants
@@ -87341,188 +87683,188 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	  docs.planckTemperature = {description: 'Planck temperature', examples: ['planckTemperature']};
 
 	  // functions - algebra
-	  docs.lsolve = __webpack_require__(141);
-	  docs.lup = __webpack_require__(142);
-	  docs.lusolve = __webpack_require__(143);
-	  docs.slu = __webpack_require__(144);
-	  docs.usolve = __webpack_require__(145);
+	  docs.lsolve = __webpack_require__(144);
+	  docs.lup = __webpack_require__(145);
+	  docs.lusolve = __webpack_require__(146);
+	  docs.slu = __webpack_require__(147);
+	  docs.usolve = __webpack_require__(148);
 
 	  // functions - arithmetic
-	  docs.abs = __webpack_require__(146);
-	  docs.add = __webpack_require__(147);
-	  docs.cbrt = __webpack_require__(148);
-	  docs.ceil = __webpack_require__(149);
-	  docs.cube = __webpack_require__(150);
-	  docs.divide = __webpack_require__(151);
-	  docs.dotDivide = __webpack_require__(152);
-	  docs.dotMultiply = __webpack_require__(153);
-	  docs.dotPow = __webpack_require__(154);
-	  docs.exp = __webpack_require__(155);
-	  docs.fix = __webpack_require__(156);
-	  docs.floor = __webpack_require__(157);
-	  docs.gcd = __webpack_require__(158);
-	  docs.hypot = __webpack_require__(159);
-	  docs.lcm = __webpack_require__(160);
-	  docs.log = __webpack_require__(161);
-	  docs.log10 = __webpack_require__(162);
-	  docs.mod = __webpack_require__(163);
-	  docs.multiply = __webpack_require__(164);
-	  docs.norm = __webpack_require__(165);
-	  docs.nthRoot = __webpack_require__(166);
-	  docs.pow = __webpack_require__(167);
-	  docs.round = __webpack_require__(168);
-	  docs.sign = __webpack_require__(169);
-	  docs.sqrt = __webpack_require__(170);
-	  docs.square = __webpack_require__(171);
-	  docs.subtract = __webpack_require__(172);
-	  docs.unaryMinus = __webpack_require__(173);
-	  docs.unaryPlus = __webpack_require__(174);
-	  docs.xgcd = __webpack_require__(175);
+	  docs.abs = __webpack_require__(149);
+	  docs.add = __webpack_require__(150);
+	  docs.cbrt = __webpack_require__(151);
+	  docs.ceil = __webpack_require__(152);
+	  docs.cube = __webpack_require__(153);
+	  docs.divide = __webpack_require__(154);
+	  docs.dotDivide = __webpack_require__(155);
+	  docs.dotMultiply = __webpack_require__(156);
+	  docs.dotPow = __webpack_require__(157);
+	  docs.exp = __webpack_require__(158);
+	  docs.fix = __webpack_require__(159);
+	  docs.floor = __webpack_require__(160);
+	  docs.gcd = __webpack_require__(161);
+	  docs.hypot = __webpack_require__(162);
+	  docs.lcm = __webpack_require__(163);
+	  docs.log = __webpack_require__(164);
+	  docs.log10 = __webpack_require__(165);
+	  docs.mod = __webpack_require__(166);
+	  docs.multiply = __webpack_require__(167);
+	  docs.norm = __webpack_require__(168);
+	  docs.nthRoot = __webpack_require__(169);
+	  docs.pow = __webpack_require__(170);
+	  docs.round = __webpack_require__(171);
+	  docs.sign = __webpack_require__(172);
+	  docs.sqrt = __webpack_require__(173);
+	  docs.square = __webpack_require__(174);
+	  docs.subtract = __webpack_require__(175);
+	  docs.unaryMinus = __webpack_require__(176);
+	  docs.unaryPlus = __webpack_require__(177);
+	  docs.xgcd = __webpack_require__(178);
 
 	  // functions - bitwise
-	  docs.bitAnd = __webpack_require__(176);
-	  docs.bitNot = __webpack_require__(177);
-	  docs.bitOr = __webpack_require__(178);
-	  docs.bitXor = __webpack_require__(179);
-	  docs.leftShift = __webpack_require__(180);
-	  docs.rightArithShift = __webpack_require__(181);
-	  docs.rightLogShift = __webpack_require__(182);
+	  docs.bitAnd = __webpack_require__(179);
+	  docs.bitNot = __webpack_require__(180);
+	  docs.bitOr = __webpack_require__(181);
+	  docs.bitXor = __webpack_require__(182);
+	  docs.leftShift = __webpack_require__(183);
+	  docs.rightArithShift = __webpack_require__(184);
+	  docs.rightLogShift = __webpack_require__(185);
 
 	  // functions - combinatorics
-	  docs.bellNumbers = __webpack_require__(183);
-	  docs.catalan = __webpack_require__(184);
-	  docs.composition = __webpack_require__(185);
-	  docs.stirlingS2 = __webpack_require__(186);
+	  docs.bellNumbers = __webpack_require__(186);
+	  docs.catalan = __webpack_require__(187);
+	  docs.composition = __webpack_require__(188);
+	  docs.stirlingS2 = __webpack_require__(189);
 
 	  // functions - core
-	  docs['config'] =  __webpack_require__(187);
-	  docs['import'] =  __webpack_require__(188);
-	  docs['typed'] =  __webpack_require__(189);
+	  docs['config'] =  __webpack_require__(190);
+	  docs['import'] =  __webpack_require__(191);
+	  docs['typed'] =  __webpack_require__(192);
 
 	  // functions - complex
-	  docs.arg = __webpack_require__(190);
-	  docs.conj = __webpack_require__(191);
-	  docs.re = __webpack_require__(192);
-	  docs.im = __webpack_require__(193);
+	  docs.arg = __webpack_require__(193);
+	  docs.conj = __webpack_require__(194);
+	  docs.re = __webpack_require__(195);
+	  docs.im = __webpack_require__(196);
 
 	  // functions - expression
-	  docs['eval'] =  __webpack_require__(194);
-	  docs.help =  __webpack_require__(195);
+	  docs['eval'] =  __webpack_require__(197);
+	  docs.help =  __webpack_require__(198);
 
 	  // functions - geometry
-	  docs.distance = __webpack_require__(196);
-	  docs.intersect = __webpack_require__(197);
+	  docs.distance = __webpack_require__(199);
+	  docs.intersect = __webpack_require__(200);
 
 	  // functions - logical
-	  docs['and'] = __webpack_require__(198);
-	  docs['not'] = __webpack_require__(199);
-	  docs['or'] = __webpack_require__(200);
-	  docs['xor'] = __webpack_require__(201);
+	  docs['and'] = __webpack_require__(201);
+	  docs['not'] = __webpack_require__(202);
+	  docs['or'] = __webpack_require__(203);
+	  docs['xor'] = __webpack_require__(204);
 
 	  // functions - matrix
-	  docs['concat'] = __webpack_require__(202);
-	  docs.cross = __webpack_require__(203);
-	  docs.det = __webpack_require__(204);
-	  docs.diag = __webpack_require__(205);
-	  docs.dot = __webpack_require__(206);
-	  docs.eye = __webpack_require__(207);
-	  docs.filter =  __webpack_require__(208);
-	  docs.flatten = __webpack_require__(209);
-	  docs.forEach =  __webpack_require__(210);
-	  docs.inv = __webpack_require__(211);
-	  docs.map =  __webpack_require__(212);
-	  docs.ones = __webpack_require__(213);
-	  docs.partitionSelect =  __webpack_require__(214);
-	  docs.range = __webpack_require__(215);
-	  docs.resize = __webpack_require__(216);
-	  docs.size = __webpack_require__(217);
-	  docs.sort =  __webpack_require__(218);
-	  docs.squeeze = __webpack_require__(219);
-	  docs.subset = __webpack_require__(220);
-	  docs.trace = __webpack_require__(221);
-	  docs.transpose = __webpack_require__(222);
-	  docs.zeros = __webpack_require__(223);
+	  docs['concat'] = __webpack_require__(205);
+	  docs.cross = __webpack_require__(206);
+	  docs.det = __webpack_require__(207);
+	  docs.diag = __webpack_require__(208);
+	  docs.dot = __webpack_require__(209);
+	  docs.eye = __webpack_require__(210);
+	  docs.filter =  __webpack_require__(211);
+	  docs.flatten = __webpack_require__(212);
+	  docs.forEach =  __webpack_require__(213);
+	  docs.inv = __webpack_require__(214);
+	  docs.map =  __webpack_require__(215);
+	  docs.ones = __webpack_require__(216);
+	  docs.partitionSelect =  __webpack_require__(217);
+	  docs.range = __webpack_require__(218);
+	  docs.resize = __webpack_require__(219);
+	  docs.size = __webpack_require__(220);
+	  docs.sort =  __webpack_require__(221);
+	  docs.squeeze = __webpack_require__(222);
+	  docs.subset = __webpack_require__(223);
+	  docs.trace = __webpack_require__(224);
+	  docs.transpose = __webpack_require__(225);
+	  docs.zeros = __webpack_require__(226);
 
 	  // functions - probability
-	  docs.combinations = __webpack_require__(224);
+	  docs.combinations = __webpack_require__(227);
 	  //docs.distribution = require('./function/probability/distribution');
-	  docs.factorial = __webpack_require__(225);
-	  docs.gamma = __webpack_require__(226);
-	  docs.kldivergence = __webpack_require__(227);
-	  docs.multinomial = __webpack_require__(228);
-	  docs.permutations = __webpack_require__(229);
-	  docs.pickRandom = __webpack_require__(230);
-	  docs.random = __webpack_require__(231);
-	  docs.randomInt = __webpack_require__(232);
+	  docs.factorial = __webpack_require__(228);
+	  docs.gamma = __webpack_require__(229);
+	  docs.kldivergence = __webpack_require__(230);
+	  docs.multinomial = __webpack_require__(231);
+	  docs.permutations = __webpack_require__(232);
+	  docs.pickRandom = __webpack_require__(233);
+	  docs.random = __webpack_require__(234);
+	  docs.randomInt = __webpack_require__(235);
 
 	  // functions - relational
-	  docs.compare = __webpack_require__(233);
-	  docs.deepEqual = __webpack_require__(234);
-	  docs['equal'] = __webpack_require__(235);
-	  docs.larger = __webpack_require__(236);
-	  docs.largerEq = __webpack_require__(237);
-	  docs.smaller = __webpack_require__(238);
-	  docs.smallerEq = __webpack_require__(239);
-	  docs.unequal = __webpack_require__(240);
+	  docs.compare = __webpack_require__(236);
+	  docs.deepEqual = __webpack_require__(237);
+	  docs['equal'] = __webpack_require__(238);
+	  docs.larger = __webpack_require__(239);
+	  docs.largerEq = __webpack_require__(240);
+	  docs.smaller = __webpack_require__(241);
+	  docs.smallerEq = __webpack_require__(242);
+	  docs.unequal = __webpack_require__(243);
 
 	  // functions - special
-	  docs.erf = __webpack_require__(241);
+	  docs.erf = __webpack_require__(244);
 
 	  // functions - statistics
-	  docs.mad = __webpack_require__(242);
-	  docs.max = __webpack_require__(243);
-	  docs.mean = __webpack_require__(244);
-	  docs.median = __webpack_require__(245);
-	  docs.min = __webpack_require__(246);
-	  docs.mode = __webpack_require__(247);
-	  docs.prod = __webpack_require__(248);
-	  docs.quantileSeq = __webpack_require__(249);
-	  docs.std = __webpack_require__(250);
-	  docs.sum = __webpack_require__(251);
-	  docs['var'] = __webpack_require__(252);
+	  docs.mad = __webpack_require__(245);
+	  docs.max = __webpack_require__(246);
+	  docs.mean = __webpack_require__(247);
+	  docs.median = __webpack_require__(248);
+	  docs.min = __webpack_require__(249);
+	  docs.mode = __webpack_require__(250);
+	  docs.prod = __webpack_require__(251);
+	  docs.quantileSeq = __webpack_require__(252);
+	  docs.std = __webpack_require__(253);
+	  docs.sum = __webpack_require__(254);
+	  docs['var'] = __webpack_require__(255);
 
 	  // functions - trigonometry
-	  docs.acos = __webpack_require__(253);
-	  docs.acosh = __webpack_require__(254);
-	  docs.acot = __webpack_require__(255);
-	  docs.acoth = __webpack_require__(256);
-	  docs.acsc = __webpack_require__(257);
-	  docs.acsch = __webpack_require__(258);
-	  docs.asec = __webpack_require__(259);
-	  docs.asech = __webpack_require__(260);
-	  docs.asin = __webpack_require__(261);
-	  docs.asinh = __webpack_require__(262);
-	  docs.atan = __webpack_require__(263);
-	  docs.atanh = __webpack_require__(264);
-	  docs.atan2 = __webpack_require__(265);
-	  docs.cos = __webpack_require__(266);
-	  docs.cosh = __webpack_require__(267);
-	  docs.cot = __webpack_require__(268);
-	  docs.coth = __webpack_require__(269);
-	  docs.csc = __webpack_require__(270);
-	  docs.csch = __webpack_require__(271);
-	  docs.sec = __webpack_require__(272);
-	  docs.sech = __webpack_require__(273);
-	  docs.sin = __webpack_require__(274);
-	  docs.sinh = __webpack_require__(275);
-	  docs.tan = __webpack_require__(276);
-	  docs.tanh = __webpack_require__(277);
+	  docs.acos = __webpack_require__(256);
+	  docs.acosh = __webpack_require__(257);
+	  docs.acot = __webpack_require__(258);
+	  docs.acoth = __webpack_require__(259);
+	  docs.acsc = __webpack_require__(260);
+	  docs.acsch = __webpack_require__(261);
+	  docs.asec = __webpack_require__(262);
+	  docs.asech = __webpack_require__(263);
+	  docs.asin = __webpack_require__(264);
+	  docs.asinh = __webpack_require__(265);
+	  docs.atan = __webpack_require__(266);
+	  docs.atanh = __webpack_require__(267);
+	  docs.atan2 = __webpack_require__(268);
+	  docs.cos = __webpack_require__(269);
+	  docs.cosh = __webpack_require__(270);
+	  docs.cot = __webpack_require__(271);
+	  docs.coth = __webpack_require__(272);
+	  docs.csc = __webpack_require__(273);
+	  docs.csch = __webpack_require__(274);
+	  docs.sec = __webpack_require__(275);
+	  docs.sech = __webpack_require__(276);
+	  docs.sin = __webpack_require__(277);
+	  docs.sinh = __webpack_require__(278);
+	  docs.tan = __webpack_require__(279);
+	  docs.tanh = __webpack_require__(280);
 
 	  // functions - units
-	  docs.to = __webpack_require__(278);
+	  docs.to = __webpack_require__(281);
 
 	  // functions - utils
-	  docs.clone = __webpack_require__(279);
-	  docs.format = __webpack_require__(280);
-	  docs.isNaN = __webpack_require__(281);
-	  docs.isInteger = __webpack_require__(282);
-	  docs.isNegative = __webpack_require__(283);
-	  docs.isNumeric = __webpack_require__(284);
-	  docs.isPositive = __webpack_require__(285);
-	  docs.isPrime = __webpack_require__(286);
-	  docs.isZero = __webpack_require__(287);
+	  docs.clone = __webpack_require__(282);
+	  docs.format = __webpack_require__(283);
+	  docs.isNaN = __webpack_require__(284);
+	  docs.isInteger = __webpack_require__(285);
+	  docs.isNegative = __webpack_require__(286);
+	  docs.isNumeric = __webpack_require__(287);
+	  docs.isPositive = __webpack_require__(288);
+	  docs.isPrime = __webpack_require__(289);
+	  docs.isZero = __webpack_require__(290);
 	  // docs.print = require('./function/utils/print'); // TODO: add documentation for print as soon as the parser supports objects.
-	  docs['typeof'] =  __webpack_require__(288);
+	  docs['typeof'] =  __webpack_require__(291);
 
 	  return docs;
 	}
@@ -87533,7 +87875,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 112 */
+/* 115 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87558,7 +87900,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 113 */
+/* 116 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87585,7 +87927,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 114 */
+/* 117 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87610,7 +87952,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 115 */
+/* 118 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87634,7 +87976,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 116 */
+/* 119 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87657,7 +87999,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 117 */
+/* 120 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87688,7 +88030,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 118 */
+/* 121 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87719,7 +88061,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 119 */
+/* 122 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87748,7 +88090,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 120 */
+/* 123 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87773,7 +88115,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 121 */
+/* 124 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87794,7 +88136,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 122 */
+/* 125 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87818,7 +88160,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 123 */
+/* 126 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87844,7 +88186,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 124 */
+/* 127 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87865,7 +88207,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 125 */
+/* 128 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87883,7 +88225,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 126 */
+/* 129 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87903,7 +88245,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 127 */
+/* 130 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87922,7 +88264,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 128 */
+/* 131 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87941,7 +88283,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 129 */
+/* 132 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87960,7 +88302,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 130 */
+/* 133 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87979,7 +88321,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 131 */
+/* 134 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -87998,7 +88340,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 132 */
+/* 135 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88017,7 +88359,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 133 */
+/* 136 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88035,7 +88377,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 134 */
+/* 137 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88054,7 +88396,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 135 */
+/* 138 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88072,7 +88414,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 136 */
+/* 139 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88091,7 +88433,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 137 */
+/* 140 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88110,7 +88452,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 138 */
+/* 141 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88129,7 +88471,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 139 */
+/* 142 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88147,7 +88489,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 140 */
+/* 143 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88165,7 +88507,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 141 */
+/* 144 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88188,7 +88530,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 142 */
+/* 145 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88211,7 +88553,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 143 */
+/* 146 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88234,7 +88576,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 144 */
+/* 147 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88254,7 +88596,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 145 */
+/* 148 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88275,7 +88617,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 146 */
+/* 149 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88294,7 +88636,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 147 */
+/* 150 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88319,7 +88661,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 148 */
+/* 151 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88350,7 +88692,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 149 */
+/* 152 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88371,7 +88713,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 150 */
+/* 153 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88395,7 +88737,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 151 */
+/* 154 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88421,7 +88763,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 152 */
+/* 155 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88446,7 +88788,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 153 */
+/* 156 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88471,7 +88813,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 154 */
+/* 157 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88494,7 +88836,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 155 */
+/* 158 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88519,7 +88861,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 156 */
+/* 159 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88541,7 +88883,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 157 */
+/* 160 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88562,7 +88904,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 158 */
+/* 161 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88583,7 +88925,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 159 */
+/* 162 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88605,7 +88947,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 160 */
+/* 163 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88625,7 +88967,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 161 */
+/* 164 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88653,7 +88995,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	};
 
 /***/ },
-/* 162 */
+/* 165 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88678,7 +89020,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 163 */
+/* 166 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88704,7 +89046,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 164 */
+/* 167 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88729,7 +89071,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 165 */
+/* 168 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88755,7 +89097,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 166 */
+/* 169 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88781,7 +89123,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	};
 
 /***/ },
-/* 167 */
+/* 170 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88803,7 +89145,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 168 */
+/* 171 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88828,7 +89170,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 169 */
+/* 172 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88851,7 +89193,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 170 */
+/* 173 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88875,7 +89217,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 171 */
+/* 174 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88902,7 +89244,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 172 */
+/* 175 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88927,7 +89269,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 173 */
+/* 176 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88951,7 +89293,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 174 */
+/* 177 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88974,7 +89316,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 175 */
+/* 178 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -88994,7 +89336,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 176 */
+/* 179 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89017,7 +89359,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 177 */
+/* 180 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89040,7 +89382,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 178 */
+/* 181 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89062,7 +89404,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 179 */
+/* 182 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89083,7 +89425,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 180 */
+/* 183 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89105,7 +89447,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 181 */
+/* 184 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89128,7 +89470,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 182 */
+/* 185 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89151,7 +89493,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 183 */
+/* 186 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89169,7 +89511,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	};
 
 /***/ },
-/* 184 */
+/* 187 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89187,7 +89529,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	};
 
 /***/ },
-/* 185 */
+/* 188 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89204,7 +89546,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	};
 
 /***/ },
-/* 186 */
+/* 189 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89222,7 +89564,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 187 */
+/* 190 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89244,7 +89586,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 188 */
+/* 191 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89265,7 +89607,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 189 */
+/* 192 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89286,7 +89628,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 190 */
+/* 193 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89312,7 +89654,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 191 */
+/* 194 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89338,7 +89680,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 192 */
+/* 195 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89364,7 +89706,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 193 */
+/* 196 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89390,7 +89732,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 194 */
+/* 197 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89410,7 +89752,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 195 */
+/* 198 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89430,7 +89772,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 196 */
+/* 199 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89450,7 +89792,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 197 */
+/* 200 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89470,7 +89812,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 198 */
+/* 201 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89493,7 +89835,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 199 */
+/* 202 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89517,7 +89859,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 200 */
+/* 203 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89540,7 +89882,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 201 */
+/* 204 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89564,7 +89906,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 202 */
+/* 205 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89589,7 +89931,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 203 */
+/* 206 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89612,7 +89954,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 204 */
+/* 207 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89633,7 +89975,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 205 */
+/* 208 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89657,7 +89999,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 206 */
+/* 209 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89681,7 +90023,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 207 */
+/* 210 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89707,7 +90049,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 208 */
+/* 211 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89727,7 +90069,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 209 */
+/* 212 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89750,7 +90092,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 210 */
+/* 213 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89768,7 +90110,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 211 */
+/* 214 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89790,7 +90132,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 212 */
+/* 215 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89808,7 +90150,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 213 */
+/* 216 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89838,7 +90180,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 214 */
+/* 217 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89858,7 +90200,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 215 */
+/* 218 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89889,7 +90231,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 216 */
+/* 219 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89914,7 +90256,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 217 */
+/* 220 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89938,7 +90280,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 218 */
+/* 221 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89960,7 +90302,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 219 */
+/* 222 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -89983,7 +90325,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 220 */
+/* 223 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90014,7 +90356,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 221 */
+/* 224 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90035,7 +90377,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 222 */
+/* 225 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90058,7 +90400,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 223 */
+/* 226 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90087,7 +90429,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 224 */
+/* 227 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90105,7 +90447,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 225 */
+/* 228 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90125,7 +90467,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 226 */
+/* 229 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90146,7 +90488,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 227 */
+/* 230 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90165,7 +90507,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 228 */
+/* 231 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90182,7 +90524,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	};
 
 /***/ },
-/* 229 */
+/* 232 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90202,7 +90544,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 230 */
+/* 233 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90230,7 +90572,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 231 */
+/* 234 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90256,7 +90598,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 232 */
+/* 235 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90279,7 +90621,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	};
 
 /***/ },
-/* 233 */
+/* 236 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90304,7 +90646,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 234 */
+/* 237 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90326,7 +90668,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 235 */
+/* 238 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90353,7 +90695,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 236 */
+/* 239 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90381,7 +90723,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 237 */
+/* 240 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90407,7 +90749,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 238 */
+/* 241 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90434,7 +90776,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 239 */
+/* 242 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90460,7 +90802,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 240 */
+/* 243 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90488,7 +90830,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 241 */
+/* 244 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90508,7 +90850,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 242 */
+/* 245 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90534,7 +90876,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 243 */
+/* 246 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90568,7 +90910,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 244 */
+/* 247 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90601,7 +90943,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 245 */
+/* 248 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90629,7 +90971,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 246 */
+/* 249 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90663,7 +91005,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 247 */
+/* 250 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90693,7 +91035,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 248 */
+/* 251 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90723,7 +91065,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 249 */
+/* 252 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90754,7 +91096,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	};
 
 /***/ },
-/* 250 */
+/* 253 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90787,7 +91129,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 251 */
+/* 254 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90817,7 +91159,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 252 */
+/* 255 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90850,7 +91192,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 253 */
+/* 256 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90873,7 +91215,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 254 */
+/* 257 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90894,7 +91236,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	};
 
 /***/ },
-/* 255 */
+/* 258 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90917,7 +91259,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 256 */
+/* 259 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90937,7 +91279,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	};
 
 /***/ },
-/* 257 */
+/* 260 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90961,7 +91303,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 258 */
+/* 261 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -90982,7 +91324,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 259 */
+/* 262 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91006,7 +91348,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 260 */
+/* 263 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91027,7 +91369,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 261 */
+/* 264 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91050,7 +91392,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 262 */
+/* 265 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91071,7 +91413,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 263 */
+/* 266 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91094,7 +91436,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 264 */
+/* 267 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91115,7 +91457,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 265 */
+/* 268 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91142,7 +91484,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 266 */
+/* 269 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91168,7 +91510,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 267 */
+/* 270 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91190,7 +91532,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 268 */
+/* 271 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91213,7 +91555,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 269 */
+/* 272 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91236,7 +91578,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 270 */
+/* 273 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91259,7 +91601,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 271 */
+/* 274 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91282,7 +91624,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 272 */
+/* 275 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91305,7 +91647,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 273 */
+/* 276 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91328,7 +91670,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 274 */
+/* 277 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91354,7 +91696,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 275 */
+/* 278 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91375,7 +91717,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 276 */
+/* 279 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91400,7 +91742,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 277 */
+/* 280 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91422,7 +91764,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 278 */
+/* 281 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91443,7 +91785,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 279 */
+/* 282 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91465,7 +91807,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 280 */
+/* 283 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91487,7 +91829,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 281 */
+/* 284 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91508,7 +91850,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 282 */
+/* 285 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91528,7 +91870,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 283 */
+/* 286 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91549,7 +91891,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 284 */
+/* 287 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91574,7 +91916,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 285 */
+/* 288 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91595,7 +91937,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 286 */
+/* 289 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91614,7 +91956,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	};
 
 /***/ },
-/* 287 */
+/* 290 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91635,7 +91977,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 288 */
+/* 291 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -91656,28 +91998,28 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 289 */
+/* 292 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(290),
-	  __webpack_require__(313),
-	  __webpack_require__(314),
-	  __webpack_require__(315),
-	  __webpack_require__(316)
+	  __webpack_require__(293),
+	  __webpack_require__(316),
+	  __webpack_require__(317),
+	  __webpack_require__(318),
+	  __webpack_require__(319)
 	];
 
 
 /***/ },
-/* 290 */
+/* 293 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
-	  var parse = load(__webpack_require__(291));
+	  var parse = load(__webpack_require__(294));
 
 	  /**
 	   * Parse and compile an expression.
@@ -91731,29 +92073,29 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 291 */
+/* 294 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var ArgumentsError = __webpack_require__(20);
-	var deepMap = __webpack_require__(28);
+	var ArgumentsError = __webpack_require__(23);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
-	  var AccessorNode            = load(__webpack_require__(292));
-	  var ArrayNode               = load(__webpack_require__(298));
-	  var AssignmentNode          = load(__webpack_require__(299));
-	  var BlockNode               = load(__webpack_require__(302));
-	  var ConditionalNode         = load(__webpack_require__(303));
-	  var ConstantNode            = load(__webpack_require__(304));
-	  var FunctionAssignmentNode  = load(__webpack_require__(305));
-	  var IndexNode               = load(__webpack_require__(306));
-	  var ObjectNode              = load(__webpack_require__(309));
-	  var OperatorNode            = load(__webpack_require__(310));
-	  var ParenthesisNode         = load(__webpack_require__(312));
-	  var FunctionNode            = load(__webpack_require__(311));
-	  var RangeNode               = load(__webpack_require__(307));
-	  var SymbolNode              = load(__webpack_require__(308));
+	  var AccessorNode            = load(__webpack_require__(295));
+	  var ArrayNode               = load(__webpack_require__(301));
+	  var AssignmentNode          = load(__webpack_require__(302));
+	  var BlockNode               = load(__webpack_require__(305));
+	  var ConditionalNode         = load(__webpack_require__(306));
+	  var ConstantNode            = load(__webpack_require__(307));
+	  var FunctionAssignmentNode  = load(__webpack_require__(308));
+	  var IndexNode               = load(__webpack_require__(309));
+	  var ObjectNode              = load(__webpack_require__(312));
+	  var OperatorNode            = load(__webpack_require__(313));
+	  var ParenthesisNode         = load(__webpack_require__(315));
+	  var FunctionNode            = load(__webpack_require__(314));
+	  var RangeNode               = load(__webpack_require__(310));
+	  var SymbolNode              = load(__webpack_require__(311));
 
 
 	  /**
@@ -93288,14 +93630,14 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 292 */
+/* 295 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var Node = load(__webpack_require__(293));
-	  var access = load(__webpack_require__(295));
+	  var Node = load(__webpack_require__(296));
+	  var access = load(__webpack_require__(298));
 
 	  /**
 	   * @constructor AccessorNode
@@ -93457,14 +93799,14 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 293 */
+/* 296 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var keywords = __webpack_require__(294);
-	var extend = __webpack_require__(12).extend;
-	var deepEqual= __webpack_require__(12).deepEqual;
+	var keywords = __webpack_require__(297);
+	var extend = __webpack_require__(15).extend;
+	var deepEqual= __webpack_require__(15).deepEqual;
 
 	function factory (type, config, load, typed, math) {
 	  /**
@@ -93845,7 +94187,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 294 */
+/* 297 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -93857,16 +94199,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 295 */
+/* 298 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var errorTransform = __webpack_require__(296).transform;
+	var errorTransform = __webpack_require__(299).transform;
 
 	function factory (type, config, load, typed) {
-	  var subset = load(__webpack_require__(297));
-	  var matrix = load(__webpack_require__(61));
+	  var subset = load(__webpack_require__(300));
+	  var matrix = load(__webpack_require__(64));
 
 	  /**
 	   * Retrieve part of an object:
@@ -93911,10 +94253,10 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 296 */
+/* 299 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var IndexError = __webpack_require__(52);
+	var IndexError = __webpack_require__(55);
 
 	/**
 	 * Transform zero-based indices to one-based indices in errors
@@ -93934,17 +94276,17 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 297 */
+/* 300 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var clone = __webpack_require__(12).clone;
-	var validateIndex = __webpack_require__(49).validateIndex;
-	var DimensionError = __webpack_require__(51);
+	var clone = __webpack_require__(15).clone;
+	var validateIndex = __webpack_require__(52).validateIndex;
+	var DimensionError = __webpack_require__(54);
 
 	function factory (type, config, load, typed) {
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
 	  /**
 	   * Get or set a subset of a matrix or string.
@@ -94169,13 +94511,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 298 */
+/* 301 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var Node = load(__webpack_require__(293));
+	  var Node = load(__webpack_require__(296));
 
 	  /**
 	   * @constructor ArrayNode
@@ -94312,22 +94654,22 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 299 */
+/* 302 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var latex = __webpack_require__(41);
+	var latex = __webpack_require__(44);
 
 	function factory (type, config, load, typed) {
-	  var Node = load(__webpack_require__(293));
-	  var ArrayNode = load(__webpack_require__(298));
-	  var matrix = load(__webpack_require__(61));
-	  var assign = load(__webpack_require__(300));
-	  var access = load(__webpack_require__(295));
+	  var Node = load(__webpack_require__(296));
+	  var ArrayNode = load(__webpack_require__(301));
+	  var matrix = load(__webpack_require__(64));
+	  var assign = load(__webpack_require__(303));
+	  var access = load(__webpack_require__(298));
 
-	  var keywords = __webpack_require__(294);
-	  var operators = __webpack_require__(301);
+	  var keywords = __webpack_require__(297);
+	  var operators = __webpack_require__(304);
 
 	  /**
 	   * @constructor AssignmentNode
@@ -94581,16 +94923,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 300 */
+/* 303 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var errorTransform = __webpack_require__(296).transform;
+	var errorTransform = __webpack_require__(299).transform;
 
 	function factory (type, config, load, typed) {
-	  var subset = load(__webpack_require__(297));
-	  var matrix = load(__webpack_require__(61));
+	  var subset = load(__webpack_require__(300));
+	  var matrix = load(__webpack_require__(64));
 
 	  /**
 	   * Replace part of an object:
@@ -94638,7 +94980,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 301 */
+/* 304 */
 /***/ function(module, exports) {
 
 	'use strict'
@@ -94960,14 +95302,14 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 302 */
+/* 305 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var Node = load(__webpack_require__(293));
-	  var ResultSet = load(__webpack_require__(81));
+	  var Node = load(__webpack_require__(296));
+	  var ResultSet = load(__webpack_require__(84));
 
 	  /**
 	   * @constructor BlockNode
@@ -95112,16 +95454,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 303 */
+/* 306 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var latex = __webpack_require__(41);
-	var operators = __webpack_require__(301);
+	var latex = __webpack_require__(44);
+	var operators = __webpack_require__(304);
 
 	function factory (type, config, load, typed) {
-	  var Node = load(__webpack_require__(293));
+	  var Node = load(__webpack_require__(296));
 
 	  /**
 	   * A lazy evaluating conditional operator: 'condition ? trueExpr : falseExpr'
@@ -95298,15 +95640,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 304 */
+/* 307 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var getType = __webpack_require__(50).type;
+	var getType = __webpack_require__(53).type;
 
 	function factory (type, config, load, typed) {
-	  var Node = load(__webpack_require__(293));
+	  var Node = load(__webpack_require__(296));
 
 	  /**
 	   * A ConstantNode holds a constant value like a number or string. A ConstantNode
@@ -95503,21 +95845,21 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 305 */
+/* 308 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var keywords = __webpack_require__(294);
-	var latex = __webpack_require__(41);
-	var operators = __webpack_require__(301);
+	var keywords = __webpack_require__(297);
+	var latex = __webpack_require__(44);
+	var operators = __webpack_require__(304);
 
 	function isString (x) {
 	  return typeof x === 'string';
 	}
 
 	function factory (type, config, load, typed) {
-	  var Node = load(__webpack_require__(293));
+	  var Node = load(__webpack_require__(296));
 
 	  /**
 	   * @constructor FunctionAssignmentNode
@@ -95675,17 +96017,17 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 306 */
+/* 309 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var Node = load(__webpack_require__(293));
-	  var RangeNode = load(__webpack_require__(307));
-	  var SymbolNode = load(__webpack_require__(308));
+	  var Node = load(__webpack_require__(296));
+	  var RangeNode = load(__webpack_require__(310));
+	  var SymbolNode = load(__webpack_require__(311));
 
-	  var Range = load(__webpack_require__(76));
+	  var Range = load(__webpack_require__(79));
 
 	  var isArray = Array.isArray;
 
@@ -95911,15 +96253,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 307 */
+/* 310 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var operators = __webpack_require__(301);
+	var operators = __webpack_require__(304);
 
 	function factory (type, config, load, typed) {
-	  var Node = load(__webpack_require__(293));
+	  var Node = load(__webpack_require__(296));
 
 	  /**
 	   * @constructor RangeNode
@@ -96129,17 +96471,17 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 308 */
+/* 311 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var latex = __webpack_require__(41);
+	var latex = __webpack_require__(44);
 
 	function factory (type, config, load, typed, math) {
-	  var Node = load(__webpack_require__(293));
+	  var Node = load(__webpack_require__(296));
 
-	  var Unit = load(__webpack_require__(84));
+	  var Unit = load(__webpack_require__(87));
 
 	  /**
 	   * @constructor SymbolNode
@@ -96274,15 +96616,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 309 */
+/* 312 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var string = __webpack_require__(32);
+	var string = __webpack_require__(35);
 
 	function factory (type, config, load, typed) {
-	  var Node = load(__webpack_require__(293));
+	  var Node = load(__webpack_require__(296));
 
 	  /**
 	   * @constructor ObjectNode
@@ -96417,19 +96759,19 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 310 */
+/* 313 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var latex = __webpack_require__(41);
-	var operators = __webpack_require__(301);
+	var latex = __webpack_require__(44);
+	var operators = __webpack_require__(304);
 
 	function factory (type, config, load, typed, math) {
-	  var Node         = load(__webpack_require__(293));
-	  var ConstantNode = load(__webpack_require__(304));
-	  var SymbolNode   = load(__webpack_require__(308));
-	  var FunctionNode = load(__webpack_require__(311));
+	  var Node         = load(__webpack_require__(296));
+	  var ConstantNode = load(__webpack_require__(307));
+	  var SymbolNode   = load(__webpack_require__(311));
+	  var FunctionNode = load(__webpack_require__(314));
 
 	  /**
 	   * @constructor OperatorNode
@@ -96887,16 +97229,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 311 */
+/* 314 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var latex = __webpack_require__(41);
+	var latex = __webpack_require__(44);
 
 	function factory (type, config, load, typed, math) {
-	  var Node = load(__webpack_require__(293));
-	  var SymbolNode = load(__webpack_require__(308));
+	  var Node = load(__webpack_require__(296));
+	  var SymbolNode = load(__webpack_require__(311));
 
 	  /**
 	   * @constructor FunctionNode
@@ -97279,13 +97621,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 312 */
+/* 315 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var Node = load(__webpack_require__(293));
+	  var Node = load(__webpack_require__(296));
 
 	  /**
 	   * @constructor ParenthesisNode
@@ -97400,15 +97742,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 313 */
+/* 316 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
-	  var parse = load(__webpack_require__(291));
+	  var parse = load(__webpack_require__(294));
 
 	  /**
 	   * Evaluate an expression.
@@ -97468,13 +97810,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	exports.factory = factory;
 
 /***/ },
-/* 314 */
+/* 317 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed, math) {
-	  var docs = load(__webpack_require__(111));
+	  var docs = load(__webpack_require__(114));
 
 	  /**
 	   * Retrieve help on a function or data type.
@@ -97538,13 +97880,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 315 */
+/* 318 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var parse = load(__webpack_require__(291));
+	  var parse = load(__webpack_require__(294));
 
 	  /**
 	   * Parse an expression. Returns a node tree, which can be evaluated by
@@ -97593,13 +97935,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 316 */
+/* 319 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed, math) {
-	  var Parser = load(__webpack_require__(317));
+	  var Parser = load(__webpack_require__(320));
 
 	  /**
 	   * Create a parser. The function creates a new `math.expression.Parser` object.
@@ -97657,15 +97999,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 317 */
+/* 320 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var extend = __webpack_require__(12).extend;
+	var extend = __webpack_require__(15).extend;
 
 	function factory (type, config, load, typed, math) {
-	  var _parse = load(__webpack_require__(291));
+	  var _parse = load(__webpack_require__(294));
 
 	  /**
 	   * @constructor Parser
@@ -97824,31 +98166,31 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 318 */
+/* 321 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(292),
-	  __webpack_require__(298),
-	  __webpack_require__(299),
+	  __webpack_require__(295),
+	  __webpack_require__(301),
 	  __webpack_require__(302),
-	  __webpack_require__(303),
-	  __webpack_require__(304),
-	  __webpack_require__(306),
 	  __webpack_require__(305),
-	  __webpack_require__(311),
-	  __webpack_require__(293),
-	  __webpack_require__(309),
-	  __webpack_require__(310),
-	  __webpack_require__(312),
+	  __webpack_require__(306),
 	  __webpack_require__(307),
+	  __webpack_require__(309),
 	  __webpack_require__(308),
-	  __webpack_require__(319)
+	  __webpack_require__(314),
+	  __webpack_require__(296),
+	  __webpack_require__(312),
+	  __webpack_require__(313),
+	  __webpack_require__(315),
+	  __webpack_require__(310),
+	  __webpack_require__(311),
+	  __webpack_require__(322)
 	];
 
 
 /***/ },
-/* 319 */
+/* 322 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -97871,30 +98213,30 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 320 */
+/* 323 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(321),
-	  __webpack_require__(323),
-	  __webpack_require__(325),
-	  __webpack_require__(327),
+	  __webpack_require__(324),
+	  __webpack_require__(326),
 	  __webpack_require__(328),
 	  __webpack_require__(330),
-	  __webpack_require__(336),
-	  __webpack_require__(341),
-	  __webpack_require__(343),
-	  __webpack_require__(345)
+	  __webpack_require__(331),
+	  __webpack_require__(333),
+	  __webpack_require__(339),
+	  __webpack_require__(344),
+	  __webpack_require__(346),
+	  __webpack_require__(348)
 	];
 
 
 /***/ },
-/* 321 */
+/* 324 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var errorTransform = __webpack_require__(296).transform;
+	var errorTransform = __webpack_require__(299).transform;
 
 	/**
 	 * Attach a transform function to math.range
@@ -97904,7 +98246,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	 * from one-based to zero based
 	 */
 	function factory (type, config, load, typed) {
-	  var concat = load(__webpack_require__(322));
+	  var concat = load(__webpack_require__(325));
 
 	  // @see: comment of concat itself
 	 return typed('concat', {
@@ -97935,19 +98277,19 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 322 */
+/* 325 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var clone = __webpack_require__(12).clone;
-	var isInteger = __webpack_require__(15).isInteger;
-	var array = __webpack_require__(49);
-	var IndexError = __webpack_require__(52);
-	var DimensionError = __webpack_require__(51);
+	var clone = __webpack_require__(15).clone;
+	var isInteger = __webpack_require__(18).isInteger;
+	var array = __webpack_require__(52);
+	var IndexError = __webpack_require__(55);
+	var DimensionError = __webpack_require__(54);
 
 	function factory (type, config, load, typed) {
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
 	  /**
 	   * Concatenate two or more matrices.
@@ -98085,12 +98427,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 323 */
+/* 326 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var maxArgumentCount = __webpack_require__(54).maxArgumentCount;
+	var maxArgumentCount = __webpack_require__(57).maxArgumentCount;
 
 	/**
 	 * Attach a transform function to math.filter
@@ -98100,8 +98442,8 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	 * so you can do something like 'filter([3, -2, 5], x > 0)'.
 	 */
 	function factory (type, config, load, typed) {
-	  var filter = load(__webpack_require__(324));
-	  var SymbolNode = load(__webpack_require__(308));
+	  var filter = load(__webpack_require__(327));
+	  var SymbolNode = load(__webpack_require__(311));
 
 	  function filterTransform(args, math, scope) {
 	    var x, test;
@@ -98157,16 +98499,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 324 */
+/* 327 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var size = __webpack_require__(49).size;
-	var maxArgumentCount = __webpack_require__(54).maxArgumentCount;
+	var size = __webpack_require__(52).size;
+	var maxArgumentCount = __webpack_require__(57).maxArgumentCount;
 
 	function factory (type, config, load, typed) {
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 	  
 	  /**
 	   * Filter the items in an array or one dimensional matrix.
@@ -98267,12 +98609,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 325 */
+/* 328 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var maxArgumentCount = __webpack_require__(54).maxArgumentCount;
+	var maxArgumentCount = __webpack_require__(57).maxArgumentCount;
 
 	/**
 	 * Attach a transform function to math.forEach
@@ -98281,7 +98623,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	 * This transform creates a one-based index instead of a zero-based index
 	 */
 	function factory (type, config, load, typed) {
-	  var forEach = load(__webpack_require__(326));
+	  var forEach = load(__webpack_require__(329));
 
 	  return typed('forEach', {
 	    'Array | Matrix, function': function (array, callback) {
@@ -98319,12 +98661,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 326 */
+/* 329 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var maxArgumentCount = __webpack_require__(54).maxArgumentCount;
+	var maxArgumentCount = __webpack_require__(57).maxArgumentCount;
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -98401,7 +98743,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 327 */
+/* 330 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -98458,12 +98800,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 328 */
+/* 331 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var maxArgumentCount = __webpack_require__(54).maxArgumentCount;
+	var maxArgumentCount = __webpack_require__(57).maxArgumentCount;
 
 	/**
 	 * Attach a transform function to math.map
@@ -98472,8 +98814,8 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	 * This transform creates a one-based index instead of a zero-based index
 	 */
 	function factory (type, config, load, typed) {
-	  var map = load(__webpack_require__(329));
-	  var matrix = load(__webpack_require__(61));
+	  var map = load(__webpack_require__(332));
+	  var matrix = load(__webpack_require__(64));
 
 	  return typed('max', {
 	    'Array, function': function (x, callback) {
@@ -98528,12 +98870,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 329 */
+/* 332 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var maxArgumentCount = __webpack_require__(54).maxArgumentCount;
+	var maxArgumentCount = __webpack_require__(57).maxArgumentCount;
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -98613,13 +98955,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 330 */
+/* 333 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var errorTransform = __webpack_require__(296).transform;
-	var isCollection = __webpack_require__(331);
+	var errorTransform = __webpack_require__(299).transform;
+	var isCollection = __webpack_require__(334);
 
 	/**
 	 * Attach a transform function to math.max
@@ -98629,7 +98971,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	 * from one-based to zero based
 	 */
 	function factory (type, config, load, typed) {
-	  var max = load(__webpack_require__(332));
+	  var max = load(__webpack_require__(335));
 
 	  return typed('max', {
 	    '...any': function (args) {
@@ -98660,7 +99002,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 331 */
+/* 334 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -98676,17 +99018,17 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 332 */
+/* 335 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepForEach = __webpack_require__(333);
-	var reduce = __webpack_require__(334);
-	var containsCollections = __webpack_require__(335);
+	var deepForEach = __webpack_require__(336);
+	var reduce = __webpack_require__(337);
+	var containsCollections = __webpack_require__(338);
 
 	function factory (type, config, load, typed) {
-	  var larger = load(__webpack_require__(73));
+	  var larger = load(__webpack_require__(76));
 
 	  /**
 	   * Compute the maximum value of a matrix or a  list with values.
@@ -98781,7 +99123,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 333 */
+/* 336 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -98812,13 +99154,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 334 */
+/* 337 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var arraySize = __webpack_require__(49).size;
-	var IndexError = __webpack_require__(52);
+	var arraySize = __webpack_require__(52).size;
+	var IndexError = __webpack_require__(55);
 
 	/**
 	 * Reduce a given matrix or array to a new matrix or
@@ -98901,12 +99243,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 335 */
+/* 338 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isCollection = __webpack_require__(331);
+	var isCollection = __webpack_require__(334);
 
 	/**
 	 * Test whether an array contains collections
@@ -98925,13 +99267,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 336 */
+/* 339 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var errorTransform = __webpack_require__(296).transform;
-	var isCollection = __webpack_require__(331);
+	var errorTransform = __webpack_require__(299).transform;
+	var isCollection = __webpack_require__(334);
 
 	/**
 	 * Attach a transform function to math.mean
@@ -98941,7 +99283,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	 * from one-based to zero based
 	 */
 	function factory (type, config, load, typed) {
-	  var mean = load(__webpack_require__(337));
+	  var mean = load(__webpack_require__(340));
 
 	  return typed('mean', {
 	    '...any': function (args) {
@@ -98972,19 +99314,19 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 337 */
+/* 340 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var size = __webpack_require__(49).size;
-	var deepForEach = __webpack_require__(333);
-	var reduce = __webpack_require__(334);
-	var containsCollections = __webpack_require__(335);
+	var size = __webpack_require__(52).size;
+	var deepForEach = __webpack_require__(336);
+	var reduce = __webpack_require__(337);
+	var containsCollections = __webpack_require__(338);
 
 	function factory (type, config, load, typed) {
-	  var add = load(__webpack_require__(60));
-	  var divide = load(__webpack_require__(338));
+	  var add = load(__webpack_require__(63));
+	  var divide = load(__webpack_require__(341));
 
 	  /**
 	   * Compute the mean value of matrix or a list with values.
@@ -99076,22 +99418,22 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 338 */
+/* 341 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var extend = __webpack_require__(12).extend;
+	var extend = __webpack_require__(15).extend;
 
 	function factory (type, config, load, typed) {
 
-	  var divideScalar = load(__webpack_require__(90));
-	  var multiply     = load(__webpack_require__(93));
-	  var inv          = load(__webpack_require__(339));
-	  var matrix       = load(__webpack_require__(61));
+	  var divideScalar = load(__webpack_require__(93));
+	  var multiply     = load(__webpack_require__(96));
+	  var inv          = load(__webpack_require__(342));
+	  var matrix       = load(__webpack_require__(64));
 
-	  var algorithm11 = load(__webpack_require__(94));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm11 = load(__webpack_require__(97));
+	  var algorithm14 = load(__webpack_require__(70));
 	  
 	  /**
 	   * Divide two values, `x / y`.
@@ -99171,21 +99513,21 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 339 */
+/* 342 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var util = __webpack_require__(48);
+	var util = __webpack_require__(51);
 
 	function factory (type, config, load, typed) {
-	  var matrix       = load(__webpack_require__(61));
-	  var divideScalar = load(__webpack_require__(90));
-	  var addScalar    = load(__webpack_require__(62));
-	  var multiply     = load(__webpack_require__(93));
-	  var unaryMinus   = load(__webpack_require__(87));
-	  var det          = load(__webpack_require__(340));
-	  var eye          = load(__webpack_require__(92));
+	  var matrix       = load(__webpack_require__(64));
+	  var divideScalar = load(__webpack_require__(93));
+	  var addScalar    = load(__webpack_require__(65));
+	  var multiply     = load(__webpack_require__(96));
+	  var unaryMinus   = load(__webpack_require__(90));
+	  var det          = load(__webpack_require__(343));
+	  var eye          = load(__webpack_require__(95));
 
 	  /**
 	   * Calculate the inverse of a square matrix.
@@ -99384,21 +99726,21 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 340 */
+/* 343 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var util = __webpack_require__(48);
+	var util = __webpack_require__(51);
 	var object = util.object;
 	var string = util.string;
 
 	function factory (type, config, load, typed) {
-	  var matrix = load(__webpack_require__(61));
-	  var add = load(__webpack_require__(60));
-	  var subtract = load(__webpack_require__(86));
-	  var multiply = load(__webpack_require__(93));
-	  var unaryMinus = load(__webpack_require__(87));
+	  var matrix = load(__webpack_require__(64));
+	  var add = load(__webpack_require__(63));
+	  var subtract = load(__webpack_require__(89));
+	  var multiply = load(__webpack_require__(96));
+	  var unaryMinus = load(__webpack_require__(90));
 
 	  /**
 	   * Calculate the determinant of a matrix.
@@ -99558,13 +99900,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 341 */
+/* 344 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var errorTransform = __webpack_require__(296).transform;
-	var isCollection = __webpack_require__(331);
+	var errorTransform = __webpack_require__(299).transform;
+	var isCollection = __webpack_require__(334);
 
 	/**
 	 * Attach a transform function to math.min
@@ -99574,7 +99916,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	 * from one-based to zero based
 	 */
 	function factory (type, config, load, typed) {
-	  var min = load(__webpack_require__(342));
+	  var min = load(__webpack_require__(345));
 
 	  return typed('min', {
 	    '...any': function (args) {
@@ -99605,17 +99947,17 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 342 */
+/* 345 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepForEach = __webpack_require__(333);
-	var reduce = __webpack_require__(334);
-	var containsCollections = __webpack_require__(335);
+	var deepForEach = __webpack_require__(336);
+	var reduce = __webpack_require__(337);
+	var containsCollections = __webpack_require__(338);
 
 	function factory (type, config, load, typed) {
-	  var smaller = load(__webpack_require__(69));
+	  var smaller = load(__webpack_require__(72));
 	  
 	  /**
 	   * Compute the maximum value of a matrix or a  list of values.
@@ -99710,7 +100052,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 343 */
+/* 346 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -99722,7 +100064,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	 * This transform creates a range which includes the end value
 	 */
 	function factory (type, config, load, typed) {
-	  var range = load(__webpack_require__(344));
+	  var range = load(__webpack_require__(347));
 
 	  return typed('range', {
 	    '...any': function (args) {
@@ -99744,13 +100086,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 344 */
+/* 347 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
 	  var ZERO = new type.BigNumber(0);
 	  var ONE = new type.BigNumber(1);
@@ -100029,12 +100371,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 345 */
+/* 348 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var errorTransform = __webpack_require__(296).transform;
+	var errorTransform = __webpack_require__(299).transform;
 
 	/**
 	 * Attach a transform function to math.subset
@@ -100043,7 +100385,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	 * This transform creates a range which includes the end value
 	 */
 	function factory (type, config, load, typed) {
-	  var subset = load(__webpack_require__(297));
+	  var subset = load(__webpack_require__(300));
 
 	  return typed('subset', {
 	    '...any': function (args) {
@@ -100063,16 +100405,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 346 */
+/* 349 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var object = __webpack_require__(12);
-	var string = __webpack_require__(32);
+	var object = __webpack_require__(15);
+	var string = __webpack_require__(35);
 
 	function factory (type, config, load, typed) {
-	  var parser = load(__webpack_require__(316))();
+	  var parser = load(__webpack_require__(319))();
 
 	  /**
 	   * Documentation object
@@ -100186,66 +100528,66 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 347 */
+/* 350 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(348),
-	  __webpack_require__(375),
-	  __webpack_require__(406),
-	  __webpack_require__(422),
-	  __webpack_require__(431),
-	  __webpack_require__(436),
+	  __webpack_require__(351),
+	  __webpack_require__(378),
+	  __webpack_require__(409),
+	  __webpack_require__(425),
+	  __webpack_require__(434),
 	  __webpack_require__(439),
-	  __webpack_require__(445),
-	  __webpack_require__(457),
-	  __webpack_require__(466),
-	  __webpack_require__(470),
-	  __webpack_require__(472),
-	  __webpack_require__(480),
-	  __webpack_require__(482),
-	  __webpack_require__(508),
-	  __webpack_require__(510)
+	  __webpack_require__(442),
+	  __webpack_require__(448),
+	  __webpack_require__(460),
+	  __webpack_require__(469),
+	  __webpack_require__(473),
+	  __webpack_require__(475),
+	  __webpack_require__(483),
+	  __webpack_require__(485),
+	  __webpack_require__(511),
+	  __webpack_require__(513)
 	];
 
 
 /***/ },
-/* 348 */
+/* 351 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
 	  // decomposition
-	  __webpack_require__(349),
-	  __webpack_require__(350),
+	  __webpack_require__(352),
+	  __webpack_require__(353),
 
 	  // solver
-	  __webpack_require__(370),
-	  __webpack_require__(372),
-	  __webpack_require__(374)
+	  __webpack_require__(373),
+	  __webpack_require__(375),
+	  __webpack_require__(377)
 	];
 
 
 /***/ },
-/* 349 */
+/* 352 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var util = __webpack_require__(48);
+	var util = __webpack_require__(51);
 
 	var object = util.object;
 
 	function factory (type, config, load, typed) {
 
-	  var matrix = load(__webpack_require__(61));
-	  var abs = load(__webpack_require__(95));
-	  var addScalar = load(__webpack_require__(62));
-	  var divideScalar = load(__webpack_require__(90));
-	  var multiplyScalar = load(__webpack_require__(89));
-	  var subtract = load(__webpack_require__(86));
-	  var larger = load(__webpack_require__(73));
-	  var equalScalar = load(__webpack_require__(57));
-	  var unaryMinus = load(__webpack_require__(87));
+	  var matrix = load(__webpack_require__(64));
+	  var abs = load(__webpack_require__(98));
+	  var addScalar = load(__webpack_require__(65));
+	  var divideScalar = load(__webpack_require__(93));
+	  var multiplyScalar = load(__webpack_require__(92));
+	  var subtract = load(__webpack_require__(89));
+	  var larger = load(__webpack_require__(76));
+	  var equalScalar = load(__webpack_require__(60));
+	  var unaryMinus = load(__webpack_require__(90));
 	  
 	  var SparseMatrix = type.SparseMatrix;
 	  var DenseMatrix = type.DenseMatrix;
@@ -100619,12 +100961,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 350 */
+/* 353 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var util = __webpack_require__(48);
+	var util = __webpack_require__(51);
 
 	var number = util.number,
 	    
@@ -100632,8 +100974,8 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 	function factory (type, config, load, typed) {
 
-	  var cs_sqr = load(__webpack_require__(351));
-	  var cs_lu = load(__webpack_require__(362));
+	  var cs_sqr = load(__webpack_require__(354));
+	  var cs_lu = load(__webpack_require__(365));
 
 	  /**
 	   * Calculate the Sparse Matrix LU decomposition with full pivoting. Sparse Matrix `A` is decomposed in two matrices (`L`, `U`) and two permutation vectors (`pinv`, `q`) where
@@ -100697,18 +101039,18 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 351 */
+/* 354 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load) {
 
-	  var cs_amd = load(__webpack_require__(352));
-	  var cs_permute = load(__webpack_require__(357));
-	  var cs_etree = load(__webpack_require__(358));
-	  var cs_post = load(__webpack_require__(359));
-	  var cs_counts = load(__webpack_require__(360));
+	  var cs_amd = load(__webpack_require__(355));
+	  var cs_permute = load(__webpack_require__(360));
+	  var cs_etree = load(__webpack_require__(361));
+	  var cs_post = load(__webpack_require__(362));
+	  var cs_counts = load(__webpack_require__(363));
 
 	  /**
 	   * Symbolic ordering and analysis for QR and LU decompositions.
@@ -100866,20 +101208,20 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 352 */
+/* 355 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load) {
 
-	  var cs_flip = load(__webpack_require__(353));
-	  var cs_fkeep = load(__webpack_require__(354));
-	  var cs_tdfs = load(__webpack_require__(355));
+	  var cs_flip = load(__webpack_require__(356));
+	  var cs_fkeep = load(__webpack_require__(357));
+	  var cs_tdfs = load(__webpack_require__(358));
 	  
-	  var add       = load(__webpack_require__(60));
-	  var multiply  = load(__webpack_require__(93));
-	  var transpose = load(__webpack_require__(356));
+	  var add       = load(__webpack_require__(63));
+	  var multiply  = load(__webpack_require__(96));
+	  var transpose = load(__webpack_require__(359));
 
 	  /**
 	   * Approximate minimum degree ordering. The minimum degree algorithm is a widely used 
@@ -101445,7 +101787,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 353 */
+/* 356 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -101473,7 +101815,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 354 */
+/* 357 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -101544,7 +101886,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 355 */
+/* 358 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -101602,18 +101944,18 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 356 */
+/* 359 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var clone = __webpack_require__(12).clone;
-	var format = __webpack_require__(32).format;
+	var clone = __webpack_require__(15).clone;
+	var format = __webpack_require__(35).format;
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
 	  var DenseMatrix = type.DenseMatrix,
 	      SparseMatrix = type.SparseMatrix;
@@ -101786,7 +102128,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 357 */
+/* 360 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -101863,7 +102205,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 358 */
+/* 361 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -101945,14 +102287,14 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 359 */
+/* 362 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load) {
 
-	  var cs_tdfs = load(__webpack_require__(355));
+	  var cs_tdfs = load(__webpack_require__(358));
 
 	  /**
 	   * Post order a tree of forest
@@ -102010,16 +102352,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 360 */
+/* 363 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load) {
 
-	  var transpose = load(__webpack_require__(356));
+	  var transpose = load(__webpack_require__(359));
 	  
-	  var cs_leaf = load(__webpack_require__(361));
+	  var cs_leaf = load(__webpack_require__(364));
 
 	  /**
 	   * Computes the column counts using the upper triangular part of A.
@@ -102137,7 +102479,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 361 */
+/* 364 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -102209,21 +102551,21 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 362 */
+/* 365 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load) {
 
-	  var abs = load(__webpack_require__(95));
-	  var divideScalar = load(__webpack_require__(90));
-	  var multiply = load(__webpack_require__(93));
+	  var abs = load(__webpack_require__(98));
+	  var divideScalar = load(__webpack_require__(93));
+	  var multiply = load(__webpack_require__(96));
 	  
-	  var larger = load(__webpack_require__(73));
-	  var largerEq = load(__webpack_require__(363));
+	  var larger = load(__webpack_require__(76));
+	  var largerEq = load(__webpack_require__(366));
 	  
-	  var cs_spsolve = load(__webpack_require__(364));
+	  var cs_spsolve = load(__webpack_require__(367));
 
 	  var SparseMatrix = type.SparseMatrix;
 
@@ -102393,25 +102735,25 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 363 */
+/* 366 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var nearlyEqual = __webpack_require__(15).nearlyEqual;
-	var bigNearlyEqual = __webpack_require__(58);
+	var nearlyEqual = __webpack_require__(18).nearlyEqual;
+	var bigNearlyEqual = __webpack_require__(61);
 
 	function factory (type, config, load, typed) {
 	  
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
-	  var algorithm03 = load(__webpack_require__(70));
-	  var algorithm07 = load(__webpack_require__(71));
-	  var algorithm12 = load(__webpack_require__(72));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm03 = load(__webpack_require__(73));
+	  var algorithm07 = load(__webpack_require__(74));
+	  var algorithm12 = load(__webpack_require__(75));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
 	  /**
 	   * Test whether value x is larger or equal to y.
@@ -102574,18 +102916,18 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 364 */
+/* 367 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load) {
 
-	  var divideScalar = load(__webpack_require__(90));
-	  var multiply = load(__webpack_require__(93));
-	  var subtract = load(__webpack_require__(86));
+	  var divideScalar = load(__webpack_require__(93));
+	  var multiply = load(__webpack_require__(96));
+	  var subtract = load(__webpack_require__(89));
 
-	  var cs_reach = load(__webpack_require__(365));
+	  var cs_reach = load(__webpack_require__(368));
 
 	  /**
 	   * The function cs_spsolve() computes the solution to G * x = bk, where bk is the
@@ -102666,16 +103008,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 365 */
+/* 368 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load) {
 
-	  var cs_dfs = load(__webpack_require__(366));
-	  var cs_marked = load(__webpack_require__(367));
-	  var cs_mark = load(__webpack_require__(368));
+	  var cs_dfs = load(__webpack_require__(369));
+	  var cs_marked = load(__webpack_require__(370));
+	  var cs_mark = load(__webpack_require__(371));
 
 	  /**
 	   * The cs_reach function computes X = Reach(B), where B is the nonzero pattern of the n-by-1 
@@ -102733,16 +103075,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 366 */
+/* 369 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load) {
 
-	  var cs_marked = load(__webpack_require__(367));
-	  var cs_mark   = load(__webpack_require__(368));
-	  var cs_unflip = load(__webpack_require__(369));
+	  var cs_marked = load(__webpack_require__(370));
+	  var cs_mark   = load(__webpack_require__(371));
+	  var cs_unflip = load(__webpack_require__(372));
 
 	  /**
 	   * Depth-first search computes the nonzero pattern xi of the directed graph G (Matrix) starting
@@ -102824,7 +103166,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 367 */
+/* 370 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -102853,14 +103195,14 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 368 */
+/* 371 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load) {
 
-	  var cs_flip = load(__webpack_require__(353));
+	  var cs_flip = load(__webpack_require__(356));
 
 	  /**
 	   * Marks the node at w[j]
@@ -102884,14 +103226,14 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 369 */
+/* 372 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load) {
 
-	  var cs_flip = load(__webpack_require__(353));
+	  var cs_flip = load(__webpack_require__(356));
 	  
 	  /**
 	   * Flips the value if it is negative of returns the same value otherwise.
@@ -102914,20 +103256,20 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 370 */
+/* 373 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
 
-	  var matrix = load(__webpack_require__(61));
-	  var divideScalar = load(__webpack_require__(90));
-	  var multiplyScalar = load(__webpack_require__(89));
-	  var subtract = load(__webpack_require__(86));
-	  var equalScalar = load(__webpack_require__(57));
+	  var matrix = load(__webpack_require__(64));
+	  var divideScalar = load(__webpack_require__(93));
+	  var multiplyScalar = load(__webpack_require__(92));
+	  var subtract = load(__webpack_require__(89));
+	  var equalScalar = load(__webpack_require__(60));
 
-	  var solveValidation = load(__webpack_require__(371));
+	  var solveValidation = load(__webpack_require__(374));
 
 	  var DenseMatrix = type.DenseMatrix;
 
@@ -103107,12 +103449,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 371 */
+/* 374 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var util = __webpack_require__(48);
+	var util = __webpack_require__(51);
 
 	var string = util.string;
 	var array = util.array;
@@ -103274,7 +103616,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	exports.factory = factory;
 
 /***/ },
-/* 372 */
+/* 375 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -103283,15 +103625,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 	function factory (type, config, load, typed) {
 	  
-	  var matrix = load(__webpack_require__(61));
-	  var lup = load(__webpack_require__(349));
-	  var slu = load(__webpack_require__(350));
-	  var cs_ipvec = load(__webpack_require__(373));
+	  var matrix = load(__webpack_require__(64));
+	  var lup = load(__webpack_require__(352));
+	  var slu = load(__webpack_require__(353));
+	  var cs_ipvec = load(__webpack_require__(376));
 
-	  var solveValidation = load(__webpack_require__(371));
+	  var solveValidation = load(__webpack_require__(374));
 
-	  var usolve = load(__webpack_require__(374));
-	  var lsolve = load(__webpack_require__(370));
+	  var usolve = load(__webpack_require__(377));
+	  var lsolve = load(__webpack_require__(373));
 
 	  /**
 	   * Solves the linear system `A * x = b` where `A` is an [n x n] matrix and `b` is a [n] column vector.
@@ -103405,7 +103747,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 373 */
+/* 376 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -103452,20 +103794,20 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 374 */
+/* 377 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
 
-	  var matrix = load(__webpack_require__(61));
-	  var divideScalar = load(__webpack_require__(90));
-	  var multiplyScalar = load(__webpack_require__(89));
-	  var subtract = load(__webpack_require__(86));
-	  var equalScalar = load(__webpack_require__(57));
+	  var matrix = load(__webpack_require__(64));
+	  var divideScalar = load(__webpack_require__(93));
+	  var multiplyScalar = load(__webpack_require__(92));
+	  var subtract = load(__webpack_require__(89));
+	  var equalScalar = load(__webpack_require__(60));
 
-	  var solveValidation = load(__webpack_require__(371));
+	  var solveValidation = load(__webpack_require__(374));
 	  
 	  var DenseMatrix = type.DenseMatrix;
 
@@ -103646,56 +103988,56 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 375 */
+/* 378 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(95),
-	  __webpack_require__(60),
-	  __webpack_require__(62),
-	  __webpack_require__(376),
-	  __webpack_require__(378),
+	  __webpack_require__(98),
+	  __webpack_require__(63),
+	  __webpack_require__(65),
 	  __webpack_require__(379),
-	  __webpack_require__(338),
-	  __webpack_require__(380),
+	  __webpack_require__(381),
 	  __webpack_require__(382),
-	  __webpack_require__(384),
+	  __webpack_require__(341),
+	  __webpack_require__(383),
 	  __webpack_require__(385),
-	  __webpack_require__(96),
-	  __webpack_require__(386),
 	  __webpack_require__(387),
 	  __webpack_require__(388),
+	  __webpack_require__(99),
+	  __webpack_require__(389),
+	  __webpack_require__(390),
 	  __webpack_require__(391),
 	  __webpack_require__(394),
-	  __webpack_require__(395),
-	  __webpack_require__(396),
-	  __webpack_require__(93),
 	  __webpack_require__(397),
+	  __webpack_require__(398),
 	  __webpack_require__(399),
-	  __webpack_require__(91),
+	  __webpack_require__(96),
 	  __webpack_require__(400),
 	  __webpack_require__(402),
-	  __webpack_require__(389),
+	  __webpack_require__(94),
 	  __webpack_require__(403),
-	  __webpack_require__(86),
-	  __webpack_require__(87),
-	  __webpack_require__(404),
-	  __webpack_require__(405)
+	  __webpack_require__(405),
+	  __webpack_require__(392),
+	  __webpack_require__(406),
+	  __webpack_require__(89),
+	  __webpack_require__(90),
+	  __webpack_require__(407),
+	  __webpack_require__(408)
 	];
 
 
 /***/ },
-/* 376 */
+/* 379 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
-	  var unaryMinus = load(__webpack_require__(87));
-	  var isNegative = load(__webpack_require__(377));
-	  var matrix = load(__webpack_require__(61));
+	  var unaryMinus = load(__webpack_require__(90));
+	  var isNegative = load(__webpack_require__(380));
+	  var matrix = load(__webpack_require__(64));
 
 	  /**
 	   * Calculate the cubic root of a value.
@@ -103876,13 +104218,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 377 */
+/* 380 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
-	var number = __webpack_require__(15);
+	var deepMap = __webpack_require__(31);
+	var number = __webpack_require__(18);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -103944,12 +104286,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 378 */
+/* 381 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -104011,12 +104353,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 379 */
+/* 382 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 
@@ -104081,24 +104423,24 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 380 */
+/* 383 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
 
-	  var matrix = load(__webpack_require__(61));
-	  var divideScalar = load(__webpack_require__(90));
-	  var latex = __webpack_require__(41);
+	  var matrix = load(__webpack_require__(64));
+	  var divideScalar = load(__webpack_require__(93));
+	  var latex = __webpack_require__(44);
 	  
-	  var algorithm02 = load(__webpack_require__(381));
-	  var algorithm03 = load(__webpack_require__(70));
-	  var algorithm07 = load(__webpack_require__(71));
-	  var algorithm11 = load(__webpack_require__(94));
-	  var algorithm12 = load(__webpack_require__(72));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm02 = load(__webpack_require__(384));
+	  var algorithm03 = load(__webpack_require__(73));
+	  var algorithm07 = load(__webpack_require__(74));
+	  var algorithm11 = load(__webpack_require__(97));
+	  var algorithm12 = load(__webpack_require__(75));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
 	  /**
 	   * Divide two matrices element wise. The function accepts both matrices and
@@ -104232,16 +104574,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 381 */
+/* 384 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var DimensionError = __webpack_require__(51);
+	var DimensionError = __webpack_require__(54);
 
 	function factory (type, config, load, typed) {
 
-	  var equalScalar = load(__webpack_require__(57));
+	  var equalScalar = load(__webpack_require__(60));
 
 	  var SparseMatrix = type.SparseMatrix;
 
@@ -104357,22 +104699,22 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 382 */
+/* 385 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
 
-	  var matrix = load(__webpack_require__(61));
-	  var multiplyScalar = load(__webpack_require__(89));
-	  var latex = __webpack_require__(41);
+	  var matrix = load(__webpack_require__(64));
+	  var multiplyScalar = load(__webpack_require__(92));
+	  var latex = __webpack_require__(44);
 
-	  var algorithm02 = load(__webpack_require__(381));
-	  var algorithm09 = load(__webpack_require__(383));
-	  var algorithm11 = load(__webpack_require__(94));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm02 = load(__webpack_require__(384));
+	  var algorithm09 = load(__webpack_require__(386));
+	  var algorithm11 = load(__webpack_require__(97));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
 	  /**
 	   * Multiply two matrices element wise. The function accepts both matrices and
@@ -104506,16 +104848,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 383 */
+/* 386 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var DimensionError = __webpack_require__(51);
+	var DimensionError = __webpack_require__(54);
 
 	function factory (type, config, load, typed) {
 
-	  var equalScalar = load(__webpack_require__(57));
+	  var equalScalar = load(__webpack_require__(60));
 
 	  var SparseMatrix = type.SparseMatrix;
 
@@ -104661,23 +105003,23 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 384 */
+/* 387 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
 
-	  var matrix = load(__webpack_require__(61));
-	  var pow = load(__webpack_require__(91));
-	  var latex = __webpack_require__(41);
+	  var matrix = load(__webpack_require__(64));
+	  var pow = load(__webpack_require__(94));
+	  var latex = __webpack_require__(44);
 
-	  var algorithm03 = load(__webpack_require__(70));
-	  var algorithm07 = load(__webpack_require__(71));
-	  var algorithm11 = load(__webpack_require__(94));
-	  var algorithm12 = load(__webpack_require__(72));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm03 = load(__webpack_require__(73));
+	  var algorithm07 = load(__webpack_require__(74));
+	  var algorithm11 = load(__webpack_require__(97));
+	  var algorithm12 = load(__webpack_require__(75));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
 	  /**
 	   * Calculates the power of x to y element wise.
@@ -104808,12 +105150,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 385 */
+/* 388 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -104871,12 +105213,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 386 */
+/* 389 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -104937,22 +105279,22 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 387 */
+/* 390 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isInteger = __webpack_require__(15).isInteger;
+	var isInteger = __webpack_require__(18).isInteger;
 
 	function factory (type, config, load, typed) {
 
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
-	  var algorithm01 = load(__webpack_require__(63));
-	  var algorithm04 = load(__webpack_require__(64));
-	  var algorithm10 = load(__webpack_require__(65));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm01 = load(__webpack_require__(66));
+	  var algorithm04 = load(__webpack_require__(67));
+	  var algorithm10 = load(__webpack_require__(68));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
 	  /**
 	   * Calculate the greatest common divisor for two or more values or arrays.
@@ -105142,21 +105484,21 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 388 */
+/* 391 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var flatten = __webpack_require__(49).flatten;
+	var flatten = __webpack_require__(52).flatten;
 
 	function factory (type, config, load, typed) {
-	  var abs = load(__webpack_require__(95));
-	  var add = load(__webpack_require__(62));
-	  var divide = load(__webpack_require__(90));
-	  var multiply = load(__webpack_require__(89));
-	  var sqrt = load(__webpack_require__(389));
-	  var smaller = load(__webpack_require__(69));
-	  var isPositive = load(__webpack_require__(390));
+	  var abs = load(__webpack_require__(98));
+	  var add = load(__webpack_require__(65));
+	  var divide = load(__webpack_require__(93));
+	  var multiply = load(__webpack_require__(92));
+	  var sqrt = load(__webpack_require__(392));
+	  var smaller = load(__webpack_require__(72));
+	  var isPositive = load(__webpack_require__(393));
 
 	  /**
 	   * Calculate the hypotenusa of a list with values. The hypotenusa is defined as:
@@ -105232,12 +105574,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 389 */
+/* 392 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -105318,13 +105660,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 390 */
+/* 393 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
-	var number = __webpack_require__(15);
+	var deepMap = __webpack_require__(31);
+	var number = __webpack_require__(18);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -105388,22 +105730,22 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 391 */
+/* 394 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isInteger = __webpack_require__(15).isInteger;
+	var isInteger = __webpack_require__(18).isInteger;
 
 	function factory (type, config, load, typed) {
 	  
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
-	  var algorithm02 = load(__webpack_require__(381));
-	  var algorithm06 = load(__webpack_require__(392));
-	  var algorithm11 = load(__webpack_require__(94));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm02 = load(__webpack_require__(384));
+	  var algorithm06 = load(__webpack_require__(395));
+	  var algorithm11 = load(__webpack_require__(97));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
 	  /**
 	   * Calculate the least common multiple for two or more values or arrays.
@@ -105608,17 +105950,17 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 392 */
+/* 395 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var scatter = __webpack_require__(393);
-	var DimensionError = __webpack_require__(51);
+	var scatter = __webpack_require__(396);
+	var DimensionError = __webpack_require__(54);
 
 	function factory (type, config, load, typed) {
 
-	  var equalScalar = load(__webpack_require__(57));
+	  var equalScalar = load(__webpack_require__(60));
 
 	  var SparseMatrix = type.SparseMatrix;
 
@@ -105777,7 +106119,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 393 */
+/* 396 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -105847,15 +106189,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 394 */
+/* 397 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
-	  var divideScalar = load(__webpack_require__(90));
+	  var divideScalar = load(__webpack_require__(93));
 
 	  /**
 	   * Calculate the logarithm of a value.
@@ -105939,12 +106281,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 395 */
+/* 398 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -106023,23 +106365,23 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 396 */
+/* 399 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
 
-	  var matrix = load(__webpack_require__(61));
-	  var latex = __webpack_require__(41);
+	  var matrix = load(__webpack_require__(64));
+	  var latex = __webpack_require__(44);
 
-	  var algorithm02 = load(__webpack_require__(381));
-	  var algorithm03 = load(__webpack_require__(70));
-	  var algorithm05 = load(__webpack_require__(88));
-	  var algorithm11 = load(__webpack_require__(94));
-	  var algorithm12 = load(__webpack_require__(72));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm02 = load(__webpack_require__(384));
+	  var algorithm03 = load(__webpack_require__(73));
+	  var algorithm05 = load(__webpack_require__(91));
+	  var algorithm11 = load(__webpack_require__(97));
+	  var algorithm12 = load(__webpack_require__(75));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 	  
 	  /**
 	   * Calculates the modulus, the remainder of an integer division.
@@ -106213,24 +106555,24 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 397 */
+/* 400 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
 	  
-	  var abs         = load(__webpack_require__(95));
-	  var add         = load(__webpack_require__(60));
-	  var pow         = load(__webpack_require__(91));
-	  var sqrt        = load(__webpack_require__(389));
-	  var multiply    = load(__webpack_require__(93));
-	  var equalScalar = load(__webpack_require__(57));
-	  var larger      = load(__webpack_require__(73));
-	  var smaller     = load(__webpack_require__(69));
-	  var matrix      = load(__webpack_require__(61));
-	  var trace       = load(__webpack_require__(398));
-	  var transpose   = load(__webpack_require__(356));
+	  var abs         = load(__webpack_require__(98));
+	  var add         = load(__webpack_require__(63));
+	  var pow         = load(__webpack_require__(94));
+	  var sqrt        = load(__webpack_require__(392));
+	  var multiply    = load(__webpack_require__(96));
+	  var equalScalar = load(__webpack_require__(60));
+	  var larger      = load(__webpack_require__(76));
+	  var smaller     = load(__webpack_require__(72));
+	  var matrix      = load(__webpack_require__(64));
+	  var trace       = load(__webpack_require__(401));
+	  var transpose   = load(__webpack_require__(359));
 
 
 	  /**
@@ -106434,18 +106776,18 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 398 */
+/* 401 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var clone = __webpack_require__(12).clone;
-	var format = __webpack_require__(32).format;
+	var clone = __webpack_require__(15).clone;
+	var format = __webpack_require__(35).format;
 
 	function factory (type, config, load, typed) {
 	  
-	  var matrix = load(__webpack_require__(61));
-	  var add = load(__webpack_require__(60));
+	  var matrix = load(__webpack_require__(64));
+	  var add = load(__webpack_require__(63));
 
 	  /**
 	   * Calculate the trace of a matrix: the sum of the elements on the main
@@ -106587,21 +106929,21 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 399 */
+/* 402 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
 
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
-	  var algorithm01 = load(__webpack_require__(63));
-	  var algorithm02 = load(__webpack_require__(381));
-	  var algorithm06 = load(__webpack_require__(392));
-	  var algorithm11 = load(__webpack_require__(94));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm01 = load(__webpack_require__(66));
+	  var algorithm02 = load(__webpack_require__(384));
+	  var algorithm06 = load(__webpack_require__(395));
+	  var algorithm11 = load(__webpack_require__(97));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
 	  /**
 	   * Calculate the nth root of a value.
@@ -106892,25 +107234,25 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 400 */
+/* 403 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isInteger = __webpack_require__(15).isInteger;
-	var toFixed = __webpack_require__(15).toFixed;
-	var deepMap = __webpack_require__(28);
+	var isInteger = __webpack_require__(18).isInteger;
+	var toFixed = __webpack_require__(18).toFixed;
+	var deepMap = __webpack_require__(31);
 
 	var NO_INT = 'Number of decimals in function round must be an integer';
 
 	function factory (type, config, load, typed) {
-	  var matrix = load(__webpack_require__(61));
-	  var equalScalar = load(__webpack_require__(57));
-	  var zeros = load(__webpack_require__(401));
+	  var matrix = load(__webpack_require__(64));
+	  var equalScalar = load(__webpack_require__(60));
+	  var zeros = load(__webpack_require__(404));
 
-	  var algorithm11 = load(__webpack_require__(94));
-	  var algorithm12 = load(__webpack_require__(72));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm11 = load(__webpack_require__(97));
+	  var algorithm12 = load(__webpack_require__(75));
+	  var algorithm14 = load(__webpack_require__(70));
 	  
 	  /**
 	   * Round a value towards the nearest integer.
@@ -107072,16 +107414,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 401 */
+/* 404 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isInteger = __webpack_require__(15).isInteger;
-	var resize = __webpack_require__(49).resize;
+	var isInteger = __webpack_require__(18).isInteger;
+	var resize = __webpack_require__(52).resize;
 
 	function factory (type, config, load, typed) {
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
 	  /**
 	   * Create a matrix filled with zeros. The created matrix can have one or
@@ -107212,13 +107554,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 402 */
+/* 405 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var number = __webpack_require__(15);
-	var deepMap = __webpack_require__(28);
+	var number = __webpack_require__(18);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -107287,12 +107629,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 403 */
+/* 406 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -107358,15 +107700,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 404 */
+/* 407 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
 	  /**
 	   * Unary plus operation.
@@ -107436,15 +107778,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 405 */
+/* 408 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isInteger = __webpack_require__(15).isInteger;
+	var isInteger = __webpack_require__(18).isInteger;
 
 	function factory (type, config, load, typed) {
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
 	  /**
 	   * Calculate the extended greatest common divisor for two values.
@@ -107579,39 +107921,39 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 406 */
+/* 409 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(407),
-	  __webpack_require__(411),
-	  __webpack_require__(412),
+	  __webpack_require__(410),
 	  __webpack_require__(414),
-	  __webpack_require__(416),
+	  __webpack_require__(415),
+	  __webpack_require__(417),
 	  __webpack_require__(419),
-	  __webpack_require__(421)
+	  __webpack_require__(422),
+	  __webpack_require__(424)
 	];
 
 
 /***/ },
-/* 407 */
+/* 410 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isInteger = __webpack_require__(15).isInteger;
-	var bigBitAnd = __webpack_require__(408);
+	var isInteger = __webpack_require__(18).isInteger;
+	var bigBitAnd = __webpack_require__(411);
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
-	  var algorithm02 = load(__webpack_require__(381));
-	  var algorithm06 = load(__webpack_require__(392));
-	  var algorithm11 = load(__webpack_require__(94));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm02 = load(__webpack_require__(384));
+	  var algorithm06 = load(__webpack_require__(395));
+	  var algorithm11 = load(__webpack_require__(97));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 	  
 	  /**
 	   * Bitwise AND two values, `x & y`.
@@ -107749,10 +108091,10 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 408 */
+/* 411 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var bitwise = __webpack_require__(409);
+	var bitwise = __webpack_require__(412);
 
 	/**
 	 * Bitwise and for Bignumbers
@@ -107823,10 +108165,10 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 409 */
+/* 412 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var bitNot = __webpack_require__(410);
+	var bitNot = __webpack_require__(413);
 
 	/**
 	 * Applies bitwise function to numbers
@@ -107953,7 +108295,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 410 */
+/* 413 */
 /***/ function(module, exports) {
 
 	/**
@@ -107980,17 +108322,17 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 411 */
+/* 414 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
-	var bigBitNot = __webpack_require__(410);
-	var isInteger = __webpack_require__(15).isInteger;
+	var deepMap = __webpack_require__(31);
+	var bigBitNot = __webpack_require__(413);
+	var isInteger = __webpack_require__(18).isInteger;
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
 	  /**
 	   * Bitwise NOT value, `~x`.
@@ -108042,24 +108384,24 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 412 */
+/* 415 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isInteger = __webpack_require__(15).isInteger;
-	var bigBitOr = __webpack_require__(413);
+	var isInteger = __webpack_require__(18).isInteger;
+	var bigBitOr = __webpack_require__(416);
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
-	  var algorithm01 = load(__webpack_require__(63));
-	  var algorithm04 = load(__webpack_require__(64));
-	  var algorithm10 = load(__webpack_require__(65));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm01 = load(__webpack_require__(66));
+	  var algorithm04 = load(__webpack_require__(67));
+	  var algorithm10 = load(__webpack_require__(68));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 	  
 	  /**
 	   * Bitwise OR two values, `x | y`.
@@ -108197,10 +108539,10 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 413 */
+/* 416 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var bitwise = __webpack_require__(409);
+	var bitwise = __webpack_require__(412);
 
 	/**
 	 * Bitwise OR for BigNumbers
@@ -108256,24 +108598,24 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 414 */
+/* 417 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isInteger = __webpack_require__(15).isInteger;
-	var bigBitXor = __webpack_require__(415);
+	var isInteger = __webpack_require__(18).isInteger;
+	var bigBitXor = __webpack_require__(418);
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
-	  var algorithm03 = load(__webpack_require__(70));
-	  var algorithm07 = load(__webpack_require__(71));
-	  var algorithm12 = load(__webpack_require__(72));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm03 = load(__webpack_require__(73));
+	  var algorithm07 = load(__webpack_require__(74));
+	  var algorithm12 = load(__webpack_require__(75));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
 	  /**
 	   * Bitwise XOR two values, `x ^ y`.
@@ -108411,11 +108753,11 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 415 */
+/* 418 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var bitwise = __webpack_require__(409);
-	var bitNot = __webpack_require__(410);
+	var bitwise = __webpack_require__(412);
+	var bitNot = __webpack_require__(413);
 
 	/**
 	 * Bitwise XOR for BigNumbers
@@ -108477,28 +108819,28 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 416 */
+/* 419 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isInteger = __webpack_require__(15).isInteger;
-	var bigLeftShift = __webpack_require__(417);
+	var isInteger = __webpack_require__(18).isInteger;
+	var bigLeftShift = __webpack_require__(420);
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
-	  var matrix = load(__webpack_require__(61));
-	  var equalScalar = load(__webpack_require__(57));
-	  var zeros = load(__webpack_require__(401));
+	  var matrix = load(__webpack_require__(64));
+	  var equalScalar = load(__webpack_require__(60));
+	  var zeros = load(__webpack_require__(404));
 
-	  var algorithm01 = load(__webpack_require__(63));
-	  var algorithm02 = load(__webpack_require__(381));
-	  var algorithm08 = load(__webpack_require__(418));
-	  var algorithm10 = load(__webpack_require__(65));
-	  var algorithm11 = load(__webpack_require__(94));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm01 = load(__webpack_require__(66));
+	  var algorithm02 = load(__webpack_require__(384));
+	  var algorithm08 = load(__webpack_require__(421));
+	  var algorithm10 = load(__webpack_require__(68));
+	  var algorithm11 = load(__webpack_require__(97));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
 	  /**
 	   * Bitwise left logical shift of a value x by y number of bits, `x << y`.
@@ -108645,7 +108987,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 417 */
+/* 420 */
 /***/ function(module, exports) {
 
 	
@@ -108692,16 +109034,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 418 */
+/* 421 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var DimensionError = __webpack_require__(51);
+	var DimensionError = __webpack_require__(54);
 
 	function factory (type, config, load, typed) {
 
-	  var equalScalar = load(__webpack_require__(57));
+	  var equalScalar = load(__webpack_require__(60));
 
 	  var SparseMatrix = type.SparseMatrix;
 
@@ -108858,28 +109200,28 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 419 */
+/* 422 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isInteger = __webpack_require__(15).isInteger;
-	var bigRightArithShift = __webpack_require__(420);
+	var isInteger = __webpack_require__(18).isInteger;
+	var bigRightArithShift = __webpack_require__(423);
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 	  
-	  var matrix = load(__webpack_require__(61));
-	  var equalScalar = load(__webpack_require__(57));
-	  var zeros = load(__webpack_require__(401));
+	  var matrix = load(__webpack_require__(64));
+	  var equalScalar = load(__webpack_require__(60));
+	  var zeros = load(__webpack_require__(404));
 
-	  var algorithm01 = load(__webpack_require__(63));
-	  var algorithm02 = load(__webpack_require__(381));
-	  var algorithm08 = load(__webpack_require__(418));
-	  var algorithm10 = load(__webpack_require__(65));
-	  var algorithm11 = load(__webpack_require__(94));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm01 = load(__webpack_require__(66));
+	  var algorithm02 = load(__webpack_require__(384));
+	  var algorithm08 = load(__webpack_require__(421));
+	  var algorithm10 = load(__webpack_require__(68));
+	  var algorithm11 = load(__webpack_require__(97));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
 	  /**
 	   * Bitwise right arithmetic shift of a value x by y number of bits, `x >> y`.
@@ -109026,7 +109368,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 420 */
+/* 423 */
 /***/ function(module, exports) {
 
 	/*
@@ -109079,27 +109421,27 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 421 */
+/* 424 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isInteger = __webpack_require__(15).isInteger;
+	var isInteger = __webpack_require__(18).isInteger;
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
-	  var matrix = load(__webpack_require__(61));
-	  var equalScalar = load(__webpack_require__(57));
-	  var zeros = load(__webpack_require__(401));
+	  var matrix = load(__webpack_require__(64));
+	  var equalScalar = load(__webpack_require__(60));
+	  var zeros = load(__webpack_require__(404));
 
-	  var algorithm01 = load(__webpack_require__(63));
-	  var algorithm02 = load(__webpack_require__(381));
-	  var algorithm08 = load(__webpack_require__(418));
-	  var algorithm10 = load(__webpack_require__(65));
-	  var algorithm11 = load(__webpack_require__(94));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm01 = load(__webpack_require__(66));
+	  var algorithm02 = load(__webpack_require__(384));
+	  var algorithm08 = load(__webpack_require__(421));
+	  var algorithm10 = load(__webpack_require__(68));
+	  var algorithm11 = load(__webpack_require__(97));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 	  
 	  /**
 	   * Bitwise right logical shift of value x by y number of bits, `x >>> y`.
@@ -109247,28 +109589,28 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 422 */
+/* 425 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(423),
-	  __webpack_require__(429),
-	  __webpack_require__(424),
-	  __webpack_require__(430)
+	  __webpack_require__(426),
+	  __webpack_require__(432),
+	  __webpack_require__(427),
+	  __webpack_require__(433)
 	];
 
 
 /***/ },
-/* 423 */
+/* 426 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var add = load(__webpack_require__(60));
-	  var stirlingS2 = load(__webpack_require__(424));
-	  var isNegative = load(__webpack_require__(377));
-	  var isInteger = load(__webpack_require__(428));
+	  var add = load(__webpack_require__(63));
+	  var stirlingS2 = load(__webpack_require__(427));
+	  var isNegative = load(__webpack_require__(380));
+	  var isInteger = load(__webpack_require__(431));
 
 	  /**
 	   * The Bell Numbers count the number of partitions of a set. A partition is a pairwise disjoint subset of S whose union is S.
@@ -109318,22 +109660,22 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 424 */
+/* 427 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var add = load(__webpack_require__(60));
-	  var subtract = load(__webpack_require__(86));
-	  var multiply = load(__webpack_require__(93));
-	  var divide = load(__webpack_require__(338));
-	  var pow = load(__webpack_require__(91));
-	  var factorial = load(__webpack_require__(425));
-	  var combinations = load(__webpack_require__(427));
-	  var isNegative = load(__webpack_require__(377));
-	  var isInteger = load(__webpack_require__(428));
-	  var larger = load(__webpack_require__(73));
+	  var add = load(__webpack_require__(63));
+	  var subtract = load(__webpack_require__(89));
+	  var multiply = load(__webpack_require__(96));
+	  var divide = load(__webpack_require__(341));
+	  var pow = load(__webpack_require__(94));
+	  var factorial = load(__webpack_require__(428));
+	  var combinations = load(__webpack_require__(430));
+	  var isNegative = load(__webpack_require__(380));
+	  var isInteger = load(__webpack_require__(431));
+	  var larger = load(__webpack_require__(76));
 
 	  /**
 	   * The Stirling numbers of the second kind, counts the number of ways to partition
@@ -109393,16 +109735,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 425 */
+/* 428 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
-	  var gamma = load(__webpack_require__(426));
-	  var latex = __webpack_require__(41);
+	  var gamma = load(__webpack_require__(429));
+	  var latex = __webpack_require__(44);
 
 	  /**
 	   * Compute the factorial of a value
@@ -109460,17 +109802,17 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 426 */
+/* 429 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
-	var isInteger = __webpack_require__(15).isInteger;
+	var deepMap = __webpack_require__(31);
+	var isInteger = __webpack_require__(18).isInteger;
 
 	function factory (type, config, load, typed) {
-	  var multiply = load(__webpack_require__(93));
-	  var pow = load(__webpack_require__(91));
+	  var multiply = load(__webpack_require__(96));
+	  var pow = load(__webpack_require__(94));
 
 	  /**
 	   * Compute the gamma function of a value using Lanczos approximation for
@@ -109668,12 +110010,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 427 */
+/* 430 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isInteger = __webpack_require__(15).isInteger;
+	var isInteger = __webpack_require__(18).isInteger;
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -109765,13 +110107,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 428 */
+/* 431 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
-	var number = __webpack_require__(15);
+	var deepMap = __webpack_require__(31);
+	var number = __webpack_require__(18);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -109827,17 +110169,17 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 429 */
+/* 432 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var combinations = load(__webpack_require__(427));
-	  var add = load(__webpack_require__(62));
-	  var isPositive = load(__webpack_require__(390));
-	  var isInteger = load(__webpack_require__(428));
-	  var larger = load(__webpack_require__(73));
+	  var combinations = load(__webpack_require__(430));
+	  var add = load(__webpack_require__(65));
+	  var isPositive = load(__webpack_require__(393));
+	  var isInteger = load(__webpack_require__(431));
+	  var larger = load(__webpack_require__(76));
 
 	  /**
 	   * The composition counts of n into k parts.
@@ -109884,18 +110226,18 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 430 */
+/* 433 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var add = load(__webpack_require__(60));
-	  var divide = load(__webpack_require__(338));
-	  var multiply = load(__webpack_require__(93));
-	  var combinations = load(__webpack_require__(427));
-	  var isNegative = load(__webpack_require__(377));
-	  var isInteger = load(__webpack_require__(428));
+	  var add = load(__webpack_require__(63));
+	  var divide = load(__webpack_require__(341));
+	  var multiply = load(__webpack_require__(96));
+	  var combinations = load(__webpack_require__(430));
+	  var isNegative = load(__webpack_require__(380));
+	  var isInteger = load(__webpack_require__(431));
 
 
 	  /**
@@ -109941,24 +110283,24 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 431 */
+/* 434 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(432),
-	  __webpack_require__(433),
-	  __webpack_require__(434),
-	  __webpack_require__(435)
+	  __webpack_require__(435),
+	  __webpack_require__(436),
+	  __webpack_require__(437),
+	  __webpack_require__(438)
 	];
 
 
 /***/ },
-/* 432 */
+/* 435 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -110018,12 +110360,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 433 */
+/* 436 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -110079,12 +110421,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 434 */
+/* 437 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -110142,12 +110484,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 435 */
+/* 438 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -110205,28 +110547,28 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 436 */
+/* 439 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(437),
-	  __webpack_require__(438)
+	  __webpack_require__(440),
+	  __webpack_require__(441)
 	];
 
 
 /***/ },
-/* 437 */
+/* 440 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
 
-	  var abs = load(__webpack_require__(95));
-	  var add = load(__webpack_require__(60));
-	  var matrix = load(__webpack_require__(61));
-	  var multiply = load(__webpack_require__(93));
-	  var subtract = load(__webpack_require__(86));
+	  var abs = load(__webpack_require__(98));
+	  var add = load(__webpack_require__(63));
+	  var matrix = load(__webpack_require__(64));
+	  var multiply = load(__webpack_require__(96));
+	  var subtract = load(__webpack_require__(89));
 
 	  /**
 	   * Calculates the point of intersection of two lines in two or three dimensions
@@ -110363,13 +110705,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 438 */
+/* 441 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
 	  /**
 	    * Calculates:
@@ -110670,36 +111012,36 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 439 */
+/* 442 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(440),
-	  __webpack_require__(441),
 	  __webpack_require__(443),
-	  __webpack_require__(444)
+	  __webpack_require__(444),
+	  __webpack_require__(446),
+	  __webpack_require__(447)
 	];
 
 
 /***/ },
-/* 440 */
+/* 443 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
-	  var matrix = load(__webpack_require__(61));
-	  var zeros = load(__webpack_require__(401));
-	  var not = load(__webpack_require__(441));
-	  var isZero = load(__webpack_require__(442));
+	  var matrix = load(__webpack_require__(64));
+	  var zeros = load(__webpack_require__(404));
+	  var not = load(__webpack_require__(444));
+	  var isZero = load(__webpack_require__(445));
 
-	  var algorithm02 = load(__webpack_require__(381));
-	  var algorithm06 = load(__webpack_require__(392));
-	  var algorithm11 = load(__webpack_require__(94));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm02 = load(__webpack_require__(384));
+	  var algorithm06 = load(__webpack_require__(395));
+	  var algorithm11 = load(__webpack_require__(97));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
 	  /**
 	   * Logical `and`. Test whether two values are both defined with a nonzero/nonempty value.
@@ -110859,15 +111201,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 441 */
+/* 444 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
 	  /**
 	   * Logical `not`. Flips boolean value of a given parameter.
@@ -110928,13 +111270,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 442 */
+/* 445 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
-	var number = __webpack_require__(15);
+	var deepMap = __webpack_require__(31);
+	var number = __webpack_require__(18);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -111004,21 +111346,21 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 443 */
+/* 446 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
-	  var algorithm03 = load(__webpack_require__(70));
-	  var algorithm05 = load(__webpack_require__(88));
-	  var algorithm12 = load(__webpack_require__(72));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm03 = load(__webpack_require__(73));
+	  var algorithm05 = load(__webpack_require__(91));
+	  var algorithm12 = load(__webpack_require__(75));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 	  
 	  /**
 	   * Logical `or`. Test if at least one value is defined with a nonzero/nonempty value.
@@ -111168,21 +111510,21 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 444 */
+/* 447 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
-	  var algorithm03 = load(__webpack_require__(70));
-	  var algorithm07 = load(__webpack_require__(71));
-	  var algorithm12 = load(__webpack_require__(72));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm03 = load(__webpack_require__(73));
+	  var algorithm07 = load(__webpack_require__(74));
+	  var algorithm12 = load(__webpack_require__(75));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 	  
 	  /**
 	   * Logical `xor`. Test whether one and only one value is defined with a nonzero/nonempty value.
@@ -111332,47 +111674,47 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 445 */
+/* 448 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(322),
-	  __webpack_require__(446),
-	  __webpack_require__(340),
-	  __webpack_require__(447),
-	  __webpack_require__(448),
-	  __webpack_require__(92),
-	  __webpack_require__(324),
+	  __webpack_require__(325),
 	  __webpack_require__(449),
-	  __webpack_require__(326),
-	  __webpack_require__(339),
-	  __webpack_require__(329),
+	  __webpack_require__(343),
 	  __webpack_require__(450),
 	  __webpack_require__(451),
-	  __webpack_require__(344),
+	  __webpack_require__(95),
+	  __webpack_require__(327),
+	  __webpack_require__(452),
+	  __webpack_require__(329),
+	  __webpack_require__(342),
+	  __webpack_require__(332),
 	  __webpack_require__(453),
 	  __webpack_require__(454),
-	  __webpack_require__(455),
+	  __webpack_require__(347),
 	  __webpack_require__(456),
-	  __webpack_require__(297),
-	  __webpack_require__(398),
-	  __webpack_require__(356),
-	  __webpack_require__(401)
+	  __webpack_require__(457),
+	  __webpack_require__(458),
+	  __webpack_require__(459),
+	  __webpack_require__(300),
+	  __webpack_require__(401),
+	  __webpack_require__(359),
+	  __webpack_require__(404)
 	];
 
 
 /***/ },
-/* 446 */
+/* 449 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var array = __webpack_require__(49);
+	var array = __webpack_require__(52);
 
 	function factory (type, config, load, typed) {
-	  var matrix   = load(__webpack_require__(61));
-	  var subtract = load(__webpack_require__(86));
-	  var multiply = load(__webpack_require__(93));
+	  var matrix   = load(__webpack_require__(64));
+	  var subtract = load(__webpack_require__(89));
+	  var multiply = load(__webpack_require__(96));
 
 	  /**
 	   * Calculate the cross product for two vectors in three dimensional space.
@@ -111469,18 +111811,18 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 447 */
+/* 450 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var array     = __webpack_require__(49);
-	var clone     = __webpack_require__(12).clone;
-	var isInteger = __webpack_require__(15).isInteger;
+	var array     = __webpack_require__(52);
+	var clone     = __webpack_require__(15).clone;
+	var isInteger = __webpack_require__(18).isInteger;
 
 	function factory (type, config, load, typed) {
 
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 	  
 	  /**
 	   * Create a diagonal matrix or retrieve the diagonal of a matrix
@@ -111645,16 +111987,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 448 */
+/* 451 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var size = __webpack_require__(49).size;
+	var size = __webpack_require__(52).size;
 
 	function factory (type, config, load, typed) {
-	  var add      = load(__webpack_require__(60));
-	  var multiply = load(__webpack_require__(93));
+	  var add      = load(__webpack_require__(63));
+	  var multiply = load(__webpack_require__(96));
 
 	  /**
 	   * Calculate the dot product of two vectors. The dot product of
@@ -111730,16 +112072,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 449 */
+/* 452 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var clone = __webpack_require__(12).clone;
-	var _flatten = __webpack_require__(49).flatten;
+	var clone = __webpack_require__(15).clone;
+	var _flatten = __webpack_require__(52).flatten;
 
 	function factory (type, config, load, typed) {
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
 	  /**
 	   * Flatten a multi dimensional matrix into a single dimensional matrix.
@@ -111781,16 +112123,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 450 */
+/* 453 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isInteger = __webpack_require__(15).isInteger;
-	var resize = __webpack_require__(49).resize;
+	var isInteger = __webpack_require__(18).isInteger;
+	var resize = __webpack_require__(52).resize;
 
 	function factory (type, config, load, typed) {
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
 	  /**
 	   * Create a matrix filled with ones. The created matrix can have one or
@@ -111921,15 +112263,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 451 */
+/* 454 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isInteger = __webpack_require__(15).isInteger;
+	var isInteger = __webpack_require__(18).isInteger;
 
 	function factory (type, config, load, typed) {
-	  var asc = load(__webpack_require__(452));
+	  var asc = load(__webpack_require__(455));
 	  function desc(a, b) {
 	    return -asc(a, b);
 	  }
@@ -112063,23 +112405,23 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 452 */
+/* 455 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var nearlyEqual = __webpack_require__(15).nearlyEqual;
-	var bigNearlyEqual = __webpack_require__(58);
+	var nearlyEqual = __webpack_require__(18).nearlyEqual;
+	var bigNearlyEqual = __webpack_require__(61);
 
 	function factory (type, config, load, typed) {
 
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
-	  var algorithm03 = load(__webpack_require__(70));
-	  var algorithm05 = load(__webpack_require__(88));
-	  var algorithm12 = load(__webpack_require__(72));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm03 = load(__webpack_require__(73));
+	  var algorithm05 = load(__webpack_require__(91));
+	  var algorithm12 = load(__webpack_require__(75));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 	  
 	  /**
 	   * Compare two values. Returns 1 when x > y, -1 when x < y, and 0 when x == y.
@@ -112251,21 +112593,21 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 453 */
+/* 456 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var DimensionError = __webpack_require__(51);
-	var ArgumentsError = __webpack_require__(20);
+	var DimensionError = __webpack_require__(54);
+	var ArgumentsError = __webpack_require__(23);
 
-	var isInteger = __webpack_require__(15).isInteger;
-	var format = __webpack_require__(32).format;
-	var clone = __webpack_require__(12).clone;
-	var array = __webpack_require__(49);
+	var isInteger = __webpack_require__(18).isInteger;
+	var format = __webpack_require__(35).format;
+	var clone = __webpack_require__(15).clone;
+	var array = __webpack_require__(52);
 
 	function factory (type, config, load, typed) {
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
 	  /**
 	   * Resize a matrix
@@ -112395,15 +112737,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 454 */
+/* 457 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var array = __webpack_require__(49);
+	var array = __webpack_require__(52);
 
 	function factory (type, config, load, typed) {
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
 	  /**
 	   * Calculate the size of a matrix or scalar.
@@ -112456,16 +112798,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 455 */
+/* 458 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var size = __webpack_require__(49).size;
+	var size = __webpack_require__(52).size;
 
 	function factory (type, config, load, typed) {
-	  var matrix = load(__webpack_require__(61));
-	  var asc = load(__webpack_require__(452));
+	  var matrix = load(__webpack_require__(64));
+	  var asc = load(__webpack_require__(455));
 	  var desc = function (a, b) {
 	    return -asc(a, b);
 	  };
@@ -112582,16 +112924,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 456 */
+/* 459 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var object = __webpack_require__(12);
-	var array = __webpack_require__(49);
+	var object = __webpack_require__(15);
+	var array = __webpack_require__(52);
 
 	function factory (type, config, load, typed) {
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
 	  /**
 	   * Squeeze a matrix, remove inner and outer singleton dimensions from a matrix.
@@ -112649,38 +112991,38 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 457 */
+/* 460 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
 	  //require('./distribution'), // TODO: rethink math.distribution
-	  __webpack_require__(427),
-	  __webpack_require__(425),
-	  __webpack_require__(426),
-	  __webpack_require__(458),
-	  __webpack_require__(460),
+	  __webpack_require__(430),
+	  __webpack_require__(428),
+	  __webpack_require__(429),
 	  __webpack_require__(461),
-	  __webpack_require__(462),
+	  __webpack_require__(463),
 	  __webpack_require__(464),
-	  __webpack_require__(465)
+	  __webpack_require__(465),
+	  __webpack_require__(467),
+	  __webpack_require__(468)
 	];
 
 
 /***/ },
-/* 458 */
+/* 461 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 
 	function factory(type, config, load, typed) {
-	    var matrix = load(__webpack_require__(61));
-	    var divide = load(__webpack_require__(338));
-	    var sum = load(__webpack_require__(459));
-	    var multiply = load(__webpack_require__(93));
-	    var dotDivide = load(__webpack_require__(380));
-	    var log = load(__webpack_require__(394));
-	    var isNumeric = load(__webpack_require__(98));
+	    var matrix = load(__webpack_require__(64));
+	    var divide = load(__webpack_require__(341));
+	    var sum = load(__webpack_require__(462));
+	    var multiply = load(__webpack_require__(96));
+	    var dotDivide = load(__webpack_require__(383));
+	    var log = load(__webpack_require__(397));
+	    var isNumeric = load(__webpack_require__(101));
 
 	    /**
 	     * Calculate the Kullback-Leibler (KL) divergence  between two distributions
@@ -112764,15 +113106,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 459 */
+/* 462 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepForEach = __webpack_require__(333);
+	var deepForEach = __webpack_require__(336);
 
 	function factory (type, config, load, typed) {
-	  var add = load(__webpack_require__(62));
+	  var add = load(__webpack_require__(65));
 
 	  /**
 	   * Compute the sum of a matrix or a list with values.
@@ -112854,20 +113196,20 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 460 */
+/* 463 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepForEach = __webpack_require__(333);
+	var deepForEach = __webpack_require__(336);
 
 	function factory (type, config, load, typed) {
-	  var add = load(__webpack_require__(60));
-	  var multiply = load(__webpack_require__(93));
-	  var divide = load(__webpack_require__(338));
-	  var factorial = load(__webpack_require__(425));
-	  var isInteger = load(__webpack_require__(428));
-	  var isPositive = load(__webpack_require__(390));
+	  var add = load(__webpack_require__(63));
+	  var multiply = load(__webpack_require__(96));
+	  var divide = load(__webpack_require__(341));
+	  var factorial = load(__webpack_require__(428));
+	  var isInteger = load(__webpack_require__(431));
+	  var isPositive = load(__webpack_require__(393));
 
 	  /**
 	   * Multinomial Coefficients compute the number of ways of picking a1, a2, ..., ai unordered outcomes from `n` possibilities.
@@ -112913,15 +113255,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 461 */
+/* 464 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isInteger = __webpack_require__(15).isInteger;
+	var isInteger = __webpack_require__(18).isInteger;
 
 	function factory (type, config, load, typed) {
-	  var factorial = load(__webpack_require__(425));
+	  var factorial = load(__webpack_require__(428));
 
 	  /**
 	   * Compute the number of ways of obtaining an ordered subset of `k` elements
@@ -113013,13 +113355,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 462 */
+/* 465 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var distribution = load(__webpack_require__(463));
+	  var distribution = load(__webpack_require__(466));
 
 	  /**
 	   * Random pick one or more values from a one dimensional array.
@@ -113064,20 +113406,20 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 463 */
+/* 466 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var ArgumentsError = __webpack_require__(20);
-	var isCollection = __webpack_require__(331);
-	var isNumber = __webpack_require__(15).isNumber;
+	var ArgumentsError = __webpack_require__(23);
+	var isCollection = __webpack_require__(334);
+	var isNumber = __webpack_require__(18).isNumber;
 
 	// TODO: rethink math.distribution
 	// TODO: rework to a typed function
 	function factory (type, config, load, typed) {
-	  var matrix = load(__webpack_require__(61));
-	  var array = __webpack_require__(49);
+	  var matrix = load(__webpack_require__(64));
+	  var array = __webpack_require__(52);
 
 	  /**
 	   * Create a distribution object with a set of random functions for given
@@ -113366,13 +113708,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 464 */
+/* 467 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var distribution = load(__webpack_require__(463));
+	  var distribution = load(__webpack_require__(466));
 
 	  /**
 	   * Return a random number larger or equal to `min` and smaller than `max`
@@ -113417,13 +113759,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 465 */
+/* 468 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var distribution = load(__webpack_require__(463));
+	  var distribution = load(__webpack_require__(466));
 
 	  /**
 	   * Return a random integer number larger or equal to `min` and smaller than `max`
@@ -113466,29 +113808,29 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 466 */
+/* 469 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(452),
-	  __webpack_require__(467),
-	  __webpack_require__(97),
-	  __webpack_require__(73),
-	  __webpack_require__(363),
-	  __webpack_require__(69),
-	  __webpack_require__(468),
-	  __webpack_require__(469)
+	  __webpack_require__(455),
+	  __webpack_require__(470),
+	  __webpack_require__(100),
+	  __webpack_require__(76),
+	  __webpack_require__(366),
+	  __webpack_require__(72),
+	  __webpack_require__(471),
+	  __webpack_require__(472)
 	];
 
 
 /***/ },
-/* 467 */
+/* 470 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var equal = load(__webpack_require__(97));
+	  var equal = load(__webpack_require__(100));
 
 	  /**
 	   * Test element wise whether two matrices are equal.
@@ -113569,25 +113911,25 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 468 */
+/* 471 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var nearlyEqual = __webpack_require__(15).nearlyEqual;
-	var bigNearlyEqual = __webpack_require__(58);
+	var nearlyEqual = __webpack_require__(18).nearlyEqual;
+	var bigNearlyEqual = __webpack_require__(61);
 
 	function factory (type, config, load, typed) {
 
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
-	  var algorithm03 = load(__webpack_require__(70));
-	  var algorithm07 = load(__webpack_require__(71));
-	  var algorithm12 = load(__webpack_require__(72));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm03 = load(__webpack_require__(73));
+	  var algorithm07 = load(__webpack_require__(74));
+	  var algorithm12 = load(__webpack_require__(75));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
 	  /**
 	   * Test whether value x is smaller or equal to y.
@@ -113749,25 +114091,25 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 469 */
+/* 472 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var nearlyEqual = __webpack_require__(15).nearlyEqual;
-	var bigNearlyEqual = __webpack_require__(58);
+	var nearlyEqual = __webpack_require__(18).nearlyEqual;
+	var bigNearlyEqual = __webpack_require__(61);
 
 	function factory (type, config, load, typed) {
 
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
-	  var algorithm03 = load(__webpack_require__(70));
-	  var algorithm07 = load(__webpack_require__(71));
-	  var algorithm12 = load(__webpack_require__(72));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm03 = load(__webpack_require__(73));
+	  var algorithm07 = load(__webpack_require__(74));
+	  var algorithm12 = load(__webpack_require__(75));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
 	  /**
 	   * Test whether two values are unequal.
@@ -113959,22 +114301,22 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 470 */
+/* 473 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(471)
+	  __webpack_require__(474)
 	];
 
 
 /***/ },
-/* 471 */
+/* 474 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
-	var sign = __webpack_require__(15).sign;
+	var deepMap = __webpack_require__(31);
+	var sign = __webpack_require__(18).sign;
 
 
 	function factory (type, config, load, typed) {
@@ -114171,37 +114513,37 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 472 */
+/* 475 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(473),
-	  __webpack_require__(332),
-	  __webpack_require__(337),
-	  __webpack_require__(474),
-	  __webpack_require__(342),
-	  __webpack_require__(475),
 	  __webpack_require__(476),
+	  __webpack_require__(335),
+	  __webpack_require__(340),
 	  __webpack_require__(477),
+	  __webpack_require__(345),
 	  __webpack_require__(478),
-	  __webpack_require__(459),
-	  __webpack_require__(479)
+	  __webpack_require__(479),
+	  __webpack_require__(480),
+	  __webpack_require__(481),
+	  __webpack_require__(462),
+	  __webpack_require__(482)
 	];
 
 
 /***/ },
-/* 473 */
+/* 476 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var flatten = __webpack_require__(49).flatten;
+	var flatten = __webpack_require__(52).flatten;
 
 	function factory (type, config, load, typed) {
-	  var abs      = load(__webpack_require__(95));
-	  var map      = load(__webpack_require__(329));
-	  var median   = load(__webpack_require__(474));
-	  var subtract = load(__webpack_require__(86));
+	  var abs      = load(__webpack_require__(98));
+	  var map      = load(__webpack_require__(332));
+	  var median   = load(__webpack_require__(477));
+	  var subtract = load(__webpack_require__(89));
 
 	  /**
 	   * Compute the median absolute deviation of a matrix or a list with values.
@@ -114260,20 +114602,20 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 474 */
+/* 477 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var flatten = __webpack_require__(49).flatten;
-	var reduce = __webpack_require__(334);
-	var containsCollections = __webpack_require__(335);
+	var flatten = __webpack_require__(52).flatten;
+	var reduce = __webpack_require__(337);
+	var containsCollections = __webpack_require__(338);
 
 	function factory (type, config, load, typed) {
-	  var add = load(__webpack_require__(62));
-	  var divide = load(__webpack_require__(90));
-	  var compare = load(__webpack_require__(452));
-	  var partitionSelect = load(__webpack_require__(451));
+	  var add = load(__webpack_require__(65));
+	  var divide = load(__webpack_require__(93));
+	  var compare = load(__webpack_require__(455));
+	  var partitionSelect = load(__webpack_require__(454));
 
 	  /**
 	   * Compute the median of a matrix or a list with values. The values are
@@ -114384,12 +114726,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 475 */
+/* 478 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var flatten = __webpack_require__(49).flatten;
+	var flatten = __webpack_require__(52).flatten;
 
 	function factory (type, config, load, typed) {
 
@@ -114466,15 +114808,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	exports.factory = factory;
 
 /***/ },
-/* 476 */
+/* 479 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepForEach = __webpack_require__(333);
+	var deepForEach = __webpack_require__(336);
 
 	function factory (type, config, load, typed) {
-	  var multiply = load(__webpack_require__(89));
+	  var multiply = load(__webpack_require__(92));
 
 	  /**
 	   * Compute the product of a matrix or a list with values.
@@ -114548,21 +114890,21 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 477 */
+/* 480 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isInteger = __webpack_require__(15).isInteger;
-	var isNumber = __webpack_require__(15).isNumber;
-	var flatten = __webpack_require__(49).flatten;
-	var isCollection = __webpack_require__(331);
+	var isInteger = __webpack_require__(18).isInteger;
+	var isNumber = __webpack_require__(18).isNumber;
+	var flatten = __webpack_require__(52).flatten;
+	var isCollection = __webpack_require__(334);
 
 	function factory (type, config, load, typed) {
-	  var add = load(__webpack_require__(60));
-	  var multiply = load(__webpack_require__(93));
-	  var partitionSelect = load(__webpack_require__(451));
-	  var compare = load(__webpack_require__(452));
+	  var add = load(__webpack_require__(63));
+	  var multiply = load(__webpack_require__(96));
+	  var partitionSelect = load(__webpack_require__(454));
+	  var compare = load(__webpack_require__(455));
 
 	  /**
 	   * Compute the prob order quantile of a matrix or a list with values.
@@ -114811,14 +115153,14 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 478 */
+/* 481 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var sqrt       = load(__webpack_require__(389));
-	  var variance   = load(__webpack_require__(479));
+	  var sqrt       = load(__webpack_require__(392));
+	  var variance   = load(__webpack_require__(482));
 
 	  /**
 	   * Compute the standard deviation of a matrix or a  list with values.
@@ -114891,20 +115233,20 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 479 */
+/* 482 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	var DEFAULT_NORMALIZATION = 'unbiased';
 
-	var deepForEach = __webpack_require__(333);
+	var deepForEach = __webpack_require__(336);
 
 	function factory (type, config, load, typed) {
-	  var add = load(__webpack_require__(62));
-	  var subtract = load(__webpack_require__(86));
-	  var multiply = load(__webpack_require__(89));
-	  var divide = load(__webpack_require__(90));
+	  var add = load(__webpack_require__(65));
+	  var subtract = load(__webpack_require__(89));
+	  var multiply = load(__webpack_require__(92));
+	  var divide = load(__webpack_require__(93));
 
 	  /**
 	   * Compute the variance of a matrix or a  list with values.
@@ -115025,23 +115367,23 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 480 */
+/* 483 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(99),
-	  __webpack_require__(481)
+	  __webpack_require__(102),
+	  __webpack_require__(484)
 	];
 
 
 /***/ },
-/* 481 */
+/* 484 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var isString = __webpack_require__(32).isString;
-	var format = __webpack_require__(32).format;
+	var isString = __webpack_require__(35).isString;
+	var format = __webpack_require__(35).format;
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -115128,13 +115470,10 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 482 */
+/* 485 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(483),
-	  __webpack_require__(484),
-	  __webpack_require__(485),
 	  __webpack_require__(486),
 	  __webpack_require__(487),
 	  __webpack_require__(488),
@@ -115156,17 +115495,20 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	  __webpack_require__(504),
 	  __webpack_require__(505),
 	  __webpack_require__(506),
-	  __webpack_require__(507)
+	  __webpack_require__(507),
+	  __webpack_require__(508),
+	  __webpack_require__(509),
+	  __webpack_require__(510)
 	];
 
 
 /***/ },
-/* 483 */
+/* 486 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 
@@ -115226,12 +115568,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 484 */
+/* 487 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 
@@ -115300,12 +115642,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 485 */
+/* 488 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 
@@ -115360,12 +115702,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 486 */
+/* 489 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 
@@ -115421,12 +115763,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 487 */
+/* 490 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 
 	function factory (type, config, load, typed) {
@@ -115485,12 +115827,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 488 */
+/* 491 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 
@@ -115544,12 +115886,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 489 */
+/* 492 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 
@@ -115607,15 +115949,15 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 490 */
+/* 493 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
-	  var acosh = typed.find(load(__webpack_require__(484)), ['Complex']);
+	  var acosh = typed.find(load(__webpack_require__(487)), ['Complex']);
 
 	  /**
 	   * Calculate the hyperbolic arcsecant of a value,
@@ -115677,12 +116019,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 491 */
+/* 494 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 
@@ -115743,12 +116085,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 492 */
+/* 495 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 
@@ -115802,12 +116144,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 493 */
+/* 496 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 
@@ -115863,22 +116205,22 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 494 */
+/* 497 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
 
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
-	  var algorithm02 = load(__webpack_require__(381));
-	  var algorithm03 = load(__webpack_require__(70));
-	  var algorithm09 = load(__webpack_require__(383));
-	  var algorithm11 = load(__webpack_require__(94));
-	  var algorithm12 = load(__webpack_require__(72));
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm02 = load(__webpack_require__(384));
+	  var algorithm03 = load(__webpack_require__(73));
+	  var algorithm09 = load(__webpack_require__(386));
+	  var algorithm11 = load(__webpack_require__(97));
+	  var algorithm12 = load(__webpack_require__(75));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
 	  /**
 	   * Calculate the inverse tangent function with two arguments, y/x.
@@ -116021,12 +116363,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 495 */
+/* 498 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -116092,12 +116434,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 496 */
+/* 499 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 
@@ -116160,12 +116502,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 497 */
+/* 500 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -116232,12 +116574,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 498 */
+/* 501 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -116296,12 +116638,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 499 */
+/* 502 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -116371,12 +116713,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 500 */
+/* 503 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -116435,13 +116777,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 501 */
+/* 504 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
-	var sign = __webpack_require__(15).sign;
+	var deepMap = __webpack_require__(31);
+	var sign = __webpack_require__(18).sign;
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -116516,12 +116858,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 502 */
+/* 505 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -116580,12 +116922,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 503 */
+/* 506 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -116654,12 +116996,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 504 */
+/* 507 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 
@@ -116723,12 +117065,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 505 */
+/* 508 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -116796,12 +117138,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 506 */
+/* 509 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -116861,12 +117203,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 507 */
+/* 510 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -116938,26 +117280,26 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 508 */
+/* 511 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(509)
+	  __webpack_require__(512)
 	];
 
 /***/ },
-/* 509 */
+/* 512 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	function factory (type, config, load, typed) {
-	  var latex = __webpack_require__(41);
+	  var latex = __webpack_require__(44);
 
-	  var matrix = load(__webpack_require__(61));
+	  var matrix = load(__webpack_require__(64));
 
-	  var algorithm13 = load(__webpack_require__(66));
-	  var algorithm14 = load(__webpack_require__(67));
+	  var algorithm13 = load(__webpack_require__(69));
+	  var algorithm14 = load(__webpack_require__(70));
 
 	  /**
 	   * Change the unit of a value.
@@ -117042,29 +117384,29 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 510 */
+/* 513 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(511),
-	  __webpack_require__(428),
-	  __webpack_require__(377),
-	  __webpack_require__(98),
-	  __webpack_require__(390),
-	  __webpack_require__(512),
-	  __webpack_require__(442),
-	  __webpack_require__(513),
-	  __webpack_require__(100)
+	  __webpack_require__(514),
+	  __webpack_require__(431),
+	  __webpack_require__(380),
+	  __webpack_require__(101),
+	  __webpack_require__(393),
+	  __webpack_require__(515),
+	  __webpack_require__(445),
+	  __webpack_require__(516),
+	  __webpack_require__(103)
 	];
 
 
 /***/ },
-/* 511 */
+/* 514 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var object= __webpack_require__(12);
+	var object= __webpack_require__(15);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -117099,12 +117441,12 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 512 */
+/* 515 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
+	var deepMap = __webpack_require__(31);
 
 
 	function factory (type, config, load, typed) {
@@ -117186,13 +117528,13 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 513 */
+/* 516 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var deepMap = __webpack_require__(28);
-	var number = __webpack_require__(15);
+	var deepMap = __webpack_require__(31);
+	var number = __webpack_require__(18);
 
 	function factory (type, config, load, typed) {
 	  /**
@@ -117258,16 +117600,16 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 514 */
+/* 517 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-	  __webpack_require__(515)
+	  __webpack_require__(518)
 	];
 
 
 /***/ },
-/* 515 */
+/* 518 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -117295,14 +117637,14 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 516 */
+/* 519 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
-	var ArgumentsError = __webpack_require__(20);
-	var DimensionError = __webpack_require__(51);
-	var IndexError = __webpack_require__(52);
+	var ArgumentsError = __webpack_require__(23);
+	var DimensionError = __webpack_require__(54);
+	var IndexError = __webpack_require__(55);
 
 	module.exports = [
 	  {
@@ -117331,7 +117673,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 517 */
+/* 520 */
 /***/ function(module, exports) {
 
 	module.exports = function( THREE ) {
@@ -118357,7 +118699,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 
 
 /***/ },
-/* 518 */
+/* 521 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -118368,7 +118710,7 @@ define(["api/SplunkVisualizationBase","api/SplunkVisualizationUtils"], function(
 	( function () {
 
 		'use strict';
-		var THREE = __webpack_require__(6);
+		var THREE = __webpack_require__(8);
 
 		var GizmoMaterial = function ( parameters ) {
 

@@ -9,7 +9,7 @@
     <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/css/build/pages/dashboard-simple-bootstrap.min.css" />
 
 </head>
-<body class="simplexml preload locale-en" data-splunk-version="6.5.0" data-splunk-product="splunk" onLoad="$('#new_scene_div').hide();$('#settings_panel').css('width','30%');$('#viz_panel').css('width','70%');$('#modelAdder').hide();$('#componentMappingDiv').hide();">
+<body class="simplexml preload locale-en" data-splunk-version="6.5.0" data-splunk-product="splunk" onLoad="$('#new_scene_div').hide();$('#settings_panel').css('width','30%');$('#viz_panel').css('width','70%');$('#modelAdder').hide();">
 <!-- <body class="simplexml preload locale-en" data-splunk-version="6.5.0" data-splunk-product="splunk"> -->
 <!-- 
 BEGIN LAYOUT
@@ -30,54 +30,6 @@ styles in <div> tags, similar to Bootstrap's grid system.
 	<div class="dashboard-header">
 		<h2>Scene Builder</h2>
 	</div>
-
-
-<!--
-Example of elements/viz
-<div id="row1" class="dashboard-row dashboard-row1">
-        <div id="panel1" class="dashboard-cell" style="width: 100%;">
-            <div class="dashboard-panel clearfix">
-                
-                <div class="panel-element-row">
-                    <div id="element1" class="dashboard-element viz" style="width: 100%">
-                        <div class="panel-body"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div id="row2" class="dashboard-row dashboard-row2">
-        <div id="panel2" class="dashboard-cell" style="width: 100%;">
-            <div class="dashboard-panel clearfix">
-                
-                <div class="panel-element-row">
-                    <div id="element2" class="dashboard-element event" style="width: 100%">
-                        <div class="panel-head">
-                            <h3>kvstore elements</h3>
-                        </div>
-                        <div class="panel-body"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-var element1 = new VisualizationElement({
-            "id": "element1",
-            "type": "Bender.rotator",
-            "resizable": true,
-            "managerid": "search1",
-            "el": $('#element1')
-        }, {tokens: true, tokenNamespace: "submitted"}).render();
-
-        var element2 = new EventElement({
-            "id": "element2",
-            "managerid": "search2",
-            "el": $('#element2')
-        }, {tokens: true, tokenNamespace: "submitted"}).render();
-
-
--->
 
 
 	<div class="fieldset">
@@ -108,8 +60,6 @@ var element1 = new VisualizationElement({
     						</div>
                             <br/>
                             <button id="addModelButton">Add Model To Scene</button>
-                            <br/>
-                            <button id="testModelButton">Test Field Build</button>
                         </div>
 					</p>
 					<hr/>
@@ -117,16 +67,8 @@ var element1 = new VisualizationElement({
                     <div id="modelUniqueComponents" class="dashboard-element event" style="width: 100%">
                         <div class="panel-body"></div>
                     </div>
+                    <button id="saveChangesButton">Save Changes (do this a lot)</button>
                     </p>
-                    <hr/>
-					<p>
-                        <div id="componentMappingDiv">
-    						<div class="input input-text" id="componentMapping_1">
-    							<label>Component Name</label>
-    						</div>
-    						<!-- we would have 'n' number of elements added dynamically here -->
-                        </div>
-					</p>
 				</div>
 			</div>
 
@@ -299,184 +241,6 @@ require([
 
         }
 
-        function addObjectComponents(components, component) {
-            //console.log("in addobjectcomponents recurse.  component: ");
-            //console.log(component);
-
-            if(component.children) {
-                //console.log("component has children");
-                _.each(component.children, function(i) {
-                    //console.log("recursing into child");
-                    return addObjectComponents(components, i);
-                });
-            } else {
-                //console.log("component does not have any children");
-            }
-
-            if(!components[component.name]) {
-                if(component.name != "NONE" && component.name != "") {
-                    //console.log("didn't find " + component.name + " in components object, adding");
-                    components[component.name] = "";
-                }
-            } else {
-                //console.log(component.name + " already found in components object");
-            }
-
-            //console.log("returning components");
-            return components;
-
-        }
-
-        function updateFieldMappings() {
-            //loop through component mappings
-            //anywhere modelKey and partname already exist in model_component_mapping perform update
-            //anywhere modelKey and partname don't exist and dataFieldName isn't blank, add new record
-
-
-
-        }
-
-        function buildComponentMappingGUI(uniqueModelKey) {
-            var componentMappingDiv = $('#componentMappingDiv');
-            componentMappingDiv.empty();
-            componentMappings = {};
-
-
-            var components = new Object();
-
-            console.log("building component mapping gui for " + uniqueModelKey);
-
-            service.get(
-                "storage/collections/data/scene_models/" + uniqueModelKey,
-                null,
-                null).done(
-                function(result) {
-                    console.log("got scene model name for unique key:  " + uniqueModelKey);
-                    console.log(result);
-                    var uniqueModelProperties = JSON.parse(result);
-                    console.log("unique model properties");
-                    console.log(uniqueModelProperties);
-
-                    var modelName = uniqueModelProperties.modelName;
-                    var uniqueName = uniqueModelProperties.componentUniqueName;
-                    var sceneKey = uniqueModelProperties.sceneKey;
-                    console.log("loading three.js model for " + modelName);
-
-                    loader = new THREE.ObjectLoader();
-                    loader.load("/en-us/static/app/Bender/" + modelName, function(obj) {
-
-
-                            //create an array of all of the parts in the obj(model template)
-                            var searchJSON = {"modelKey":{"$eq":uniqueModelKey}};
-                            var searchQuery = JSON.stringify({"modelKey":{"$eq":uniqueModelKey}});
-                            var searchQueryEncoded = encodeURI(searchQuery);
-
-
-                            service.get(
-                                "storage/collections/data/model_component_mapping",
-                                null,
-                                null).done(
-                                function(result) {
-                                    $('#componentMappingDiv').append("<p style='font-weight:bold;border-bottom:1px solid black'>Field Mapping for " + uniqueName + "</p>");
-
-                                    var resultJSON = JSON.parse(result);
-                                    var alreadyDefinedFields = _.filter(resultJSON, function(j) {
-                                        return j.modelKey == uniqueModelKey;
-                                    });
-
-
-                                    _.each(alreadyDefinedFields, function(fieldStuff) {
-                                        components[fieldStuff.modelComponentName] = fieldStuff;
-                                    });
-
-
-                                    var totalComponents = addObjectComponents(components, obj);
-
-
-                                    var metaCounter = 0;
-                                    _.each(_.keys(totalComponents).sort(), function(meta) {
-                                        
-                                        var componentData = totalComponents[meta];
-                                        var fieldMapping = "";
-                                        if(componentData) {
-                                            fieldMapping = componentData.dataFieldName;
-                                        }
-
-                                        var uniqueId = uniqueModelKey + '-' + meta;
-
-                                        var newNode = '<div class="input input-text" id="' + uniqueId + '"><label>' + meta + '</label></div>';
-                                        $('#componentMappingDiv').append(newNode);
-
-
-
-
-                                        var temp = new TextInput({
-                                            "id": uniqueId,
-                                            "searchWhenChanged": false,
-                                            "value": fieldMapping,
-                                            "el": $('#' + uniqueId)
-                                        }, {tokens:true}).render();
-
-                                        temp.on("change", function(newValue) {
-                                            FormUtils.handleValueChange(temp);
-                                        });
-
-                                        componentMappings[metaCounter++] = temp;
-
-
-                                    });
-
-                                    $('#componentMappingDiv').append('<br/><button id="updateFieldMappings">Update Field Mappings</button>');
-
-                                    $('#updateFieldMappings').click(function() {
-                                                console.log("this function writes the model_component_mapping kvstore with updated values");
-
-                                                updateFieldMappings();
-
-                                            });
-
-                                    componentMappingDiv.show();
-
-
-                                });
-
-                        });
-
-
-                });
-
-
-
-            //query the unique model kv store for the model template
-            //get all of the possible mappings for the template
-
-            //query the component mapping kvstore for existing entries
-            //fill in the field values with existing values from the store
-
-            //create all of the html nodes
-            /*
-                <div class="input input-text" id="componentMapping_1">
-                    <label>Component Name</label>
-                </div>
-            */
-
-            //build up the javascript objects for each node
-            /*
-                var componentMapping1 = new TextInput({
-                    "id": "componentMapping_1",
-                    "searchWhenChanged": true,
-                    "initialValue": "abcd",
-                    "default": "abcd",
-                    "value": "$form.componentMapping1$",
-                    "el": $('#componentMapping_1')
-                }, {tokens: true}).render();
-
-            */
-
-
-
-        }
-
         
         //
         // SEARCH MANAGERS
@@ -525,7 +289,6 @@ require([
         }, {tokens: true});
 
 
-
         //
         // SPLUNK LAYOUT
         //
@@ -572,7 +335,22 @@ require([
             "managerid": "modelUniqueComponentsSearch",
             "el": $('#modelUniqueComponents')
         }, {tokens: true}).render();
-        //TODO add an on-click here that loads up the metadata fields for that element
+
+        modelUniqueComponents.on("click", function (e) {
+            //this can send a new search to the viz with the selected component.  automatically put into translate mode, etc
+            console.log("telling viz to highlight model key: " + e.data["row.KeyID"]);
+            /*
+            vizCRUDSearch.settings.set("search", '| makeresults | eval mode="sceneBuilderCRUD" | eval sceneName="$sceneNamePicker$" | eval sceneModelKey="' + e.data["row.KeyID"] + '"');
+            vizCRUDSearch.startSearch();
+            */
+
+            //try to use this to access tokens 
+            setToken("vizbridge_selectmodel", e.data["row.KeyID"]);
+            submitTokens();
+
+
+        });
+
 
         //
         // VIEWS: FORM INPUTS
@@ -596,24 +374,17 @@ require([
         sceneNamePicker.on("change", function(newValue) {
             FormUtils.handleValueChange(sceneNamePicker);
 			if(newValue == "_new") {
-    //alert('new scene');
 				$('#new_scene_div').show();
 				$('#new_scene_div').css("display", "inline");
-    //console.log(bob);
                 $('#modelAdder').hide();
             } 
 
             if(newValue != "" && newValue != "_new") {
                 $('#modelAdder').show();
 
+                setToken("sceneNameKey", newValue);
+                submitTokens();
 
-                if(getToken("sceneNameKey")) {
-                    console.log("found a sceneNameKey, setting field");
-                    sceneNamePicker.val(getToken("sceneNameKey"));
-                } else {
-                    setToken("sceneNameKey", newValue);
-                    submitTokens();
-                }
                 modelUniqueComponentsSearch.startSearch();
 
             }
@@ -653,21 +424,6 @@ require([
             FormUtils.handleValueChange(modelGeometryFile);
         });
 
-        var componentMappings = {};
-        
-        var componentMapping1 = new TextInput({
-            "id": "componentMapping_1",
-            "searchWhenChanged": true,
-            "initialValue": "abcd",
-            "default": "abcd",
-            "value": "$form.componentMapping1$",
-            "el": $('#componentMapping_1')
-        }, {tokens: true}).render();
-
-        componentMapping1.on("change", function(newValue) {
-            FormUtils.handleValueChange(componentMapping1);
-        });
-
 
         $("#addSceneButton").click(function() {
                 submitTokens();
@@ -700,6 +456,18 @@ require([
 
             });
 
+
+            $("#saveChangesButton").click(function() {
+                console.log("asking viz to save current model information");
+                vizCRUDSearch.settings.set("search", '| makeresults | eval mode="sceneBuilderCRUD" | eval action="saveCurrentModel"');
+                vizCRUDSearch.startSearch();
+
+                //try to use this to access tokens 
+                setToken("vizbridge_action", "saveCurrentMode");
+
+            });
+
+
         $("#addModelButton").click(function() {
                 console.log("Add model '" + modelUniqueName.val() + "' to scene button called for model: " + modelGeometryFile.val());
 
@@ -726,8 +494,8 @@ require([
                         var resultKey = JSON.parse(result)._key;
                         setToken("modelKey", resultKey);
                         submitTokens();
-                        buildComponentMappingGUI(resultKey);
                         //build out part mapping pairs thingy.  need to insert nodes and create vars for them
+                        modelUniqueComponentsSearch.startSearch();
                         vizCRUDSearch.startSearch();
                         modelUniqueName.val("");
                         modelGeometryFile.val("");
@@ -738,14 +506,6 @@ require([
 
 
             });
-
-        $("#testModelButton").click(function() {
-            console.log("testing with known id"); //farts13 = 585c9588b9eef5513170fb6e
-            buildComponentMappingGUI("585c9588b9eef5513170fb6e");
-
-
-        });
-
 
 
         

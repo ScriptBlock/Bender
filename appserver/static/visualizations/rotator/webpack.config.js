@@ -14,6 +14,11 @@ module.exports = {
     },
     externals: [
         'api/SplunkVisualizationBase',
-        'api/SplunkVisualizationUtils'
+        'api/SplunkVisualizationUtils',
+        'splunkjs/mvc',
+        'splunkjs/mvc/utils',
+        'splunkjs/mvc/tokenutils',
+        'splunkjs/mvc/simpleform/formutils',
+        'splunkjs/mvc/simplexml/urltokenmodel'
     ]
 };

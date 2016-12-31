@@ -5,6 +5,7 @@
 ( function () {
 
 	'use strict';
+	var THREE = require('three');
 
 	var GizmoMaterial = function ( parameters ) {
 

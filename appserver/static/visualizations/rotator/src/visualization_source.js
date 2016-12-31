@@ -10,6 +10,11 @@
 
  */
 define([
+			'splunkjs/mvc',
+			'splunkjs/mvc/utils',
+			'splunkjs/mvc/tokenutils',
+			//'splunkjs/mvc/simpleform/formutils',
+    		//'splunkjs/mvc/simplexml/urltokenmodel',
             'jquery',
             'underscore',
             'api/SplunkVisualizationBase',
@@ -18,10 +23,15 @@ define([
             'three-math',
             'tween.js',
             'mathjs'
-       
+
             // Add required assets to this list
         ],
         function(
+	        mvc,
+	        utils,
+	        TokenUtils,
+        	//FormUtils,
+        	//UrlTokenModel,
             $,
             _,
             SplunkVisualizationBase,
@@ -30,11 +40,13 @@ define([
             Math,
             TWEEN,
             mathjs
+
         ) {
 
     var hasViz = false;
 
 var armJSONFile = "/en-us/static/app/Bender/scene.json";
+var modelPath = "/en-us/static/app/Bender/";
 
 
 
@@ -44,6 +56,20 @@ var TransformControls = require('../viz_tools/TransformControls');
 
 
 var camera, scene, loader, renderer;
+
+var currentSceneKey;
+var currentSceneComponents = new Object();
+var sceneComponentCount = 0;
+var sceneComponentsCounted = 0;
+
+
+var	sceneModelsDeferred = $.Deferred();
+var	modelMappingDeferred = $.Deferred();
+
+
+
+var mvcService;
+
 var base, shoulder, elbow, wrist1, wrist2, wrist3; //this needs to be refactored into multiple models
 var counter = 0;
 var activeTween;
@@ -58,6 +84,57 @@ var currentTransformObject;
 var transformControlState = false;
 
 
+var crudMode = false;
+var crudCommand;
+
+//if(true) { console.log("osdijfodisjfiodsfjsdf"); }
+/*
+var fu;
+try {
+	console.log("doing stuff before require");
+	fu = require('splunkjs/mvc/simpleform/formutils');
+	console.log("loaded formutils");
+} catch(e) {
+	console.log("error requiring formutils");
+	console.log(e);
+}
+*/
+//////////////////////////
+/*
+        var urlTokenModel = new UrlTokenModel();
+        mvc.Components.registerInstance('url', urlTokenModel);
+        var defaultTokenModel = mvc.Components.getInstance('default', {create: true});
+        var submittedTokenModel = mvc.Components.getInstance('submitted', {create: true});
+        urlTokenModel.on('url:navigate', function() {
+            defaultTokenModel.set(urlTokenModel.toJSON());
+            if (!_.isEmpty(urlTokenModel.toJSON()) && !_.all(urlTokenModel.toJSON(), _.isUndefined)) {
+                submitTokens();
+            } else {
+                submittedTokenModel.clear();
+            }
+        });
+
+        // Initialize tokens
+        defaultTokenModel.set(urlTokenModel.toJSON());
+
+
+        function getToken(name) {
+            var retVal = defaultTokenModel.get(name);
+            console.log("token value for " + name + " is " + retVal);
+            return retVal;
+
+        }
+
+function getToken(name) {
+    var retVal = defaultTokenModel.get(name);
+    console.log("token value for " + name + " is " + retVal);
+    return retVal;
+
+}
+*/
+
+
+
 function animate() {
 	requestAnimationFrame(animate);
 	render();
@@ -66,6 +143,13 @@ function animate() {
 }
 
 function render() {
+	//token testing
+	
+	//var tokenTemp = getToken("vizbridge_selectmodel");
+	//console.log("token temp");
+	//console.log(tokenTemp);
+	
+	updateFromDom();
 	//this is a safety check.  if you try to set the camera angles and scene size before
 	//the dom element and camera is initialized it doesn't work.  once the camera and dom
 	//element is built, you can get the screen size and your model won't be skewed
@@ -131,6 +215,68 @@ function setJointColor(part, temp) {
 }
 
 
+function updateFromDom() {
+
+
+/*
+<div id="vizbridge_crudmode" style="display:none">on</div>
+        <div id="vizbridge_crudcommand" style="display:none">none</div>
+*/
+
+	if(crudMode != $("#vizbridge_crudmode").text()) {
+		console.log("current crudMode: [" + crudMode + "] doesn't match " + $("#vizbridge_crudmode").text());
+		crudMode = $("#vizbridge_crudmode").text();
+		console.log("changed crudmode to " + crudMode);
+	}
+
+	var tempCommand = $("#vizbridge_crudcommand").text();
+	if(tempCommand != "") {
+		crudCommand = $("#vizbridge_crudcommand").text();
+		console.log("received dom based viz command: " + crudCommand);
+
+		$("#vizbridge_crudcommand").text("");
+
+		if(crudCommand == "save") {}
+
+		if(crudCommand == "reloadSceneModels") {
+			reloadSceneModels();
+
+		}
+
+
+		if(/switchscene:/.test(crudCommand)) {
+			var sceneKey = /switchscene:(.*)$/.exec(crudCommand)[1];
+
+			loadScene(sceneKey);
+
+		}
+
+		if(/selectcomponent:/.test(crudCommand)) {
+			var componentKey = /selectcomponent:(.*)$/.exec(crudCommand)[1];
+			selectComponent(componentKey);
+		}
+
+
+		if(/switchxform:/.test(crudCommand)) {
+			var xformType = /switchxform:(.*)$/.exec(crudCommand)[1];
+			switch(xformType) {
+				case "translate": 
+					transformControl.setMode("translate");
+					break;
+				case "scale":
+					transformControl.setMode("scale");
+					break;
+				case "rotate":
+					transformControl.setMode("rotate");
+					break;
+			}
+		}
+		
+	}
+
+}
+
+
 //this is a recursive function to get the whole model when clicked instead of just a 
 //specific part.  Scene is hardcoded here assuming that every model that is loaded is
 //an imported scene.
@@ -151,9 +297,20 @@ function getParentUntil(obj) {
 
 //this selects the entire model and reflects the wishes of the formatter api settings
 //currently just supports transforms.
-function onSceneMouseDown(event) {
-	event.preventDefault();
+function selectComponent(componentKey) {
+	console.log("selecting component: " + componentKey);
+	transformControl.detach();
 
+	transformControl.attach(currentSceneComponents[componentKey].threeObject);
+	//component key needs to be added to model during loading.
+	//perhaps maintain a hash during scene load so that selecting components 
+	//isn't an enumeration of all scene objects
+
+//	event.preventDefault();
+/*
+
+	//refactor this stuff out.  no need for raycasting since we are picking components
+	//from the list in the GUI
 	if(transformControlState) {
 
 		//standard raycaster object selection code
@@ -176,15 +333,13 @@ function onSceneMouseDown(event) {
 
 		} 
 	}
+*/
 
 }
 
-function onSceneKeyDown(event) {
-	//nadda right now.  probably deprecated
-}
 
 
-
+/*
 //this will need to be refactored for CRUD
 function updateControls() {
 	var transformState;
@@ -216,7 +371,168 @@ function updateControls() {
 				break;
 		}
 	}
+}
+*/
 
+
+function loadScene(sceneKey) {
+	console.log("loading scene for " + sceneKey);
+
+	if(transformControl) {
+		transformControl.detach();
+	}
+
+	console.log("re/setting scenecomponent vars")
+	currentSceneKey = sceneKey;
+	currentSceneComponents = new Object();
+
+	console.log("creating a new scene.");
+	scene = new THREE.Scene();
+	scene.add( new THREE.GridHelper( 500, 100 ) );
+	scene.background = new THREE.Color( 0x000000 );
+	scene.add(transformControl);
+
+	sceneModelsDeferred = $.Deferred();
+	modelMappingDeferred = $.Deferred();
+
+
+	//KV lookup
+	loadSceneModels(sceneKey);
+
+}
+
+function modelLoadingTracker() {
+	if(sceneComponentsCounted != sceneComponentCount) {
+		setTimeout(modelLoadingTracker, 1000);
+	} else {
+		modelMappingDeferred.resolve();
+	}
+
+
+}
+
+function loadSceneModels(sceneKey) {
+	console.log("loading scene models");
+	//fields_list = _key, sceneKey, componentUniqueName, modelName, rotation, translation, scale
+
+//?query={"id": {"$gt": 24}}
+	var searchString = '{"sceneKey": "' + sceneKey + '"}';
+
+
+
+	mvcService.request("storage/collections/data/scene_models", 
+		"GET", 
+		{"query": searchString},
+		null,
+		null,
+		null,	
+		function(err, response) {
+			_.each(response.data, function(model) {
+				currentSceneComponents[model._key] = model;
+				//console.log(model);
+			});
+
+			console.log("here's the currentSceneComponents object after scene model loading");
+			console.log(currentSceneComponents);
+
+			sceneModelsDeferred.resolve(currentSceneComponents);
+
+
+
+		});
+
+	sceneComponentCount = _.size(currentSceneComponents);
+	sceneComponentsCounted = 0;
+	_.each(currentSceneComponents, function(model) {
+		console.log("loading mapping for component " + model._key);
+		console.log(model);
+		mvcService.request("storage/collections/data/model_component_mapping",
+			"GET",
+			{"query": '{"modelKey: "' + model._key + '"}'},
+			null,
+			null,
+			null,
+			function(err, response) {
+				console.log("working with output for model key: " + model._key);
+				var fieldMapping = new Object();
+				_.each(response.data, function(mapping) {
+					fieldMapping[mapping._key] = mapping;
+				})
+				model["fieldmapping"] = fieldMapping;
+				sceneComponentsCounted++;
+			}
+
+			)
+
+
+	});
+	
+	console.log("tracking model loading for deferred variable");
+	setTimeout(modelLoadingTracker, 250);
+	
+
+	//kv lookup
+	//add models to a hash during load
+
+	console.log("calling $.when");
+	$.when(sceneModelsDeferred, modelMappingDeferred).done(function() {
+		console.log("inside $.when block");
+		console.log(currentSceneComponents);
+		//actually create the model and apply translations and field mapping and unique identified to it.
+
+		_.each(currentSceneComponents, function(model) {
+			loader.load(modelPath + model.modelName, function(obj) {
+				console.log("loaded object: " + model.componentUniqueName);
+				//set object properties recursively to add _key
+				obj.kvkey = model._key;
+
+				var xyz = JSON.parse(model.translation);
+
+				obj.position.x = xyz.x;
+				obj.position.y = xyz.y;
+				obj.position.z = xyz.z;
+
+				xyz = JSON.parse(model.scale);
+				console.log("model.scale = " + model.scale);
+				obj.scale.set(xyz.x,xyz.y,xyz.z);
+
+
+				currentSceneComponents[model._key].threeObject = obj;
+
+
+
+				scene.add(currentSceneComponents[model._key].threeObject);
+			});
+		});
+
+		console.log("current scene components with three object loaded");
+		console.log(currentSceneComponents);
+
+
+	});
+
+
+}
+
+function reloadSceneModels() {
+	console.log("reloading scene models");
+
+	sceneModelsDeferred = $.Deferred();
+	modelMappingDeferred = $.Deferred();
+
+	if(transformControl) {
+		transformControl.detach();
+	}
+
+	_.each(currentSceneComponents, function(model) {
+		console.log("removing " + model.componentUniqueName);
+		scene.remove(model.threeObject);
+	});
+
+	currentSceneComponents = new Object();
+
+	
+	loadSceneModels(currentSceneKey); //then reload them
 
 }
 
@@ -231,7 +547,7 @@ function updateControls() {
             this.$el = $(this.el);
             globalElement = this.$el;
             hasViz = false;
-            this.$el.addClass('rotator');
+            this.$el.addClass('bender');
 
 
             //build up the base scane
@@ -254,6 +570,8 @@ function updateControls() {
 			raycaster = new THREE.Raycaster();
 			mouse = new THREE.Vector2();
 
+		    mvcService = mvc.createService({ owner: "nobody"});
+
 
 
 			//this needs to be refactored into a save file and/or multiple models
@@ -270,15 +588,19 @@ function updateControls() {
 			//   movement within the scene will save the resulting data off to KVstore
 			//	 
 			//   
+
+
 			loader = new THREE.ObjectLoader();
+			/* deprecated for true loading of unique models
 			loader.load(armJSONFile, function(obj) {
 				scene.add(obj);
 
 			});
+			*/
 			
 
 			//mouse-down for model selection.  this is used with transform tools
-			renderer.domElement.addEventListener('mousedown', onSceneMouseDown);
+			//renderer.domElement.addEventListener('mousedown', onSceneMouseDown);
 
 			//hooking keyboard events isn't working well..  probably not going to use this in lieu of
 			//formatter api and maybe some on-screen buttons
@@ -301,11 +623,13 @@ function updateControls() {
         	highTemp = parseInt(config[globalNamespace + "highTemp"])
         	mediumTemp = parseInt(config[globalNamespace + "medTemp"])
 
-        	updateControls();
+        	updateFromDom();
 	
 			// Check for empty data
 			if(_.size(data.results) < 1) { console.log("no data"); return; }
 
+
+			var dataRows = data.results;
 
 			//needs to be refactored for multiple models.  This just creates
 			//some variables for tweening/manipulation

@@ -9,7 +9,7 @@
     <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/css/build/pages/dashboard-simple-bootstrap.min.css" />
 
 </head>
-<body class="simplexml preload locale-en" data-splunk-version="6.5.0" data-splunk-product="splunk" onLoad="$('#new_scene_div').hide();$('#settings_panel').css('width','30%');$('#viz_panel').css('width','70%');">
+<body class="simplexml preload locale-en" data-splunk-version="6.5.0" data-splunk-product="splunk" onLoad="$('#new_scene_div').hide();$('#settings_panel').css('width','30%');$('#viz_panel').css('width','70%');$('#modelAdder').hide();">
 <!-- <body class="simplexml preload locale-en" data-splunk-version="6.5.0" data-splunk-product="splunk"> -->
 <!-- 
 BEGIN LAYOUT
@@ -32,55 +32,9 @@ styles in <div> tags, similar to Bootstrap's grid system.
     </div>
 
 
-<!--
-Example of elements/viz
-<div id="row1" class="dashboard-row dashboard-row1">
-        <div id="panel1" class="dashboard-cell" style="width: 100%;">
-            <div class="dashboard-panel clearfix">
-                
-                <div class="panel-element-row">
-                    <div id="element1" class="dashboard-element viz" style="width: 100%">
-                        <div class="panel-body"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div id="row2" class="dashboard-row dashboard-row2">
-        <div id="panel2" class="dashboard-cell" style="width: 100%;">
-            <div class="dashboard-panel clearfix">
-                
-                <div class="panel-element-row">
-                    <div id="element2" class="dashboard-element event" style="width: 100%">
-                        <div class="panel-head">
-                            <h3>kvstore elements</h3>
-                        </div>
-                        <div class="panel-body"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-var element1 = new VisualizationElement({
-            "id": "element1",
-            "type": "Bender.rotator",
-            "resizable": true,
-            "managerid": "search1",
-            "el": $('#element1')
-        }, {tokens: true, tokenNamespace: "submitted"}).render();
-
-        var element2 = new EventElement({
-            "id": "element2",
-            "managerid": "search2",
-            "el": $('#element2')
-        }, {tokens: true, tokenNamespace: "submitted"}).render();
-
-
--->
-
-
     <div class="fieldset">
+        <div id="vizbridge_crudmode" style="display:none">true</div>
+        <div id="vizbridge_crudcommand" style="display:none"></div>
         <div class="dashboard-row"><!-- <div class="dashboard-cell" style="width: 30%;" id="settings_panel"> -->
             <div class="dashboard-cell" id="settings_panel">
                 <div class="dashboard-panel clearfix">
@@ -97,21 +51,30 @@ var element1 = new VisualizationElement({
                     </p>
                     <hr/>
                     <p>
-                        <div class="input input-text" id="modelUniqueName">
-                            <label>Model Name (unique)</label>
-                        </div>
+                        <div id="modelAdder"> 
+                            <p>Use this panel to add models to your scene.  You can have many models of the same design, use the unique name field to give them an identity</p>
+                            <div class="input input-text" id="modelUniqueName">
+                                <label>Model Name (unique)</label>
+                            </div>
 
-                        <div class="input input-text" id="modelGeometryFile">
-                            <label>Model Geometry File</label>
+                            <div class="input input-text" id="modelGeometryFile">
+                                <label>Model Geometry File</label>
+                            </div>
+                            <br/>
+                            <button id="addModelButton">Add Model To Scene</button>
                         </div>
-                        <button id="addModelButton">Add Model To Scene</button>
                     </p>
                     <hr/>
                     <p>
-                        <div class="input input-text" id="componentMapping_1">
-                            <label>Component Name</label>
-                        </div>
-                        <!-- we would have 'n' number of elements added dynamically here -->
+                    <div>
+                        <button id="modetranslate">Translate</button>
+                        <button id="modescale">Scale</button>
+                        <button id="moderotate">Rotate</button>
+                    </div>
+                    <div id="modelUniqueComponents" class="dashboard-element event" style="width: 100%">
+                        <div class="panel-body"></div>
+                    </div>
+                    <button id="saveChangesButton">Save Changes (do this a lot)</button>
                     </p>
                 </div>
             </div>
@@ -189,7 +152,8 @@ require([
     "splunkjs/mvc/searchmanager",
     "splunkjs/mvc/savedsearchmanager",
     "splunkjs/mvc/postprocessmanager",
-    "splunkjs/mvc/simplexml/urltokenmodel"
+    "splunkjs/mvc/simplexml/urltokenmodel",
+    "/static/app/Bender/js/three.min.js"
     // Add comma-separated libraries and modules manually here, for example:
     // ..."splunkjs/mvc/simplexml/urltokenmodel",
     // "splunkjs/mvc/tokenforwarder"
@@ -226,7 +190,8 @@ require([
         SearchManager,
         SavedSearchManager,
         PostProcessManager,
-        UrlTokenModel
+        UrlTokenModel,
+        THREE
 
         // Add comma-separated parameter names here, for example: 
         // ...UrlTokenModel, 
@@ -276,6 +241,17 @@ require([
             submittedTokenModel.unset(name);
         }
 
+        function getToken(name) {
+            var retVal = defaultTokenModel.get(name);
+            console.log("token value for " + name + " is " + retVal);
+            return retVal;
+
+        }
+
+        function sendDomCommandToViz(command) {
+            $("#vizbridge_crudcommand").text(command);
+        }
+
         
         //
         // SEARCH MANAGERS
@@ -309,6 +285,19 @@ require([
             "runWhenTimeIsUndefined": false
         }, {tokens: true});
 
+        var modelUniqueComponentsSearch = new SearchManager({
+            "id": "modelUniqueComponentsSearch",
+            "search": "| inputlookup scene_models_lookup  where sceneKey=$sceneNamePicker$ | eval KeyID=_key | table KeyID, componentUniqueName",
+            "latest_time": "$latest$",
+            "status_buckets": 0,
+            "earliest_time": "$earliest$",
+            "sample_ratio": null,
+            "cancelOnUnload": true,
+            "app": utils.getCurrentApp(),
+            "auto_cancel": 90,
+            "preview": true,
+            "runWhenTimeIsUndefined": false
+        }, {tokens: true});
 
 
         //
@@ -341,15 +330,37 @@ require([
         //loading models inside the viz will be up to the viz using kvstore calls
         //changes to model position inside the viz will be up to the viz to save to kvstore.
         //first phase will be manua "refresh values" on the nav side 
-        var vizCRUDElement = new EventElement({
+        var vizCRUDElement = new VisualizationElement({
             "id": "vizCRUDElement",
+            "type": "Bender.rotator",
+            "resizable": true,
             "managerid": "vizCRUDSearch",
             "el": $('#vizCRUDElement')
         }, {tokens: true, tokenNamespace: "submitted"}).render();
 
-        vizCRUDElement.on("load", function() {
-            //TODO remove this?
-            $(this).css("min-height","0");
+
+        var modelUniqueComponents = new TableElement({
+            "id": "modelUniqueComponents",
+            "drilldown":"cell",
+            "drilldownRedirect": false,
+            "managerid": "modelUniqueComponentsSearch",
+            "el": $('#modelUniqueComponents')
+        }, {tokens: true}).render();
+
+        modelUniqueComponents.on("click", function (e) {
+            //this can send a new search to the viz with the selected component.  automatically put into translate mode, etc
+            //console.log("telling viz to highlight model key: " + e.data["row.KeyID"]);
+            /*
+            vizCRUDSearch.settings.set("search", '| makeresults | eval mode="sceneBuilderCRUD" | eval sceneName="$sceneNamePicker$" | eval sceneModelKey="' + e.data["row.KeyID"] + '"');
+            vizCRUDSearch.startSearch();
+            */
+
+            //try to use this to access tokens 
+            //setToken("vizbridge_selectmodel", e.data["row.KeyID"]);
+            //submitTokens();
+
+            sendDomCommandToViz("selectcomponent:" + e.data["row.KeyID"]);
+
         });
 
 
@@ -363,7 +374,6 @@ require([
                 {"label": "New Scene", "value": "_new"}
             ],
             "labelField": "sceneName",
-            "initialValue": defaultTokenModel.get("sceneName"),
             "searchWhenChanged": true,
             "valueField": "KeyID",
             "showClearButton": true,
@@ -376,11 +386,23 @@ require([
         sceneNamePicker.on("change", function(newValue) {
             FormUtils.handleValueChange(sceneNamePicker);
             if(newValue == "_new") {
-    //alert('new scene');
                 $('#new_scene_div').show();
                 $('#new_scene_div').css("display", "inline");
-    //console.log(bob);
+                $('#modelAdder').hide();
+            } 
+
+            if(newValue != "" && newValue != "_new") {
+                $('#modelAdder').show();
+
+                setToken("sceneNameKey", newValue);
+                submitTokens();
+
+                sendDomCommandToViz("switchscene:" + newValue);
+
+                modelUniqueComponentsSearch.startSearch();
+
             }
+
         });
         
         var newSceneName = new TextInput({
@@ -415,22 +437,11 @@ require([
         modelGeometryFile.on("change", function(newValue) {
             FormUtils.handleValueChange(modelGeometryFile);
         });
-        
-        var componentMapping1 = new TextInput({
-            "id": "componentMapping_1",
-            "searchWhenChanged": true,
-            "initialValue": "abcd",
-            "default": "abcd",
-            "value": "$form.componentMapping1$",
-            "el": $('#componentMapping_1')
-        }, {tokens: true}).render();
-
-        componentMapping1.on("change", function(newValue) {
-            FormUtils.handleValueChange(componentMapping1);
-        });
 
 
         $("#addSceneButton").click(function() {
+                submitTokens();
+
                 var tempSceneName = newSceneName.val();
                 console.log("Adding new scene called" + tempSceneName);
                 //add scene via KVSTORE
@@ -438,7 +449,6 @@ require([
                 //set the sceneNamePicker token/value to new scene name.
                 
                 var record = { "sceneName": tempSceneName };
-                console.log(record);
                 service.request(
                     "storage/collections/data/scenes/",
                     "POST",
@@ -446,24 +456,79 @@ require([
                     null,
                     JSON.stringify(record),
                     {"Content-Type": "application/json" },
-                    null).done(function() {
+                    null).done(function(result) {
                             console.log("setting scene name token to " + tempSceneName);
-                            setToken("sceneName", tempSceneName);
+                            var resultKey = JSON.parse(result)._key;
+                            //sceneNamePicker.settings.set("initialValue", JSON.parse(result)._key);
+                            setToken("sceneNameKey", resultKey);
+                            submitTokens();
                             sceneNamePickerSearch.startSearch();
+                            sceneNamePicker.val(resultKey);
                             vizCRUDSearch.startSearch();
+                            $('#new_scene_div').hide();
                         });
 
             });
 
-        $("addModelButton").click(function() {
+
+            $("#saveChangesButton").click(function() {
+                sendDomCommandToViz("save");
+
+            });
+
+
+        $("#addModelButton").click(function() {
                 console.log("Add model '" + modelUniqueName.val() + "' to scene button called for model: " + modelGeometryFile.val());
+
+                var tempModelUniqueName = modelUniqueName.val();
+                var tempModelGeomertryFile = modelGeometryFile.val();
+//_key, sceneKey, componentUniqueName, modelName, rotation, translation, scale
+                var record = { 
+                    "sceneKey": getToken("sceneNameKey"),
+                    "componentUniqueName": tempModelUniqueName,
+                    "modelName": tempModelGeomertryFile,
+                    "rotation": '{"x":0,"y":0,"z":0}',
+                    "translation": '{"x":0,"y":0,"z":0}',
+                    "scale": '{"x":0,"y":0,"z":0}'
+                }
+                service.request(
+                    "storage/collections/data/scene_models/",
+                    "POST",
+                    null,
+                    null,
+                    JSON.stringify(record),
+                    {"Content-Type": "application/json"},
+                    null).done(function(result) {
+                        console.log("added model: " + tempModelUniqueName + " to scene: " + getToken("sceneNameKey"));
+                        var resultKey = JSON.parse(result)._key;
+                        setToken("modelKey", resultKey);
+                        submitTokens();
+                        //build out part mapping pairs thingy.  need to insert nodes and create vars for them
+                        modelUniqueComponentsSearch.startSearch();
+                        //vizCRUDSearch.startSearch();
+                        modelUniqueName.val("");
+                        modelGeometryFile.val("");
+                        sendDomCommandToViz("reloadSceneModels");
+
+
+                    })
                 //add model to kvstore for scene
                 //call refresh on viz search.  crud mode needs to always reload the whole scene any time a search is called
 
 
             });
 
+        $("#modetranslate").click(function() {
+            sendDomCommandToViz("switchxform:translate");
+        })
 
+        $("#modescale").click(function() {
+            sendDomCommandToViz("switchxform:scale");
+        })
+
+        $("#moderotate").click(function() {
+            sendDomCommandToViz("switchxform:rotate");
+        })
 
         
         DashboardController.onReady(function() {
