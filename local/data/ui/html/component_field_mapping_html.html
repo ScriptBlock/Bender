@@ -85,6 +85,16 @@ styles in <div> tags, similar to Bootstrap's grid system.
 
         </div>
     </div>
+    <div class="dashboard-row">
+        <div class="dashboard-cell">
+            <div class="dashboard-panel">
+                <div id="componentMappingItems" class="dashboard-element event" style="width: 100%">
+                    <div class="panel-body"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <!-- 
@@ -276,6 +286,20 @@ require([
             "runWhenTimeIsUndefined": false
         }, {tokens: true});
 
+        var componentMappingItemsSearch = new SearchManager({
+            "id": "componentMappingItemsSearch",
+            "status_buckets": 0,
+            "cancelOnUnload": true,
+            "sample_ratio": null,
+            "latest_time": "$latest$",
+            "search": "| inputlookup model_component_mapping_lookup where modelKey=$modelKey$ | eval KeyID = _key | table KeyID,modelComponentName, dataFieldName, componentPurpose, componentMeasurementUnit, rotationOffset, translationOffset, rotationAxis",
+            "earliest_time": "$earliest$",
+            "app": utils.getCurrentApp(),
+            "auto_cancel": 90,
+            "preview": true,
+            "runWhenTimeIsUndefined": false
+        }, {tokens: true});
+
         /*
 [scene_models_lookup]
 external_type=kvstore
@@ -339,6 +363,15 @@ fields_list = _key, modelKey, modelComponentName, dataFieldName, componentPurpos
         //
         // VIEWS: FORM INPUTS
         //
+
+        var componentMappingItems = new TableElement({
+            "id": "componentMappingItems",
+            "drilldown":"cell",
+            "drilldownRedirect": false,
+            "managerid": "componentMappingItemsSearch",
+            "el": $('#componentMappingItems')
+        }, {tokens: true}).render();
+
 
         var input1 = new TextInput({
                         "id": "input1",
@@ -521,6 +554,7 @@ fields_list = _key, modelKey, modelComponentName, dataFieldName, componentPurpos
             "id": "purpose",
             "choices": [
                 {"value": "Rotation", "label": "Rotation"},
+                {"value": "ConstantRotation", "label": "Constant Rotation"},
                 {"value": "Temperature", "label": "Temperature"},
                 {"value": "Light", "label": "Light"},
             ],
@@ -620,6 +654,7 @@ fields_list = _key, modelKey, modelComponentName, dataFieldName, componentPurpos
                 null).done(function(result) {
                     var resultKey = JSON.parse(result)._key;
                     dataKey.val(resultKey);
+                    componentMappingItemsSearch.startSearch();
                 });            
 
         });

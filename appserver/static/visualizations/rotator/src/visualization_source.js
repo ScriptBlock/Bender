@@ -59,10 +59,10 @@ var camera, scene, loader, renderer;
 
 var currentSceneKey;
 var currentSceneComponents = new Object();
+var currentSceneName;
 var uniqueToPartMapping = new Object();
 var sceneComponentCount = 0;
 var sceneComponentsCounted = 0;
-
 
 var	sceneModelsDeferred = $.Deferred();
 var	modelMappingDeferred = $.Deferred();
@@ -84,6 +84,7 @@ var mouse;
 var currentTransformObject;
 var transformControlState = false;
 
+var activeTweens = new Object();
 
 var crudMode = false;
 var crudCommand;
@@ -431,6 +432,41 @@ function updateControls() {
 }
 */
 
+function rebuildTweens() {
+	_.each(activeTweens, function(tween) {
+		tween.stop();
+		TWEEN.remove(tween);
+	});
+
+	activeTweens = new Object();
+}
+
+function createDefaultScene() {
+	console.log("creating a new scene.");
+	scene = new THREE.Scene();
+	scene.add( new THREE.GridHelper( 500, 100 ) );
+	scene.background = new THREE.Color( 0x000000 );
+
+	return scene;
+}
+
+function loadSceneByName(sceneName) {
+	console.log("loading scene by name: " + sceneName);
+	mvcService.request("storage/collections/data/scenes",
+		"GET",
+		null,
+		null,
+		null,
+		null,
+		function(err, response) {
+			var tempSceneInfo = _.findWhere(response.data, {"sceneName":sceneName});
+			console.log("found a scene for that name");
+			console.log(tempSceneInfo);
+			console.log("calling loadScene(" + tempSceneInfo._key + ")");
+			currentSceneName = tempSceneInfo.sceneName;
+			loadScene(tempSceneInfo._key);
+		});
+}
 
 function loadScene(sceneKey) {
 	console.log("loading scene for " + sceneKey);
@@ -444,29 +480,22 @@ function loadScene(sceneKey) {
 	currentSceneComponents = new Object();
 
 	console.log("creating a new scene.");
-	scene = new THREE.Scene();
-	scene.add( new THREE.GridHelper( 500, 100 ) );
-	scene.background = new THREE.Color( 0x000000 );
+	scene = createDefaultScene();
 	scene.add(transformControl);
 
 	sceneModelsDeferred = $.Deferred();
 	modelMappingDeferred = $.Deferred();
 
+	rebuildTweens();
+
+	
+	
 
 	//KV lookup
 	loadSceneModels(sceneKey);
 
 }
 
-function modelLoadingTracker() {
-	if(sceneComponentsCounted != sceneComponentCount) {
-		setTimeout(modelLoadingTracker, 1000);
-	} else {
-		modelMappingDeferred.resolve();
-	}
-
-
-}
 
 function loadSceneModels(sceneKey) {
 	console.log("loading scene models");
@@ -562,6 +591,7 @@ function loadSceneModels(sceneKey) {
 				});
 
 				scene.add(currentSceneComponents[model._key].threeObject);
+				
 			});			
 		});
 
@@ -596,7 +626,136 @@ function reloadSceneModels() {
 	currentSceneComponents = new Object();
 	uniqueToPartMapping = new Object();
 	
+	rebuildTweens();
+
+	
 	loadSceneModels(currentSceneKey); //then reload them
+
+}
+
+function constantRotate(partInfo, newValue) {
+	var existingTween = activeTweens[partInfo.mappingData._key];
+	newValue = parseInt(newValue);
+
+
+	if(existingTween) {
+		//update the delay
+
+
+	} else {
+		console.log("starting a constant rotation on : " + partInfo.part.name);
+
+		console.log("current axis [" + partInfo.mappingData.rotationAxis + "]  rotation is: " + partInfo.part.rotation[partInfo.mappingData.rotationAxis]);
+		console.log("new value is " + newValue);
+
+		var current = {axis:partInfo.part.rotation[partInfo.mappingData.rotationAxis]};
+		var target = {axis: current + newValue};
+
+
+
+		var newTween = new TWEEN.Tween(current)
+								.to(target, 200)
+								.onUpdate(function() { partInfo.part.rotation[partInfo.mappingData.rotationAxis] = this.axis })
+								.onComplete(function() {
+									TWEEN.remove(this);
+									current = {axis:partInfo.part.rotation[partInfo.mappingData.rotationAxis]};
+									target = {axis: current + newValue};
+									//need to callback to self here TODO
+								})
+								.start();
+
+/*
+		var newTween = new TWEEN.Tween({axis:partInfo.part.rotation[partInfo.mappingData.rotationAxis], obj:partInfo})
+							 .to({axis:360}, newValue) //TODO this 50 is arbitrate and needs to be updateable
+							 .onUpdate(function() { 
+							 				console.log(this.obj.part.rotation[this.obj.mappingData.rotationAxis])
+							 				this.obj.part.rotation[this.obj.mappingData.rotationAxis] = this.axis; 
+							 			})
+							 .onComplete(function() { 
+							 				console.log("finished rotation tween.");
+							 				console.log("finished axis value: " + this.axis);
+							 				console.log("rotation at end: " + this.obj.part.rotation[this.obj.mappingData.rotationAxis]);
+
+							 			})
+							 .repeat(Infinity);
+
+
+		activeTweens[partInfo.mappingData._key] = newTween.start();
+		console.log(activeTweens);
+		*/
+
+	}
+
+
+
+}
+
+function rotatePart(partInfo, newValue) {
+	console.log("inside rotatepart");
+/*
+
+var actualRadians = THREE.Math.degToRad((dataRadians*mathjs.PI/180)+200);
+TWEEN.add(new TWEEN.Tween({y:base.rotation.y, obj:base, tween:activeTween})
+		.to({y:actualRadians}, 300)
+		.onUpdate(function() { this.obj.rotation.y = this.y; })
+		.onComplete( function() { TWEEN.remove(this); })
+		.easing(TWEEN.Easing.Exponential.InOut)
+		.start());
+}
+*/
+	console.log("value from data: " + newValue);
+
+	var tempOffset = 0;
+	if(partInfo.mappingData.rotationOffset && partInfo.mappingData.rotationOffset != "") {
+		tempOffset = parseInt(partInfo.mappingData.rotationOffset);
+	}
+	var actualRadians = THREE.Math.degToRad((newValue*mathjs.PI/180)+tempOffset);
+	
+	//console.log("rotation axis for this tween")
+
+	console.log("starting value for tween: " + partInfo.part.rotation[partInfo.mappingData.rotationAxis] );
+	console.log("translated to actual radians with offset [" + partInfo.mappingData.rotationOffset + "] = " + actualRadians);
+
+	var rotationTween = new TWEEN.Tween({axis:partInfo.part.rotation[partInfo.mappingData.rotationAxis], obj:partInfo})
+								 .to({axis:actualRadians},300)
+								 .onUpdate(function() { this.obj.part.rotation[this.obj.mappingData.rotationAxis] = this.axis; })
+								 //.onUpdate(function() { 
+								 				//console.log("setting new rotation to: " + this.axis); 
+								 				//partInfo.part.rotation[this.obj.mappingData.rotationAxis] = this.axis; 
+								 //			})
+								 .onComplete(function() { TWEEN.remove(this); })
+								 .easing(TWEEN.Easing.Exponential.InOut);
+
+	console.log("created rotationtween");
+	console.log(rotationTween);
+
+	console.log("starting tween");
+	TWEEN.add(rotationTween.start());
+}
+
+function processPart(partInfo, newValue) {
+	console.log("inside process part");
+	var thePart = partInfo.part;
+	var mappingMetaData = partInfo.mappingData;
+
+
+	switch(mappingMetaData.componentPurpose) {
+		case "Rotation": 
+			console.log("componentpurpose is rotation.  calling rotatepart");
+			rotatePart(partInfo, newValue);
+			break;
+		case "ConstantRotation":
+			console.log("component purpose is constantrotation");
+			constantRotate(partInfo, newValue);
+			break;
+		case "Temperature":
+			setPartTemperature(partInfo, newValue);
+			break;
+		case "Light":
+			setPartLight(partInfo, newValue);
+			break;
+	}
+
 
 }
 
@@ -615,10 +774,7 @@ function reloadSceneModels() {
 
 
             //build up the base scane
-			scene = new THREE.Scene();
-			scene.add( new THREE.GridHelper( 500, 100 ) );
-			//needs to be customizable for formatter api
-			scene.background = new THREE.Color( 0x000000 );
+			scene = createDefaultScene();
 
 
 			//build up the viz renderer
@@ -680,7 +836,52 @@ function reloadSceneModels() {
         },
   
         
-        updateView: function(data, config) {
+        updateView: function(data,config) {
+        	globalConfig = config;
+        	globalNamespace = this.getPropertyNamespaceInfo().propertyNamespace;
+			var preferenceBasedSceneName = config[globalNamespace + "sceneName"];
+
+
+        	updateFromDom(); //basically used for CRUDmode.  passing commands back and forth.  There's probably 10 better ways to do this.  this is how i did it.  
+
+        	if(preferenceBasedSceneName && preferenceBasedSceneName != "") { //something real 
+       			if(preferenceBasedSceneName != currentSceneName) { 
+       				//switch to the new scene
+       				console.log("the preference based scene selection does not match the current scene name.  setting to " + preferenceBasedSceneName);
+       				loadSceneByName(preferenceBasedSceneName); 
+       			}
+        	}
+
+			// Check for empty data
+			if(_.size(data.results) < 1) { console.log("no data"); return; }
+
+
+			var dataRows = data.results;
+			_.each(dataRows, function(data) {
+
+				if(data["part"] && data["value"]) {
+					var thisUniquePartName = data["part"];
+					var thisUniquePartValue = data["value"];
+
+					console.log("new data row, processing part");
+					console.log("thisUniquePartName: " + thisUniquePartName);
+					console.log("thisUniquePartValue: " + thisUniquePartValue);
+
+					if(uniqueToPartMapping[thisUniquePartName]) {
+						console.log("found part mapping for this guy.. process");
+						processPart(uniqueToPartMapping[thisUniquePartName], thisUniquePartValue);
+					} else {
+						console.log("there is no part mapping for this");
+					}
+				}
+
+			});
+
+
+        },
+
+
+        updateViewOld: function(data, config) {
         	globalConfig = config;
         	globalNamespace = this.getPropertyNamespaceInfo().propertyNamespace;
 
@@ -688,6 +889,7 @@ function reloadSceneModels() {
         	mediumTemp = parseInt(config[globalNamespace + "medTemp"])
 
         	updateFromDom();
+
 	
 			// Check for empty data
 			if(_.size(data.results) < 1) { console.log("no data"); return; }
