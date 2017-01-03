@@ -104,6 +104,7 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 
 	var currentSceneKey;
 	var currentSceneComponents = new Object();
+	var uniqueToPartMapping = new Object();
 	var sceneComponentCount = 0;
 	var sceneComponentsCounted = 0;
 
@@ -260,18 +261,72 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 	}
 
 
+	function saveSceneModels() {
+
+		/*
+
+			loop through all "currentscenecomponents"
+			use rest to save values for each
+		*/
+
+		_.each(currentSceneComponents, function(model) {
+			console.log("saving data for mode: " + model.componentUniqueName);
+			var key = model._key;
+			var sceneKey = model.sceneKey;
+			var uniqueName = model.componentUniqueName;
+			var modelName = model.modelName;
+
+			var translation = JSON.stringify(model.threeObject.position);
+			var scale = JSON.stringify(model.threeObject.scale);
+
+			var rotation = new Object();
+			rotation.x = model.threeObject.rotation._x;
+			rotation.y = model.threeObject.rotation._y;
+			rotation.z = model.threeObject.rotation._z;
+			var rotationString = JSON.stringify(rotation);
+
+
+			console.log("the key is: " + model._key);
+			console.log("translation: " + translation);
+			console.log("rotation: " + rotationString);
+			console.log("scale: " + scale);
+
+
+			var record = {
+				"sceneKey": sceneKey,
+				"componentUniqueName": uniqueName,
+				"modelName": modelName,
+				"translation": translation,
+				"scale": scale,
+				"rotation": rotationString
+			}
+
+			mvcService.request(
+				"storage/collections/data/scene_models/" + key,
+				"POST",
+				null,
+				null,
+				JSON.stringify(record),
+				{"Content-Type": "application/json"},
+				null).done(function (result) {
+					console.log("saved data for " + key);
+					console.log(result);
+				});
+
+		});
+
+
+
+	}
+
 	function updateFromDom() {
 
-
-	/*
-	<div id="vizbridge_crudmode" style="display:none">on</div>
-	        <div id="vizbridge_crudcommand" style="display:none">none</div>
-	*/
-
-		if(crudMode != $("#vizbridge_crudmode").text()) {
-			console.log("current crudMode: [" + crudMode + "] doesn't match " + $("#vizbridge_crudmode").text());
-			crudMode = $("#vizbridge_crudmode").text();
-			console.log("changed crudmode to " + crudMode);
+		if($("vizbridge_crudmode").text() != "") { 
+			if(crudMode != $("#vizbridge_crudmode").text()) {
+				console.log("current crudMode: [" + crudMode + "] doesn't match " + $("#vizbridge_crudmode").text());
+				crudMode = $("#vizbridge_crudmode").text();
+				console.log("changed crudmode to " + crudMode);
+			}
 		}
 
 		var tempCommand = $("#vizbridge_crudcommand").text();
@@ -281,7 +336,9 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 
 			$("#vizbridge_crudcommand").text("");
 
-			if(crudCommand == "save") {}
+			if(crudCommand == "save") {
+				saveSceneModels();
+			}
 
 			if(crudCommand == "reloadSceneModels") {
 				reloadSceneModels();
@@ -462,7 +519,7 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 
 	//?query={"id": {"$gt": 24}}
 		var searchString = '{"sceneKey": "' + sceneKey + '"}';
-
+		var mappingData;
 
 
 		mvcService.request("storage/collections/data/scene_models", 
@@ -480,47 +537,35 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 				console.log("here's the currentSceneComponents object after scene model loading");
 				console.log(currentSceneComponents);
 
-				sceneModelsDeferred.resolve(currentSceneComponents);
+				console.log("mapping up field data");
+				mvcService.request("storage/collections/data/model_component_mapping",
+					"GET",
+					null, //no query, just get them all
+					null,
+					null,
+					null,
+					function(err, response) {
+
+						mappingData = response.data;
+						console.log("all mapping data: " );
+						console.log(mappingData);
 
 
+						_.each(currentSceneComponents, function(model) {
+							console.log("setting mappingdata field for model: " + model._key)
+							var thisGuysMappingData = _.where(mappingData, {"modelKey":model._key});
+							console.log(thisGuysMappingData);
+							model.mappingData = thisGuysMappingData;
 
+						});
+						sceneModelsDeferred.resolve(currentSceneComponents);
+
+					}
+				);
 			});
 
-		sceneComponentCount = _.size(currentSceneComponents);
-		sceneComponentsCounted = 0;
-		_.each(currentSceneComponents, function(model) {
-			console.log("loading mapping for component " + model._key);
-			console.log(model);
-			mvcService.request("storage/collections/data/model_component_mapping",
-				"GET",
-				{"query": '{"modelKey: "' + model._key + '"}'},
-				null,
-				null,
-				null,
-				function(err, response) {
-					console.log("working with output for model key: " + model._key);
-					var fieldMapping = new Object();
-					_.each(response.data, function(mapping) {
-						fieldMapping[mapping._key] = mapping;
-					})
-					model["fieldmapping"] = fieldMapping;
-					sceneComponentsCounted++;
-				}
-
-				)
-
-
-		});
-		
-		console.log("tracking model loading for deferred variable");
-		setTimeout(modelLoadingTracker, 250);
-		
-
-		//kv lookup
-		//add models to a hash during load
-
 		console.log("calling $.when");
-		$.when(sceneModelsDeferred, modelMappingDeferred).done(function() {
+		$.when(sceneModelsDeferred).done(function() {
 			console.log("inside $.when block");
 			console.log(currentSceneComponents);
 			//actually create the model and apply translations and field mapping and unique identified to it.
@@ -541,14 +586,33 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 					console.log("model.scale = " + model.scale);
 					obj.scale.set(xyz.x,xyz.y,xyz.z);
 
+					xyz = JSON.parse(model.rotation);
+					console.log("model.rotation = " + model.rotation);
+					obj.rotateX(xyz.x);
+					obj.rotateY(xyz.y);
+					obj.rotateZ(xyz.z);
+
+
 
 					currentSceneComponents[model._key].threeObject = obj;
+					_.each(model.mappingData, function(mapping) {
+						//this creates a lookup for fast tweening later on.  each key is the unique data field name.  this has a reference to the part itself as well as the mapping data which contains axis info, etc
+						//need to also incude offsets during tweening so this will be useful there as well.
+						uniqueToPartMapping[mapping.dataFieldName] = new Object();
+						uniqueToPartMapping[mapping.dataFieldName].part = currentSceneComponents[model._key].threeObject.getObjectByName(mapping.modelComponentName);
+						uniqueToPartMapping[mapping.dataFieldName].mappingData = mapping;
 
 
+
+					});
 
 					scene.add(currentSceneComponents[model._key].threeObject);
-				});
+				});			
 			});
+
+			console.log("unique part mapping");
+			console.log(uniqueToPartMapping);
+
 
 			console.log("current scene components with three object loaded");
 			console.log(currentSceneComponents);
@@ -575,7 +639,7 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 		});
 
 		currentSceneComponents = new Object();
-
+		uniqueToPartMapping = new Object();
 		
 		loadSceneModels(currentSceneKey); //then reload them
 

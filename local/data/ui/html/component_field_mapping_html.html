@@ -29,52 +29,60 @@ styles in <div> tags, similar to Bootstrap's grid system.
     <div class="dashboard-header clearfix">
         <h2>Component Field Mapping HTML</h2>
     </div>
-    <div class="fieldset">
-      	<div class="dashboard-row">
-          <div class="dashboard-cell" id="metaChooserDiv">
+    <div class="dashboard-row">
+        <div class="dashboard-cell" id="metaChooserDiv">
             <div class="dashboard-panel">
-            <p>
-            <div class="input input-dropdown" id="sceneSelection">
-                <label>Scene Selection</label>
+                <p>
+                    <div class="input input-dropdown" id="sceneSelection">
+                        <label>Scene Selection</label>
+                    </div>
+                </p>
+                <p>
+                    <div class="input input-dropdown" id="modelSelection">
+                        <label>Model</label>
+                    </div>
+                </p>
+                <p>
+                    <div class="input input-dropdown" id="modelComponentSelection">
+                        <label>Component</label>
+                    </div>
+                </p>
             </div>
-            </p>
-            <p>
-            <div class="input input-dropdown" id="modelSelection">
-                <label>Model</label>
-            </div>
-            </p>
-            <p>
-            <div class="input input-dropdown" id="modelComponentSelection">
-                <label>Component (build dynamically)</label>
-            </div>
-            </p>
-            </div>
-          </div>
-          <div class="dashboard-cell">
+        </div>
+        <div class="dashboard-cell">
             <div class="dashboard-panel">
-            <div class="input input-text" id="dataField">
-                <label>Data Field</label>
-            </div>
-            <div class="input input-dropdown" id="purpose">
-                <label>Purpose</label>
-            </div>
-            <div class="input input-text" id="unit">
-                <label>Unit</label>
-            </div>
-            <div class="input input-text" id="rotationOffset">
-                <label>Rotation Offset</label>
-            </div>
-            <div class="input input-text" id="rotationAxis">
-                <label>Rotation Axis</label>
-            </div>
+                <form id="componentMappingForm">
+                    <div class="fieldset">
+                        <div class="input input-text" id="dataKey">
+                            <label>Key</label>
+                        </div>
+                        <div class="input input-text" id="dataField">
+                            <label>Data Field</label>
+                        </div>
+                        <div class="input input-dropdown" id="purpose">
+                            <label>Purpose</label>
+                        </div>
+                        <div class="input input-text" id="unit">
+                            <label>Unit</label>
+                        </div>
+                        <div class="input input-text" id="rotationOffset">
+                            <label>Rotation Offset</label>
+                        </div>
+                        <div class="input input-text" id="rotationAxis">
+                            <label>Rotation Axis</label>
+                        </div>
+                        <!--
+                        <div class="form-submit" id="submit">
+                            <button class="btn btn-primary submit">Submit</button>
+                        </div>
+                        -->
+
+                    </div>
+                </form>
+                <div><button id="componentsavebutton">Save</button></div>
 
             </div>
-            
-          </div>
-      </div>
 
-        <div class="form-submit" id="search_btn">
-            <button class="btn btn-primary submit">Submit</button>
         </div>
     </div>
 </div>
@@ -89,6 +97,11 @@ END LAYOUT
 <script src="{{SPLUNKWEB_URL_PREFIX}}/static/build/simplexml/index.js"></script>
 <script type="text/javascript">
 // <![CDATA[
+require.config({
+    baseUrl: "{{SPLUNKWEB_URL_PREFIX}}/static/js",
+    waitSeconds: 0 // Disable require.js load timeout
+});
+
 // <![CDATA[
 //
 // LIBRARY REQUIREMENTS
@@ -133,7 +146,9 @@ require([
     "splunkjs/mvc/searchmanager",
     "splunkjs/mvc/savedsearchmanager",
     "splunkjs/mvc/postprocessmanager",
-    "splunkjs/mvc/simplexml/urltokenmodel"
+    "splunkjs/mvc/simplexml/urltokenmodel",
+    "/static/app/Bender/js/three.min.js"
+
     // Add comma-separated libraries and modules manually here, for example:
     // ..."splunkjs/mvc/simplexml/urltokenmodel",
     // "splunkjs/mvc/tokenforwarder"
@@ -170,7 +185,8 @@ require([
         SearchManager,
         SavedSearchManager,
         PostProcessManager,
-        UrlTokenModel
+        UrlTokenModel,
+        THREE
 
         // Add comma-separated parameter names here, for example: 
         // ...UrlTokenModel, 
@@ -189,6 +205,9 @@ require([
         mvc.Components.registerInstance('url', urlTokenModel);
         var defaultTokenModel = mvc.Components.getInstance('default', {create: true});
         var submittedTokenModel = mvc.Components.getInstance('submitted', {create: true});
+
+
+        var modelComponents;
 
         urlTokenModel.on('url:navigate', function() {
             defaultTokenModel.set(urlTokenModel.toJSON());
@@ -217,6 +236,12 @@ require([
             submittedTokenModel.unset(name);
         }
 
+
+        function formReadyCheck() {
+            console.log("form ready checker: ");
+            console.log(FormUtils.isFormReady());
+            setTimeout(formReadyCheck, 1000);
+        }
         
         
         //
@@ -251,6 +276,37 @@ require([
             "runWhenTimeIsUndefined": false
         }, {tokens: true});
 
+        /*
+[scene_models_lookup]
+external_type=kvstore
+collection=scene_models
+fields_list = _key, sceneKey, componentUniqueName, modelName, rotation, translation, scale
+
+[model_component_mapping_lookup]
+external_type=kvstore
+collection=model_component_mapping
+fields_list = _key, modelKey, modelComponentName, dataFieldName, componentPurpose, componentMeasurementUnit, rotationOffset, translationOffset, rotationAxis
+
+
+
+        */
+
+        //maybe i'll need this later
+        /*
+        var modelComponentSelectionSearch = new SearchManager({
+            "id": "modelComponentSelectionSearch",
+            "status_buckets": 0,
+            "cancelOnUnload": true,
+            "sample_ratio": null,
+            "latest_time": "$latest$",
+            "search": "|inputlookup model_component_mapping_lookup where modelKey=$scene_model$ | eval KeyID = _key | table KeyID, modelComponentName",
+            "earliest_time": "$earliest$",
+            "app": utils.getCurrentApp(),
+            "auto_cancel": 90,
+            "preview": true,
+            "runWhenTimeIsUndefined": false
+        }, {tokens: true});
+*/
 
 
         //
@@ -284,10 +340,21 @@ require([
         // VIEWS: FORM INPUTS
         //
 
+        var input1 = new TextInput({
+                        "id": "input1",
+            "value": "$form.input1$",
+            "el": $('#input1')
+        }, {tokens: true}).render();
+
+        input1.on("change", function(newValue) {
+            FormUtils.handleValueChange(input1);
+        });
+
+
         var sceneSelection = new DropdownInput({
             "id": "sceneSelection",
             "choices": [],
-            "selectFirstChoice": false,
+            "selectFirstChoice": true,
             "labelField": "sceneName",
             "showClearButton": true,
             "valueField": "KeyID",
@@ -304,45 +371,142 @@ require([
         var modelSelection = new DropdownInput({
             "id": "modelSelection",
             "choices": [],
-            "selectFirstChoice": false,
+            "selectFirstChoice": true,
             "labelField": "componentUniqueName",
             "showClearButton": true,
             "valueField": "KeyID",
-            "value": "$form.scene_model$",
+            "value": "$form.modelKey$",
             "managerid": "modelSelectionSearch",
             "el": $('#modelSelection')
         }, {tokens: true}).render();
 
+        function buildChoicesFromChildren(choices, obj) {
+            if(obj.children) {
+                _.each(obj.children, function(i) {
+
+                    return buildChoicesFromChildren(choices,i);
+                })
+            }
+            if(obj.name && obj.name != "NONE" && obj.name != "") {
+                var retVal = new Object();
+                retVal.label = obj.name;
+                retVal.value = obj.name;
+
+                choices.push(retVal);
+            }
+            return choices;
+
+        }
+
         modelSelection.on("change", function(newValue) {
             FormUtils.handleValueChange(modelSelection);
-            //TODO
-            //use the scenemodel key to do a rest lookup of model name
-            //use the scenemodel key to search all valued components
-                //use three to open up the model and grb the fields
+
+            service.get(
+                "storage/collections/data/scene_models/" + newValue,
+                null,
+                null).done(function(result) {
+                    console.log("got scene model name for unique key: " + newValue);
+                    var modelProps = JSON.parse(result);
+                    var modelName = modelProps.modelName;
+                    var uniqueName = modelProps.componentUniqueName;
+                    var sceneKey = modelProps.sceneKey;
+                    console.log("loading three.js model for " + modelName);
+
+                    var loader = new THREE.ObjectLoader();
+                    loader.load("/en-us/static/app/Bender/" + modelName, 
+                        function(obj) {
+                            var modelComponentSelectionChoices = new Array();
+                            modelComponentSelectionChoices = buildChoicesFromChildren(modelComponentSelectionChoices,obj);
+                            modelComponentSelectionChoices = _.sortBy(modelComponentSelectionChoices, 'label');
+
+                            modelComponentSelection.settings.set("choices", modelComponentSelectionChoices);
+
+                        }
+                    );
 
 
-                //for each field in there, add onto the working field selection model
-                //  if there's also a field matching in the component search set that and add a key property to make saving eaier
+                }
+            );
 
 
         });
         
         var modelComponentSelection = new DropdownInput({
             "id": "modelComponentSelection",
-            "choices": [
-                {"value": "def", "label": "abc"} //this can be dynamically generated prior to render
-            ],
+            "choices": [],
             "selectFirstChoice": false,
             "showClearButton": true,
             "searchWhenChanged": true,
+            "labelField": "modelComponentName",
+            "valueField": "KeyID",
             "value": "$form.componentKey$",
+            "managerid": "modelComponentSelectionSearch",
             "el": $('#modelComponentSelection')
         }, {tokens: true}).render();
 
         modelComponentSelection.on("change", function(newValue) {
             FormUtils.handleValueChange(modelComponentSelection);
+
+            var tokens = mvc.Components.get("default");
+            var modelKey = tokens.get("modelKey");
+            var componentName = newValue;
+
+            modelComponents = new Object();
+
+
+            var searchString = '{"modelKey":"' + modelKey + '", "modelComponentName":"' + componentName + '"}';
+            console.log("search string: " + searchString);
+            console.log({"query":searchString});
+
+            service.get("storage/collections/data/model_component_mapping",
+                {"query":searchString},
+                null).done(function(result) {
+
+                    console.log("modelComponents search results");
+                    console.log(result);
+
+                    var jsonTemp = JSON.parse(result);
+
+//fields_list = _key, modelKey, modelComponentName, dataFieldName, componentPurpose, componentMeasurementUnit, rotationOffset, translationOffset, rotationAxis
+
+
+                    if(jsonTemp[0]) {
+                        var temp = jsonTemp[0];
+                        dataKey.val(temp._key);
+                        dataField.val(temp.dataFieldName);
+                        purpose.val(temp.componentPurpose);
+                        unit.val(temp.componentMeasurementUnit);
+                        rotationOffset.val(temp.rotationOffset);
+                        rotationAxis.val(temp.rotationAxis);
+                    } else {
+                        dataKey.val("");
+                        dataField.val("");
+                        purpose.val("");
+                        unit.val("");
+                        rotationOffset.val("");
+                        rotationAxis.val("");
+
+
+                    }
+                    submitTokens();
+                    //console.log(FormUtils);
+
+                }
+            );
+
+
         });
-        
+
+        var dataKey = new TextInput({
+            "id": "dataKey",
+            "value": "$form.dataKey$",
+            "el": $('#dataKey')
+        }, {tokens: true}).render();
+
+        dataKey.on("change", function(newValue) {
+            FormUtils.handleValueChange(dataKey);
+        });
+
         var dataField = new TextInput({
             "id": "dataField",
             "value": "$form.dataField$",
@@ -360,7 +524,7 @@ require([
                 {"value": "Temperature", "label": "Temperature"},
                 {"value": "Light", "label": "Light"},
             ],
-            "selectFirstChoice": false,
+            "selectFirstChoice": true,
             "showClearButton": true,
             "value": "$form.purpose$",
             "el": $('#purpose')
@@ -403,14 +567,75 @@ require([
         // 
         // SUBMIT FORM DATA
         //
+        var service = mvc.createService({ owner: "nobody"});
+
+
+        $("#componentsavebutton").click(function() {
+            submitTokens();
+            
+            //submitTokens();
+            var localTokens = mvc.Components.get("default");
+            var localSceneKey = localTokens.get("sceneKey"); 
+            var localModelKey = localTokens.get("modelKey"); 
+            var localComponentKey = localTokens.get("componentKey"); 
+            var localDataField = localTokens.get("dataField"); 
+            var localDataKey = localTokens.get("dataKey"); 
+            var localPurpose = localTokens.get("purpose"); 
+            var localUnit = localTokens.get("unit"); 
+            var localRotationOffset = localTokens.get("rotationOffset"); 
+            var localRotationAxis = localTokens.get("rotationAxis"); 
+            
+            console.log("dataKey: " + localDataKey);
+            console.log("sceneKey: " + localSceneKey);
+            console.log("modelKey: " + localModelKey);
+            console.log("componentKey: " + localComponentKey);
+            console.log("dataField: " + localDataField);
+            console.log("purpose: " + localPurpose);
+            console.log("unit: " + localUnit);
+            console.log("rotationOffset: " + localRotationOffset);
+            console.log("rotationAxis: " + localRotationAxis);
+
+            var record = {
+                "modelKey": localModelKey,
+                "modelComponentName": localComponentKey,
+                "dataFieldName": localDataField,
+                "componentPurpose": localPurpose,
+                "componentMeasurementUnit": localUnit,
+                "rotationOffset": localRotationOffset,
+                "rotationAxis": localRotationAxis
+            }
+
+            var uri = "storage/collections/data/model_component_mapping/";
+            if(typeof localDataKey != "undefined" && localDataKey != "") {
+                uri += localDataKey + "/";
+            }
+
+            service.request(
+                uri,
+                "POST",
+                null,
+                null,
+                JSON.stringify(record),
+                {"Content-Type": "application/json"},
+                null).done(function(result) {
+                    var resultKey = JSON.parse(result)._key;
+                    dataKey.val(resultKey);
+                });            
+
+        });
 
         var submit = new SubmitButton({
             id: 'submit',
-            el: $('#search_btn')
+            el: $('#submit')
         }, {tokens: true}).render();
 
-        submit.on("submit", function() {
+        submit.on("submit", function() {    
+            console.log("submit submit called");
             submitTokens();
+
+            var tokens = mvc.Components.get("default");
+            console.log(tokens.get("dataKey"));
+
         });
 
         // Initialize time tokens to default
@@ -426,10 +651,10 @@ require([
         //
         // DASHBOARD READY
         //
-
         DashboardController.ready();
         pageLoading = false;
-
+        //console.log(DashboardController);
+        //setTimeout(formReadyCheck, 1000);
     }
 );
 // ]]>
