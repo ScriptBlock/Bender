@@ -134,16 +134,16 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 	var crudMode = false;
 	var crudCommand;
 
-	//if(true) { console.log("osdijfodisjfiodsfjsdf"); }
+	//if(true) { //console.log("osdijfodisjfiodsfjsdf"); }
 	/*
 	var fu;
 	try {
-		console.log("doing stuff before require");
+		//console.log("doing stuff before require");
 		fu = require('splunkjs/mvc/simpleform/formutils');
-		console.log("loaded formutils");
+		//console.log("loaded formutils");
 	} catch(e) {
-		console.log("error requiring formutils");
-		console.log(e);
+		//console.log("error requiring formutils");
+		//console.log(e);
 	}
 	*/
 	//////////////////////////
@@ -167,14 +167,14 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 
 	        function getToken(name) {
 	            var retVal = defaultTokenModel.get(name);
-	            console.log("token value for " + name + " is " + retVal);
+	            //console.log("token value for " + name + " is " + retVal);
 	            return retVal;
 
 	        }
 
 	function getToken(name) {
 	    var retVal = defaultTokenModel.get(name);
-	    console.log("token value for " + name + " is " + retVal);
+	    //console.log("token value for " + name + " is " + retVal);
 	    return retVal;
 
 	}
@@ -193,8 +193,8 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 		//token testing
 		
 		//var tokenTemp = getToken("vizbridge_selectmodel");
-		//console.log("token temp");
-		//console.log(tokenTemp);
+		////console.log("token temp");
+		////console.log(tokenTemp);
 		
 		updateFromDom();
 		//this is a safety check.  if you try to set the camera angles and scene size before
@@ -271,7 +271,7 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 		*/
 
 		_.each(currentSceneComponents, function(model) {
-			console.log("saving data for mode: " + model.componentUniqueName);
+			//console.log("saving data for mode: " + model.componentUniqueName);
 			var key = model._key;
 			var sceneKey = model.sceneKey;
 			var uniqueName = model.componentUniqueName;
@@ -287,10 +287,10 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 			var rotationString = JSON.stringify(rotation);
 
 
-			console.log("the key is: " + model._key);
-			console.log("translation: " + translation);
-			console.log("rotation: " + rotationString);
-			console.log("scale: " + scale);
+			//console.log("the key is: " + model._key);
+			//console.log("translation: " + translation);
+			//console.log("rotation: " + rotationString);
+			//console.log("scale: " + scale);
 
 
 			var record = {
@@ -310,8 +310,8 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 				JSON.stringify(record),
 				{"Content-Type": "application/json"},
 				null).done(function (result) {
-					console.log("saved data for " + key);
-					console.log(result);
+					//console.log("saved data for " + key);
+					//console.log(result);
 				});
 
 		});
@@ -324,16 +324,16 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 
 		if($("vizbridge_crudmode").text() != "") { 
 			if(crudMode != $("#vizbridge_crudmode").text()) {
-				console.log("current crudMode: [" + crudMode + "] doesn't match " + $("#vizbridge_crudmode").text());
+				//console.log("current crudMode: [" + crudMode + "] doesn't match " + $("#vizbridge_crudmode").text());
 				crudMode = $("#vizbridge_crudmode").text();
-				console.log("changed crudmode to " + crudMode);
+				//console.log("changed crudmode to " + crudMode);
 			}
 		}
 
 		var tempCommand = $("#vizbridge_crudcommand").text();
 		if(tempCommand != "") {
 			crudCommand = $("#vizbridge_crudcommand").text();
-			console.log("received dom based viz command: " + crudCommand);
+			//console.log("received dom based viz command: " + crudCommand);
 
 			$("#vizbridge_crudcommand").text("");
 
@@ -401,7 +401,7 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 	//this selects the entire model and reflects the wishes of the formatter api settings
 	//currently just supports transforms.
 	function selectComponent(componentKey) {
-		console.log("selecting component: " + componentKey);
+		//console.log("selecting component: " + componentKey);
 		transformControl.detach();
 
 		transformControl.attach(currentSceneComponents[componentKey].threeObject);
@@ -428,7 +428,7 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 				var theParent = getParentUntil(intersects[0].object);
 				if(theParent) {
 					currentTransformObject = theParent;
-					console.log(theParent);
+					//console.log(theParent);
 					if(transformControlState) {
 						transformControl.attach(currentTransformObject);
 					}
@@ -487,7 +487,7 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 	}
 
 	function createDefaultScene() {
-		console.log("creating a new scene.");
+		//console.log("creating a new scene.");
 		scene = new THREE.Scene();
 		scene.add( new THREE.GridHelper( 500, 100 ) );
 		scene.background = new THREE.Color( 0x000000 );
@@ -496,7 +496,7 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 	}
 
 	function loadSceneByName(sceneName) {
-		console.log("loading scene by name: " + sceneName);
+		//console.log("loading scene by name: " + sceneName);
 		mvcService.request("storage/collections/data/scenes",
 			"GET",
 			null,
@@ -505,26 +505,26 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 			null,
 			function(err, response) {
 				var tempSceneInfo = _.findWhere(response.data, {"sceneName":sceneName});
-				console.log("found a scene for that name");
-				console.log(tempSceneInfo);
-				console.log("calling loadScene(" + tempSceneInfo._key + ")");
+				//console.log("found a scene for that name");
+				//console.log(tempSceneInfo);
+				//console.log("calling loadScene(" + tempSceneInfo._key + ")");
 				currentSceneName = tempSceneInfo.sceneName;
 				loadScene(tempSceneInfo._key);
 			});
 	}
 
 	function loadScene(sceneKey) {
-		console.log("loading scene for " + sceneKey);
+		//console.log("loading scene for " + sceneKey);
 
 		if(transformControl) {
 			transformControl.detach();
 		}
 
-		console.log("re/setting scenecomponent vars")
+		//console.log("re/setting scenecomponent vars")
 		currentSceneKey = sceneKey;
 		currentSceneComponents = new Object();
 
-		console.log("creating a new scene.");
+		//console.log("creating a new scene.");
 		scene = createDefaultScene();
 		scene.add(transformControl);
 
@@ -543,7 +543,7 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 
 
 	function loadSceneModels(sceneKey) {
-		console.log("loading scene models");
+		//console.log("loading scene models");
 		//fields_list = _key, sceneKey, componentUniqueName, modelName, rotation, translation, scale
 
 	//?query={"id": {"$gt": 24}}
@@ -560,13 +560,13 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 			function(err, response) {
 				_.each(response.data, function(model) {
 					currentSceneComponents[model._key] = model;
-					//console.log(model);
+					////console.log(model);
 				});
 
-				console.log("here's the currentSceneComponents object after scene model loading");
-				console.log(currentSceneComponents);
+				//console.log("here's the currentSceneComponents object after scene model loading");
+				//console.log(currentSceneComponents);
 
-				console.log("mapping up field data");
+				//console.log("mapping up field data");
 				mvcService.request("storage/collections/data/model_component_mapping",
 					"GET",
 					null, //no query, just get them all
@@ -576,14 +576,14 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 					function(err, response) {
 
 						mappingData = response.data;
-						console.log("all mapping data: " );
-						console.log(mappingData);
+						//console.log("all mapping data: " );
+						//console.log(mappingData);
 
 
 						_.each(currentSceneComponents, function(model) {
-							console.log("setting mappingdata field for model: " + model._key)
+							//console.log("setting mappingdata field for model: " + model._key)
 							var thisGuysMappingData = _.where(mappingData, {"modelKey":model._key});
-							console.log(thisGuysMappingData);
+							//console.log(thisGuysMappingData);
 							model.mappingData = thisGuysMappingData;
 
 						});
@@ -593,15 +593,15 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 				);
 			});
 
-		console.log("calling $.when");
+		//console.log("calling $.when");
 		$.when(sceneModelsDeferred).done(function() {
-			console.log("inside $.when block");
-			console.log(currentSceneComponents);
+			//console.log("inside $.when block");
+			//console.log(currentSceneComponents);
 			//actually create the model and apply translations and field mapping and unique identified to it.
 
 			_.each(currentSceneComponents, function(model) {
 				loader.load(modelPath + model.modelName, function(obj) {
-					console.log("loaded object: " + model.componentUniqueName);
+					//console.log("loaded object: " + model.componentUniqueName);
 					//set object properties recursively to add _key
 					obj.kvkey = model._key;
 
@@ -612,11 +612,11 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 					obj.position.z = xyz.z;
 
 					xyz = JSON.parse(model.scale);
-					console.log("model.scale = " + model.scale);
+					//console.log("model.scale = " + model.scale);
 					obj.scale.set(xyz.x,xyz.y,xyz.z);
 
 					xyz = JSON.parse(model.rotation);
-					console.log("model.rotation = " + model.rotation);
+					//console.log("model.rotation = " + model.rotation);
 					obj.rotateX(xyz.x);
 					obj.rotateY(xyz.y);
 					obj.rotateZ(xyz.z);
@@ -640,12 +640,12 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 				});			
 			});
 
-			console.log("unique part mapping");
-			console.log(uniqueToPartMapping);
+			//console.log("unique part mapping");
+			//console.log(uniqueToPartMapping);
 
 
-			console.log("current scene components with three object loaded");
-			console.log(currentSceneComponents);
+			//console.log("current scene components with three object loaded");
+			//console.log(currentSceneComponents);
 
 
 		});
@@ -654,7 +654,7 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 	}
 
 	function reloadSceneModels() {
-		console.log("reloading scene models");
+		//console.log("reloading scene models");
 
 		sceneModelsDeferred = $.Deferred();
 		modelMappingDeferred = $.Deferred();
@@ -664,7 +664,7 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 		}
 
 		_.each(currentSceneComponents, function(model) {
-			console.log("removing " + model.componentUniqueName);
+			//console.log("removing " + model.componentUniqueName);
 			scene.remove(model.threeObject);
 		});
 
@@ -688,13 +688,15 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 
 
 		} else {
-			console.log("starting a constant rotation on : " + partInfo.part.name);
+			//console.log("starting a constant rotation on : " + partInfo.part.name);
 
-			console.log("current axis [" + partInfo.mappingData.rotationAxis + "]  rotation is: " + partInfo.part.rotation[partInfo.mappingData.rotationAxis]);
-			console.log("new value is " + newValue);
+			//console.log("current axis [" + partInfo.mappingData.rotationAxis + "]  rotation is: " + partInfo.part.rotation[partInfo.mappingData.rotationAxis]);
+			//console.log("new value is " + newValue);
 
 			var current = {axis:partInfo.part.rotation[partInfo.mappingData.rotationAxis]};
 			var target = {axis: current + newValue};
+
+
 
 			var newTween = new TWEEN.Tween(current)
 									.to(target, 200)
@@ -703,15 +705,7 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 										TWEEN.remove(this);
 										current = {axis:partInfo.part.rotation[partInfo.mappingData.rotationAxis]};
 										target = {axis: current + newValue};
-										new TWEEN.Tween(current)
-											.to(target, 200)
-											.onUpdate(function() { partInfo.part.rotation[partInfo.mappingData.rotationAxis] = this.axis })
-											.onComplete(function() {
-												TWEEN.remove(this);
-												current = {axis:partInfo.part.rotation[partInfo.mappingData.rotationAxis]};
-												target = {axis: current + newValue};
-											})
-											.start();									
+										//need to callback to self here TODO
 									})
 									.start();
 
@@ -719,20 +713,20 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 			var newTween = new TWEEN.Tween({axis:partInfo.part.rotation[partInfo.mappingData.rotationAxis], obj:partInfo})
 								 .to({axis:360}, newValue) //TODO this 50 is arbitrate and needs to be updateable
 								 .onUpdate(function() { 
-								 				console.log(this.obj.part.rotation[this.obj.mappingData.rotationAxis])
+								 				//console.log(this.obj.part.rotation[this.obj.mappingData.rotationAxis])
 								 				this.obj.part.rotation[this.obj.mappingData.rotationAxis] = this.axis; 
 								 			})
 								 .onComplete(function() { 
-								 				console.log("finished rotation tween.");
-								 				console.log("finished axis value: " + this.axis);
-								 				console.log("rotation at end: " + this.obj.part.rotation[this.obj.mappingData.rotationAxis]);
+								 				//console.log("finished rotation tween.");
+								 				//console.log("finished axis value: " + this.axis);
+								 				//console.log("rotation at end: " + this.obj.part.rotation[this.obj.mappingData.rotationAxis]);
 
 								 			})
 								 .repeat(Infinity);
 
 
 			activeTweens[partInfo.mappingData._key] = newTween.start();
-			console.log(activeTweens);
+			//console.log(activeTweens);
 			*/
 
 		}
@@ -742,7 +736,7 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 	}
 
 	function rotatePart(partInfo, newValue) {
-		console.log("inside rotatepart");
+		//console.log("inside rotatepart");
 	/*
 
 	var actualRadians = THREE.Math.degToRad((dataRadians*mathjs.PI/180)+200);
@@ -754,7 +748,7 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 			.start());
 	}
 	*/
-		console.log("value from data: " + newValue);
+		//console.log("value from data: " + newValue);
 
 		var tempOffset = 0;
 		if(partInfo.mappingData.rotationOffset && partInfo.mappingData.rotationOffset != "") {
@@ -762,41 +756,41 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 		}
 		var actualRadians = THREE.Math.degToRad((newValue*mathjs.PI/180)+tempOffset);
 		
-		//console.log("rotation axis for this tween")
+		////console.log("rotation axis for this tween")
 
-		console.log("starting value for tween: " + partInfo.part.rotation[partInfo.mappingData.rotationAxis] );
-		console.log("translated to actual radians with offset [" + partInfo.mappingData.rotationOffset + "] = " + actualRadians);
+		//console.log("starting value for tween: " + partInfo.part.rotation[partInfo.mappingData.rotationAxis] );
+		//console.log("translated to actual radians with offset [" + partInfo.mappingData.rotationOffset + "] = " + actualRadians);
 
 		var rotationTween = new TWEEN.Tween({axis:partInfo.part.rotation[partInfo.mappingData.rotationAxis], obj:partInfo})
 									 .to({axis:actualRadians},300)
 									 .onUpdate(function() { this.obj.part.rotation[this.obj.mappingData.rotationAxis] = this.axis; })
 									 //.onUpdate(function() { 
-									 				//console.log("setting new rotation to: " + this.axis); 
+									 				////console.log("setting new rotation to: " + this.axis); 
 									 				//partInfo.part.rotation[this.obj.mappingData.rotationAxis] = this.axis; 
 									 //			})
 									 .onComplete(function() { TWEEN.remove(this); })
 									 .easing(TWEEN.Easing.Exponential.InOut);
 
-		console.log("created rotationtween");
-		console.log(rotationTween);
+		//console.log("created rotationtween");
+		//console.log(rotationTween);
 
-		console.log("starting tween");
+		//console.log("starting tween");
 		TWEEN.add(rotationTween.start());
 	}
 
 	function processPart(partInfo, newValue) {
-		console.log("inside process part");
+		//console.log("inside process part");
 		var thePart = partInfo.part;
 		var mappingMetaData = partInfo.mappingData;
 
 
 		switch(mappingMetaData.componentPurpose) {
 			case "Rotation": 
-				console.log("componentpurpose is rotation.  calling rotatepart");
+				//console.log("componentpurpose is rotation.  calling rotatepart");
 				rotatePart(partInfo, newValue);
 				break;
 			case "ConstantRotation":
-				console.log("component purpose is constantrotation");
+				//console.log("component purpose is constantrotation");
 				constantRotate(partInfo, newValue);
 				break;
 			case "Temperature":
@@ -898,7 +892,7 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 	        	if(preferenceBasedSceneName && preferenceBasedSceneName != "") { //something real 
 	       			if(preferenceBasedSceneName != currentSceneName) { 
 	       				//switch to the new scene
-	       				console.log("the preference based scene selection does not match the current scene name.  setting to " + preferenceBasedSceneName);
+	       				//console.log("the preference based scene selection does not match the current scene name.  setting to " + preferenceBasedSceneName);
 	       				loadSceneByName(preferenceBasedSceneName); 
 	       			}
 	        	}
@@ -914,15 +908,15 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 						var thisUniquePartName = data["part"];
 						var thisUniquePartValue = data["value"];
 
-						console.log("new data row, processing part");
-						console.log("thisUniquePartName: " + thisUniquePartName);
-						console.log("thisUniquePartValue: " + thisUniquePartValue);
+						//console.log("new data row, processing part");
+						//console.log("thisUniquePartName: " + thisUniquePartName);
+						//console.log("thisUniquePartValue: " + thisUniquePartValue);
 
 						if(uniqueToPartMapping[thisUniquePartName]) {
-							console.log("found part mapping for this guy.. process");
+							//console.log("found part mapping for this guy.. process");
 							processPart(uniqueToPartMapping[thisUniquePartName], thisUniquePartValue);
 						} else {
-							console.log("there is no part mapping for this");
+							//console.log("there is no part mapping for this");
 						}
 					}
 
@@ -951,7 +945,7 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 				//needs to be refactored for multiple models.  This just creates
 				//some variables for tweening/manipulation
 				if(!base || !shoulder || !elbow || !wrist1 || !wrist2 || !wrist3) {
-					console.log("waiting to enumerate all parts");
+					//console.log("waiting to enumerate all parts");
 					scene.traverse(function(i) {
 						switch(i.name) {
 							case "Base": base = i; break;
