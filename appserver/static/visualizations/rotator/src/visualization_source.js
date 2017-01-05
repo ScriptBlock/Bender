@@ -58,6 +58,9 @@ var	modelMappingDeferred = $.Deferred();
 var globalVizBase, globalConfig, globalNamespace, globalElement;
 var orbitControls, transformControl;
 
+
+var constantRotations = new Object();
+
 //TODO this needs to get fixed 
 var highTemp, mediumTemp;
 
@@ -75,8 +78,10 @@ var crudCommand;
  */
 function animate() {
 	requestAnimationFrame(animate);
-	render();
 	TWEEN.update();
+	rotateObjects();	
+	render();
+
 
 }
 
@@ -298,12 +303,8 @@ function selectComponent(componentKey) {
  * Just an artifact from trying to get constant rotation working
  */
 function rebuildTweens() {
-	_.each(activeTweens, function(tween) {
-		tween.stop();
-		TWEEN.remove(tween);
-	});
-
-	activeTweens = new Object();
+	TWEEN.removeAll();
+	constantRotations = new Object();
 }
 
 
@@ -313,7 +314,7 @@ function rebuildTweens() {
 function createDefaultScene() {
 	scene = new THREE.Scene();
 	scene.add( new THREE.GridHelper( 500, 100 ) );
-	scene.background = new THREE.Color( 0x000000 );
+	scene.background = new THREE.Color( 0x505050 );
 
 	return scene;
 }
@@ -486,63 +487,47 @@ function reloadSceneModels() {
 
 }
 
+
 /**
- * Function to set up a constantly spinning joint.  Consider a windmill or something else that is constantly spins with variable speed.
- * Not sure if tweening or just looping is the right ay to do this.  This method is also broken is a big way right now.
+ * rotateObjects() is called during the animation frame.  all it does is rotate the part by 
+ * whatever increment is set from the data.  it may be helpful to only process every n frames.
+ * ideally value would relate to RPMs  or at least relative speed.  right now it's just
+ * arbitrary
  */
+function rotateObjects() {
+	_.each(constantRotations, function(r) {
+		var currentRotation = r.part.part.rotation[r.part.mappingData.rotationAxis];
+		if(currentRotation == 0 || currentRotation == -0) {
+			currentRotation = r.part.part.rotation[r.part.mappingData.rotationAxis] = 1;
+		}
+		r.part.part.rotation[r.part.mappingData.rotationAxis] += r.speed;
+	})
+}
+
+/**
+ * sets up the increment used in rotateobjects().  
+ * would be handy to have a linear scale method in here or some clamping. 
+ * because the rotation happens every frame, only very small numbers are useful (.05 -> .2 maybe)
+ * 
+ */
+
 function constantRotate(partInfo, newValue) {
-	var existingTween = activeTweens[partInfo.mappingData._key];
-	newValue = parseInt(newValue);
+	console.log("starting constant rotation for part: " + partInfo.part.name);
 
+	var speed = parseFloat(newValue);
 
-	if(existingTween) {
-		//update the delay
-
-
+	if(constantRotations[partInfo.mappingData._key]) {
+		if(speed == 0) {
+			delete constantRotations[partInfo.mappingData._key];	
+		} else {
+			constantRotations[partInfo.mappingData._key].speed = speed;
+		}
 	} else {
-		//console.log("starting a constant rotation on : " + partInfo.part.name);
-
-		//console.log("current axis [" + partInfo.mappingData.rotationAxis + "]  rotation is: " + partInfo.part.rotation[partInfo.mappingData.rotationAxis]);
-		//console.log("new value is " + newValue);
-
-		var current = {axis:partInfo.part.rotation[partInfo.mappingData.rotationAxis]};
-		var target = {axis: current + newValue};
-
-
-
-		var newTween = new TWEEN.Tween(current)
-								.to(target, 200)
-								.onUpdate(function() { partInfo.part.rotation[partInfo.mappingData.rotationAxis] = this.axis })
-								.onComplete(function() {
-									TWEEN.remove(this);
-									current = {axis:partInfo.part.rotation[partInfo.mappingData.rotationAxis]};
-									target = {axis: current + newValue};
-									//need to callback to self here TODO
-								})
-								.start();
-
-/*
-		var newTween = new TWEEN.Tween({axis:partInfo.part.rotation[partInfo.mappingData.rotationAxis], obj:partInfo})
-							 .to({axis:360}, newValue) //TODO this 50 is arbitrate and needs to be updateable
-							 .onUpdate(function() { 
-							 				//console.log(this.obj.part.rotation[this.obj.mappingData.rotationAxis])
-							 				this.obj.part.rotation[this.obj.mappingData.rotationAxis] = this.axis; 
-							 			})
-							 .onComplete(function() { 
-							 				//console.log("finished rotation tween.");
-							 				//console.log("finished axis value: " + this.axis);
-							 				//console.log("rotation at end: " + this.obj.part.rotation[this.obj.mappingData.rotationAxis]);
-
-							 			})
-							 .repeat(Infinity);
-
-
-		activeTweens[partInfo.mappingData._key] = newTween.start();
-		//console.log(activeTweens);
-		*/
+		constantRotations[partInfo.mappingData._key] = new Object();
+		constantRotations[partInfo.mappingData._key].part = partInfo;
+		constantRotations[partInfo.mappingData._key].speed = speed;
 
 	}
-
 
 
 }
@@ -557,7 +542,9 @@ function rotatePart(partInfo, newValue) {
 	if(partInfo.mappingData.rotationOffset && partInfo.mappingData.rotationOffset != "") {
 		tempOffset = parseInt(partInfo.mappingData.rotationOffset);
 	}
+
 	var actualRadians = THREE.Math.degToRad((newValue*mathjs.PI/180)+tempOffset);
+	if(newValue == 0) { actualRadians = 0; }
 	var rotationTween = new TWEEN.Tween({axis:partInfo.part.rotation[partInfo.mappingData.rotationAxis], obj:partInfo})
 								 .to({axis:actualRadians},300)
 								 .onUpdate(function() { this.obj.part.rotation[this.obj.mappingData.rotationAxis] = this.axis; })
@@ -569,6 +556,29 @@ function rotatePart(partInfo, newValue) {
 }
 
 
+function setDoor(partInfo, newValue) {
+	if(newValue == "open") {
+		console.log("opening door");
+		rotatePart(partInfo, partInfo.mappingData.rotationOffset);
+	} else {
+		console.log("closing door");
+		rotatePart(partInfo, 0);
+	}
+}
+
+
+function setPartLight(partInfo, newValue) {
+	console.log("setting light values for part: " );
+	console.log(partInfo);
+	if(newValue == "on") {
+		console.log("turning light on");
+		partInfo.part.intensity = 5;
+	} else {
+		console.log("turning light off");
+		partInfo.part.intensity = 0;
+	}
+}
+
 /**
  * Dictates code based behavior from user-defined part role.  In the long term, there would be a number of actions that would be supported.
  * Some thoughts:
@@ -578,7 +588,8 @@ function processPart(partInfo, newValue) {
 	var thePart = partInfo.part;
 	var mappingMetaData = partInfo.mappingData;
 
-
+	console.log("processing part: ");
+	console.log(thePart);
 	switch(mappingMetaData.componentPurpose) {
 		case "Rotation": 
 			rotatePart(partInfo, newValue);
@@ -592,6 +603,10 @@ function processPart(partInfo, newValue) {
 		case "Light":
 			setPartLight(partInfo, newValue);
 			break;
+		case "Door":
+			setDoor(partInfo, newValue);
+			break;
+
 	}
 
 

@@ -1,0 +1,36 @@
+{
+	"metadata": {
+		"version": 4.4,
+		"type": "Object",
+		"generator": "Object3D.toJSON"
+	},
+	"object": {
+		"uuid": "106DDBE1-921C-4D93-8BC6-350DAC7F1054",
+		"type": "Scene",
+		"name": "Scene",
+		"matrix": [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+		"children": [
+			{
+				"uuid": "7EAC5294-DBD9-4D67-ABCB-E59B7D13D6BA",
+				"type": "DirectionalLight",
+				"name": "DirectionalLight 1",
+				"matrix": [1,0,0,0,0,1,0,0,0,0,1,0,5,10,7.5,1],
+				"color": 16777215,
+				"intensity": 3,
+				"shadow": {
+					"camera": {
+						"uuid": "917B14DE-6DD9-4B4D-9D05-A5C7775BB868",
+						"type": "OrthographicCamera",
+						"zoom": 1,
+						"left": -5,
+						"right": 5,
+						"top": 5,
+						"bottom": -5,
+						"near": 0.5,
+						"far": 500
+					}
+				}
+			}],
+		"background": 11184810
+	}
+}

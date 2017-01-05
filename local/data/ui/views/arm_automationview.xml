@@ -14,13 +14,14 @@
       </input>
       <viz type="Bender.rotator">
         <search>
-          <query>index=robotdata Tag!=Omron* Tag!="MODBUS.ROBOT.Vel*" Tag!="MODBUS.ROBOT.Robot_Cur*"| table _time, part, purpose, Value</query>
+          <query>index=robotdata |rename Tag as part | rename Value as value | table part, value</query>
           <earliest>rt-5s</earliest>
           <latest>rtnow</latest>
           <sampleRatio>1</sampleRatio>
         </search>
         <option name="Bender.rotator.highTemp">40</option>
         <option name="Bender.rotator.medTemp">30</option>
+        <option name="Bender.rotator.sceneName">MyScene1</option>
         <option name="height">379</option>
       </viz>
       <html>

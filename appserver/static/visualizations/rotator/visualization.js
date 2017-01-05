@@ -51,16 +51,12 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 	 * TODO - refactor code for CRUD integration and Splunk KVStore
 	 *
 	 *
-
-
-
 	 */
+
 	!(__WEBPACK_AMD_DEFINE_ARRAY__ = [
 				__webpack_require__(2),
 				__webpack_require__(9),
 				__webpack_require__(3),
-				//'splunkjs/mvc/simpleform/formutils',
-	    		//'splunkjs/mvc/simplexml/urltokenmodel',
 	            __webpack_require__(4),
 	            __webpack_require__(5),
 	            __webpack_require__(6),
@@ -69,14 +65,10 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 	            __webpack_require__(1),
 	            __webpack_require__(10),
 	            __webpack_require__(12)
-
-	            // Add required assets to this list
 	        ], __WEBPACK_AMD_DEFINE_RESULT__ = function(
 		        mvc,
 		        utils,
 		        TokenUtils,
-	        	//FormUtils,
-	        	//UrlTokenModel,
 	            $,
 	            _,
 	            SplunkVisualizationBase,
@@ -85,22 +77,17 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 	            Math,
 	            TWEEN,
 	            mathjs
-
 	        ) {
 
-	    var hasViz = false;
 
-	var armJSONFile = "/en-us/static/app/Bender/scene.json";
 	var modelPath = "/en-us/static/app/Bender/";
-
-
 
 	var container;
 	var OrbitControls = __webpack_require__(520)(THREE);
 	var TransformControls = __webpack_require__(521);
 
-
 	var camera, scene, loader, renderer;
+	var mvcService;
 
 	var currentSceneKey;
 	var currentSceneComponents = new Object();
@@ -113,90 +100,43 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 	var	modelMappingDeferred = $.Deferred();
 
 
-
-	var mvcService;
-
-	var base, shoulder, elbow, wrist1, wrist2, wrist3; //this needs to be refactored into multiple models
-	var counter = 0;
-	var activeTween;
-	var globalVizBase, globalConfig, globalNamespace;
+	var globalVizBase, globalConfig, globalNamespace, globalElement;
 	var orbitControls, transformControl;
-	var globalElement;
+
+
+	var constantRotations = new Object();
+
+	//TODO this needs to get fixed 
 	var highTemp, mediumTemp;
 
-	var raycaster;
-	var mouse;
-	var currentTransformObject;
-	var transformControlState = false;
+	//Saved for later
+	//var raycaster;
+	//var mouse;
 
-	var activeTweens = new Object();
 
 	var crudMode = false;
 	var crudCommand;
 
-	//if(true) { //console.log("osdijfodisjfiodsfjsdf"); }
-	/*
-	var fu;
-	try {
-		//console.log("doing stuff before require");
-		fu = require('splunkjs/mvc/simpleform/formutils');
-		//console.log("loaded formutils");
-	} catch(e) {
-		//console.log("error requiring formutils");
-		//console.log(e);
-	}
-	*/
-	//////////////////////////
-	/*
-	        var urlTokenModel = new UrlTokenModel();
-	        mvc.Components.registerInstance('url', urlTokenModel);
-	        var defaultTokenModel = mvc.Components.getInstance('default', {create: true});
-	        var submittedTokenModel = mvc.Components.getInstance('submitted', {create: true});
-	        urlTokenModel.on('url:navigate', function() {
-	            defaultTokenModel.set(urlTokenModel.toJSON());
-	            if (!_.isEmpty(urlTokenModel.toJSON()) && !_.all(urlTokenModel.toJSON(), _.isUndefined)) {
-	                submitTokens();
-	            } else {
-	                submittedTokenModel.clear();
-	            }
-	        });
 
-	        // Initialize tokens
-	        defaultTokenModel.set(urlTokenModel.toJSON());
-
-
-	        function getToken(name) {
-	            var retVal = defaultTokenModel.get(name);
-	            //console.log("token value for " + name + " is " + retVal);
-	            return retVal;
-
-	        }
-
-	function getToken(name) {
-	    var retVal = defaultTokenModel.get(name);
-	    //console.log("token value for " + name + " is " + retVal);
-	    return retVal;
-
-	}
-	*/
-
-
-
+	/**
+	 * Main animation loop
+	 */
 	function animate() {
 		requestAnimationFrame(animate);
-		render();
 		TWEEN.update();
+		rotateObjects();	
+		render();
+
 
 	}
 
+	/**
+	 * Main render loop
+	 */
 	function render() {
-		//token testing
-		
-		//var tokenTemp = getToken("vizbridge_selectmodel");
-		////console.log("token temp");
-		////console.log(tokenTemp);
 		
 		updateFromDom();
+
 		//this is a safety check.  if you try to set the camera angles and scene size before
 		//the dom element and camera is initialized it doesn't work.  once the camera and dom
 		//element is built, you can get the screen size and your model won't be skewed
@@ -213,9 +153,6 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 				camera.lookAt(scene.position);
 
 
-				//build up pan/zoom/scroll controls for the whole viz.  
-				//could probably put these options in the formatter as well but these values work
-				//pretty well.
 				orbitControls = new OrbitControls( camera, renderer.domElement );
 				orbitControls.rotateSpeed = 0.4;
 				orbitControls.zoomSpeed = 0.4;
@@ -235,7 +172,8 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 	}
 
 
-	//this needs a whole lotta work.  kind of just a first go at it.
+	//TODO get this redone 
+	/*
 	function setJointColor(part, temp) {
 		var r,g,b;
 		if(temp) {
@@ -260,18 +198,16 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 			part.material.color.g = g;
 		}
 	}
+	*/
 
 
+	/**
+	 * This just iterates through all of the components in the scene and writes their positional data to the kvstore.
+	 * Used in CRUD mode only
+	 */
 	function saveSceneModels() {
 
-		/*
-
-			loop through all "currentscenecomponents"
-			use rest to save values for each
-		*/
-
 		_.each(currentSceneComponents, function(model) {
-			//console.log("saving data for mode: " + model.componentUniqueName);
 			var key = model._key;
 			var sceneKey = model.sceneKey;
 			var uniqueName = model.componentUniqueName;
@@ -280,17 +216,14 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 			var translation = JSON.stringify(model.threeObject.position);
 			var scale = JSON.stringify(model.threeObject.scale);
 
+			/**
+			 * Rotation using euler not quaternion 
+	 		 */
 			var rotation = new Object();
 			rotation.x = model.threeObject.rotation._x;
 			rotation.y = model.threeObject.rotation._y;
 			rotation.z = model.threeObject.rotation._z;
 			var rotationString = JSON.stringify(rotation);
-
-
-			//console.log("the key is: " + model._key);
-			//console.log("translation: " + translation);
-			//console.log("rotation: " + rotationString);
-			//console.log("scale: " + scale);
 
 
 			var record = {
@@ -310,8 +243,7 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 				JSON.stringify(record),
 				{"Content-Type": "application/json"},
 				null).done(function (result) {
-					//console.log("saved data for " + key);
-					//console.log(result);
+					//TODO add some feedback that the save was successful
 				});
 
 		});
@@ -320,20 +252,27 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 
 	}
 
+	/**
+	 * This is called every frame.  I don't really know how to call methods
+	 * on the custom viz from a dashboard, but I use them to support CRUD
+	 * interactivity.  So I just watch a DOM element for commands.  The view
+	 * uses button presses to set these DIVs and then this method picks up 
+	 * the text and acts on it.  There's probably many and better ways to
+	 * do this. 
+	 */
+
 	function updateFromDom() {
 
+		//This is like a constant declated in the CRUD screens.
 		if($("vizbridge_crudmode").text() != "") { 
 			if(crudMode != $("#vizbridge_crudmode").text()) {
-				//console.log("current crudMode: [" + crudMode + "] doesn't match " + $("#vizbridge_crudmode").text());
 				crudMode = $("#vizbridge_crudmode").text();
-				//console.log("changed crudmode to " + crudMode);
 			}
 		}
 
 		var tempCommand = $("#vizbridge_crudcommand").text();
 		if(tempCommand != "") {
 			crudCommand = $("#vizbridge_crudcommand").text();
-			//console.log("received dom based viz command: " + crudCommand);
 
 			$("#vizbridge_crudcommand").text("");
 
@@ -345,7 +284,6 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 				reloadSceneModels();
 
 			}
-
 
 			if(/switchscene:/.test(crudCommand)) {
 				var sceneKey = /switchscene:(.*)$/.exec(crudCommand)[1];
@@ -379,10 +317,8 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 
 	}
 
-
-	//this is a recursive function to get the whole model when clicked instead of just a 
-	//specific part.  Scene is hardcoded here assuming that every model that is loaded is
-	//an imported scene.
+	/*
+	//this is not needed anymore but going to keep it around for future reference
 	function getParentUntil(obj) { 
 		if(!obj.parent) { return null; }
 
@@ -394,107 +330,46 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 		} else {
 			return null;
 		}
-
-
 	}
+	*/
 
-	//this selects the entire model and reflects the wishes of the formatter api settings
-	//currently just supports transforms.
+	/**
+	 * Called as a CRUD command.  Sets the transform to whatever component is clicked.
+	 */
 	function selectComponent(componentKey) {
-		//console.log("selecting component: " + componentKey);
 		transformControl.detach();
-
 		transformControl.attach(currentSceneComponents[componentKey].threeObject);
-		//component key needs to be added to model during loading.
-		//perhaps maintain a hash during scene load so that selecting components 
-		//isn't an enumeration of all scene objects
-
-	//	event.preventDefault();
-	/*
-
-		//refactor this stuff out.  no need for raycasting since we are picking components
-		//from the list in the GUI
-		if(transformControlState) {
-
-			//standard raycaster object selection code
-			var mv = new THREE.Vector3();
-			mv.x = ( event.offsetX / globalElement.innerWidth() ) * 2 - 1;
-			mv.y = - ( event.offsetY / globalElement.innerHeight() ) * 2 + 1;
-			raycaster.setFromCamera(mv.clone(), camera);
-			var intersects = raycaster.intersectObjects( scene.children,true );
-
-
-			if ( intersects.length > 0 ) {
-				var theParent = getParentUntil(intersects[0].object);
-				if(theParent) {
-					currentTransformObject = theParent;
-					//console.log(theParent);
-					if(transformControlState) {
-						transformControl.attach(currentTransformObject);
-					}
-				}
-
-			} 
-		}
-	*/
 
 	}
 
 
-
-	/*
-	//this will need to be refactored for CRUD
-	function updateControls() {
-		var transformState;
-		var transformMode;
-
-		switch(globalConfig[globalNamespace + "transformState"]) {
-			case "on":
-				transformControlState = true;
-				break;
-			case "off": 
-				transformControlState = false;
-				transformControl.detach();
-				break;
-		}
-
-		//just a little control logic to make sure that we're not creating new events 
-		//unnecessarily.  every time you call setmode the transformcontrols code dispatches a 
-		//change event.  this would get called every time new data comes in.  we don't want that.
-		if(transformControl.getMode != globalConfig[globalNamespace + "transformMode"]) {
-			switch(globalConfig[globalNamespace + "transformMode"]) {
-				case "translate":
-					transformControl.setMode("translate");
-					break;
-				case "scale": 
-					transformControl.setMode("scale");
-					break;
-				case "rotate": 
-					transformControl.setMode("rotate");
-					break;
-			}
-		}
-	}
-	*/
-
+	/**
+	 * TWEEN tracker basically.  Probably going to remove this.
+	 * Just an artifact from trying to get constant rotation working
+	 */
 	function rebuildTweens() {
-		_.each(activeTweens, function(tween) {
-			tween.stop();
-			TWEEN.remove(tween);
-		});
-
-		activeTweens = new Object();
+		TWEEN.removeAll();
+		constantRotations = new Object();
 	}
 
+
+	/**
+	 * Scene creation for repeatability
+	 */
 	function createDefaultScene() {
-		//console.log("creating a new scene.");
 		scene = new THREE.Scene();
 		scene.add( new THREE.GridHelper( 500, 100 ) );
-		scene.background = new THREE.Color( 0x000000 );
+		scene.background = new THREE.Color( 0x505050 );
 
 		return scene;
 	}
 
+	/**
+	 * Used by formatter/preference based scene selection.  This is 
+	 * NOT a CRUD function.  The visualization has to have it's 
+	 * scene preference set in order to show anything at all.  
+	 * This is just a wrapper.
+	 */
 	function loadSceneByName(sceneName) {
 		//console.log("loading scene by name: " + sceneName);
 		mvcService.request("storage/collections/data/scenes",
@@ -505,134 +380,121 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 			null,
 			function(err, response) {
 				var tempSceneInfo = _.findWhere(response.data, {"sceneName":sceneName});
-				//console.log("found a scene for that name");
-				//console.log(tempSceneInfo);
-				//console.log("calling loadScene(" + tempSceneInfo._key + ")");
 				currentSceneName = tempSceneInfo.sceneName;
+				//Call the real scene loader.
 				loadScene(tempSceneInfo._key);
 			});
 	}
 
+	/**
+	 * Sets up scene loading.  Might need some extra checks to make sure the viz/DOM is all clean
+	 */
 	function loadScene(sceneKey) {
-		//console.log("loading scene for " + sceneKey);
-
 		if(transformControl) {
 			transformControl.detach();
 		}
 
-		//console.log("re/setting scenecomponent vars")
 		currentSceneKey = sceneKey;
 		currentSceneComponents = new Object();
 
-		//console.log("creating a new scene.");
 		scene = createDefaultScene();
 		scene.add(transformControl);
 
 		sceneModelsDeferred = $.Deferred();
 		modelMappingDeferred = $.Deferred();
 
+
+		//TODO review whether we need to do this long-term
 		rebuildTweens();
 
-		
-		
-
-		//KV lookup
 		loadSceneModels(sceneKey);
 
 	}
 
+	/**
+	 * Primary scene loading method.  Does a bunch of data mapping for standard (non-CRUD) use.
+	 * See comments in code
+	 */
 
 	function loadSceneModels(sceneKey) {
-		//console.log("loading scene models");
-		//fields_list = _key, sceneKey, componentUniqueName, modelName, rotation, translation, scale
-
-	//?query={"id": {"$gt": 24}}
 		var searchString = '{"sceneKey": "' + sceneKey + '"}';
 		var mappingData;
 
-
+		//Get all of the models that belong in the scene
 		mvcService.request("storage/collections/data/scene_models", 
 			"GET", 
-			{"query": searchString},
+			{"query": searchString},  // i set a REST query/filter here.  Probably easier and more maintainable to use underscore to filter and just pull the whole dataset in this query.
 			null,
 			null,
 			null,	
 			function(err, response) {
-				_.each(response.data, function(model) {
-					currentSceneComponents[model._key] = model;
-					////console.log(model);
-				});
+				//loop through the models and create a hash that contains all of the keys and their positional data directly from the kvstore
+				_.each(response.data, function(model) { currentSceneComponents[model._key] = model; });
 
-				//console.log("here's the currentSceneComponents object after scene model loading");
-				//console.log(currentSceneComponents);
-
-				//console.log("mapping up field data");
+				//Get all field mappings.  Field mappings contain all of the specific component metdata that is used when drawing and interactive with parts in non-CRUD mode
 				mvcService.request("storage/collections/data/model_component_mapping",
 					"GET",
-					null, //no query, just get them all
+					null, //no query, just get them all.  filter later
 					null,
 					null,
 					null,
 					function(err, response) {
-
 						mappingData = response.data;
-						//console.log("all mapping data: " );
-						//console.log(mappingData);
 
-
+						//loop through all of the scene components and bind the mapping data to each record
+						//note that the currentSceneComponents object for each model contains the entire set of mapping data.
+						//this is used further down.  
 						_.each(currentSceneComponents, function(model) {
-							//console.log("setting mappingdata field for model: " + model._key)
 							var thisGuysMappingData = _.where(mappingData, {"modelKey":model._key});
-							//console.log(thisGuysMappingData);
 							model.mappingData = thisGuysMappingData;
 
 						});
+
+						//indicate that the scene is loaded.
 						sceneModelsDeferred.resolve(currentSceneComponents);
 
 					}
 				);
 			});
 
-		//console.log("calling $.when");
+		//since the queries above can take a little bit, we wait here for the data to populate before creating the actual scene models.
+		//here is where we are actually building the three.js objects
 		$.when(sceneModelsDeferred).done(function() {
-			//console.log("inside $.when block");
-			//console.log(currentSceneComponents);
-			//actually create the model and apply translations and field mapping and unique identified to it.
 
 			_.each(currentSceneComponents, function(model) {
+
+				//use the provided model name to load the object from static or whatever
 				loader.load(modelPath + model.modelName, function(obj) {
-					//console.log("loaded object: " + model.componentUniqueName);
-					//set object properties recursively to add _key
 					obj.kvkey = model._key;
 
+					//move the object xyz based on kvstore data (this is set during scene building)
 					var xyz = JSON.parse(model.translation);
-
 					obj.position.x = xyz.x;
 					obj.position.y = xyz.y;
 					obj.position.z = xyz.z;
 
+					//scale the object xyz based on kvstore data.. again, set during scene building...
 					xyz = JSON.parse(model.scale);
-					//console.log("model.scale = " + model.scale);
 					obj.scale.set(xyz.x,xyz.y,xyz.z);
 
+					//we have eueler angles stored.  we might be able to do obj.rotation.x but docs say I should use rotateXYX
 					xyz = JSON.parse(model.rotation);
-					//console.log("model.rotation = " + model.rotation);
 					obj.rotateX(xyz.x);
 					obj.rotateY(xyz.y);
 					obj.rotateZ(xyz.z);
 
 
-
+					//put this object into the currentSceneComponents for later reference
 					currentSceneComponents[model._key].threeObject = obj;
-					_.each(model.mappingData, function(mapping) {
-						//this creates a lookup for fast tweening later on.  each key is the unique data field name.  this has a reference to the part itself as well as the mapping data which contains axis info, etc
-						//need to also incude offsets during tweening so this will be useful there as well.
+
+					//this creates a lookup for fast tweening later on.  each key is the unique data field name.  this has a reference to the part itself as well as the mapping data which contains axis info, etc
+					//need to also incude offsets during tweening so this will be useful there as well.
+					//loop through this model's mapping data (set above).  Loop through each mapped field and build the hash.  the hash contains the specific mapping metdata but also a reference
+					//to the part itself.  this let's us call property changes/methods right on the object without having to look things up or traverse any more than necessary.
+					_.each(model.mappingData, function(mapping) {	
 						uniqueToPartMapping[mapping.dataFieldName] = new Object();
 						uniqueToPartMapping[mapping.dataFieldName].part = currentSceneComponents[model._key].threeObject.getObjectByName(mapping.modelComponentName);
 						uniqueToPartMapping[mapping.dataFieldName].mappingData = mapping;
-
-
-
 					});
 
 					scene.add(currentSceneComponents[model._key].threeObject);
@@ -640,21 +502,15 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 				});			
 			});
 
-			//console.log("unique part mapping");
-			//console.log(uniqueToPartMapping);
-
-
-			//console.log("current scene components with three object loaded");
-			//console.log(currentSceneComponents);
-
-
 		});
 
 
 	}
 
+	/**
+	 * Tear things down and rebuild.
+	 */
 	function reloadSceneModels() {
-		//console.log("reloading scene models");
 
 		sceneModelsDeferred = $.Deferred();
 		modelMappingDeferred = $.Deferred();
@@ -664,7 +520,6 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 		}
 
 		_.each(currentSceneComponents, function(model) {
-			//console.log("removing " + model.componentUniqueName);
 			scene.remove(model.threeObject);
 		});
 
@@ -673,124 +528,118 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 		
 		rebuildTweens();
 
-		
-		loadSceneModels(currentSceneKey); //then reload them
+		loadSceneModels(currentSceneKey); 
 
 	}
 
+
+	/**
+	 * rotateObjects() is called during the animation frame.  all it does is rotate the part by 
+	 * whatever increment is set from the data.  it may be helpful to only process every n frames.
+	 * ideally value would relate to RPMs  or at least relative speed.  right now it's just
+	 * arbitrary
+	 */
+	function rotateObjects() {
+		_.each(constantRotations, function(r) {
+			var currentRotation = r.part.part.rotation[r.part.mappingData.rotationAxis];
+			if(currentRotation == 0 || currentRotation == -0) {
+				currentRotation = r.part.part.rotation[r.part.mappingData.rotationAxis] = 1;
+			}
+			r.part.part.rotation[r.part.mappingData.rotationAxis] += r.speed;
+		})
+	}
+
+	/**
+	 * sets up the increment used in rotateobjects().  
+	 * would be handy to have a linear scale method in here or some clamping. 
+	 * because the rotation happens every frame, only very small numbers are useful (.05 -> .2 maybe)
+	 * 
+	 */
+
 	function constantRotate(partInfo, newValue) {
-		var existingTween = activeTweens[partInfo.mappingData._key];
-		newValue = parseInt(newValue);
+		console.log("starting constant rotation for part: " + partInfo.part.name);
 
+		var speed = parseFloat(newValue);
 
-		if(existingTween) {
-			//update the delay
-
-
+		if(constantRotations[partInfo.mappingData._key]) {
+			if(speed == 0) {
+				delete constantRotations[partInfo.mappingData._key];	
+			} else {
+				constantRotations[partInfo.mappingData._key].speed = speed;
+			}
 		} else {
-			//console.log("starting a constant rotation on : " + partInfo.part.name);
-
-			//console.log("current axis [" + partInfo.mappingData.rotationAxis + "]  rotation is: " + partInfo.part.rotation[partInfo.mappingData.rotationAxis]);
-			//console.log("new value is " + newValue);
-
-			var current = {axis:partInfo.part.rotation[partInfo.mappingData.rotationAxis]};
-			var target = {axis: current + newValue};
-
-
-
-			var newTween = new TWEEN.Tween(current)
-									.to(target, 200)
-									.onUpdate(function() { partInfo.part.rotation[partInfo.mappingData.rotationAxis] = this.axis })
-									.onComplete(function() {
-										TWEEN.remove(this);
-										current = {axis:partInfo.part.rotation[partInfo.mappingData.rotationAxis]};
-										target = {axis: current + newValue};
-										//need to callback to self here TODO
-									})
-									.start();
-
-	/*
-			var newTween = new TWEEN.Tween({axis:partInfo.part.rotation[partInfo.mappingData.rotationAxis], obj:partInfo})
-								 .to({axis:360}, newValue) //TODO this 50 is arbitrate and needs to be updateable
-								 .onUpdate(function() { 
-								 				//console.log(this.obj.part.rotation[this.obj.mappingData.rotationAxis])
-								 				this.obj.part.rotation[this.obj.mappingData.rotationAxis] = this.axis; 
-								 			})
-								 .onComplete(function() { 
-								 				//console.log("finished rotation tween.");
-								 				//console.log("finished axis value: " + this.axis);
-								 				//console.log("rotation at end: " + this.obj.part.rotation[this.obj.mappingData.rotationAxis]);
-
-								 			})
-								 .repeat(Infinity);
-
-
-			activeTweens[partInfo.mappingData._key] = newTween.start();
-			//console.log(activeTweens);
-			*/
+			constantRotations[partInfo.mappingData._key] = new Object();
+			constantRotations[partInfo.mappingData._key].part = partInfo;
+			constantRotations[partInfo.mappingData._key].speed = speed;
 
 		}
 
 
-
 	}
 
+
+	/**
+	 * Rotates any part on any axis to any angle.  there's the capability to offset the radians to work
+	 * around mismatched part starting angles.  The better the model work, the less of this that needs to be done
+	 */
 	function rotatePart(partInfo, newValue) {
-		//console.log("inside rotatepart");
-	/*
-
-	var actualRadians = THREE.Math.degToRad((dataRadians*mathjs.PI/180)+200);
-	TWEEN.add(new TWEEN.Tween({y:base.rotation.y, obj:base, tween:activeTween})
-			.to({y:actualRadians}, 300)
-			.onUpdate(function() { this.obj.rotation.y = this.y; })
-			.onComplete( function() { TWEEN.remove(this); })
-			.easing(TWEEN.Easing.Exponential.InOut)
-			.start());
-	}
-	*/
-		//console.log("value from data: " + newValue);
-
 		var tempOffset = 0;
 		if(partInfo.mappingData.rotationOffset && partInfo.mappingData.rotationOffset != "") {
 			tempOffset = parseInt(partInfo.mappingData.rotationOffset);
 		}
+
 		var actualRadians = THREE.Math.degToRad((newValue*mathjs.PI/180)+tempOffset);
-		
-		////console.log("rotation axis for this tween")
-
-		//console.log("starting value for tween: " + partInfo.part.rotation[partInfo.mappingData.rotationAxis] );
-		//console.log("translated to actual radians with offset [" + partInfo.mappingData.rotationOffset + "] = " + actualRadians);
-
+		if(newValue == 0) { actualRadians = 0; }
 		var rotationTween = new TWEEN.Tween({axis:partInfo.part.rotation[partInfo.mappingData.rotationAxis], obj:partInfo})
 									 .to({axis:actualRadians},300)
 									 .onUpdate(function() { this.obj.part.rotation[this.obj.mappingData.rotationAxis] = this.axis; })
-									 //.onUpdate(function() { 
-									 				////console.log("setting new rotation to: " + this.axis); 
-									 				//partInfo.part.rotation[this.obj.mappingData.rotationAxis] = this.axis; 
-									 //			})
-									 .onComplete(function() { TWEEN.remove(this); })
+									 .onComplete(function() { TWEEN.remove(this); }) //removing the tween is important otherwise a huge array gets built and never cleaned up
 									 .easing(TWEEN.Easing.Exponential.InOut);
 
-		//console.log("created rotationtween");
-		//console.log(rotationTween);
-
-		//console.log("starting tween");
 		TWEEN.add(rotationTween.start());
+
 	}
 
+
+	function setDoor(partInfo, newValue) {
+		if(newValue == "open") {
+			console.log("opening door");
+			rotatePart(partInfo, partInfo.mappingData.rotationOffset);
+		} else {
+			console.log("closing door");
+			rotatePart(partInfo, 0);
+		}
+	}
+
+
+	function setPartLight(partInfo, newValue) {
+		console.log("setting light values for part: " );
+		console.log(partInfo);
+		if(newValue == "on") {
+			console.log("turning light on");
+			partInfo.part.intensity = 5;
+		} else {
+			console.log("turning light off");
+			partInfo.part.intensity = 0;
+		}
+	}
+
+	/**
+	 * Dictates code based behavior from user-defined part role.  In the long term, there would be a number of actions that would be supported.
+	 * Some thoughts:
+	 *    Rotation, constantrotation, temperature, light, door, motion, linear/rail
+	 */
 	function processPart(partInfo, newValue) {
-		//console.log("inside process part");
 		var thePart = partInfo.part;
 		var mappingMetaData = partInfo.mappingData;
 
-
+		console.log("processing part: ");
+		console.log(thePart);
 		switch(mappingMetaData.componentPurpose) {
 			case "Rotation": 
-				//console.log("componentpurpose is rotation.  calling rotatepart");
 				rotatePart(partInfo, newValue);
 				break;
 			case "ConstantRotation":
-				//console.log("component purpose is constantrotation");
 				constantRotate(partInfo, newValue);
 				break;
 			case "Temperature":
@@ -799,6 +648,10 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 			case "Light":
 				setPartLight(partInfo, newValue);
 				break;
+			case "Door":
+				setDoor(partInfo, newValue);
+				break;
+
 		}
 
 
@@ -814,9 +667,8 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 	            SplunkVisualizationBase.prototype.initialize.apply(this, arguments);
 	            this.$el = $(this.el);
 	            globalElement = this.$el;
-	            hasViz = false;
-	            this.$el.addClass('bender');
 
+	            this.$el.addClass('bender');
 
 	            //build up the base scane
 				scene = createDefaultScene();
@@ -832,44 +684,13 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 				highTemp = 40;
 				mediumTemp = 30;
 				globalVizBase = this;
-				raycaster = new THREE.Raycaster();
-				mouse = new THREE.Vector2();
+
+				//these guys were used to selecting objects through clicking on the scene.  keeping around because i'm sure i'll use them again sometime
+				//raycaster = new THREE.Raycaster();
+				//mouse = new THREE.Vector2();
 
 			    mvcService = mvc.createService({ owner: "nobody"});
-
-
-
-				//this needs to be refactored into a save file and/or multiple models
-				//need to implement KVStore code similar to home automation code
-				//provide a CRUD interface to add component and dynamically load
-				//scene based on KV elements.
-				//KVSTORE
-				//   model root (scene.json for example)
-				//   model name - will be used to give unique joint/poisition names
-				//   Vector3 for scene placement (translation)
-				//	 Vector3 for rotational placement 
-				//	 Vector3 for scale 
-				//   These vector3's will be stored in the KV store but not user editable
-				//   movement within the scene will save the resulting data off to KVstore
-				//	 
-				//   
-
-
 				loader = new THREE.ObjectLoader();
-				/* deprecated for true loading of unique models
-				loader.load(armJSONFile, function(obj) {
-					scene.add(obj);
-
-				});
-				*/
-				
-
-				//mouse-down for model selection.  this is used with transform tools
-				//renderer.domElement.addEventListener('mousedown', onSceneMouseDown);
-
-				//hooking keyboard events isn't working well..  probably not going to use this in lieu of
-				//formatter api and maybe some on-screen buttons
-				//window.addEventListener('keydown', onSceneKeyDown);
 
 				animate();
 
@@ -904,161 +725,22 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 				var dataRows = data.results;
 				_.each(dataRows, function(data) {
 
+					//super simple action on data...
 					if(data["part"] && data["value"]) {
 						var thisUniquePartName = data["part"];
 						var thisUniquePartValue = data["value"];
 
-						//console.log("new data row, processing part");
-						//console.log("thisUniquePartName: " + thisUniquePartName);
-						//console.log("thisUniquePartValue: " + thisUniquePartValue);
-
+						//since we set up the lookup table with the part unique name, we can take the native part data and link it up with the proper action based on the value in the data.
 						if(uniqueToPartMapping[thisUniquePartName]) {
-							//console.log("found part mapping for this guy.. process");
 							processPart(uniqueToPartMapping[thisUniquePartName], thisUniquePartValue);
 						} else {
-							//console.log("there is no part mapping for this");
+							//there's no defined detail for the current part.  ignore
 						}
 					}
 
 				});
 
 
-	        },
-
-
-	        updateViewOld: function(data, config) {
-	        	globalConfig = config;
-	        	globalNamespace = this.getPropertyNamespaceInfo().propertyNamespace;
-
-	        	highTemp = parseInt(config[globalNamespace + "highTemp"])
-	        	mediumTemp = parseInt(config[globalNamespace + "medTemp"])
-
-	        	updateFromDom();
-
-		
-				// Check for empty data
-				if(_.size(data.results) < 1) { console.log("no data"); return; }
-
-
-				var dataRows = data.results;
-
-				//needs to be refactored for multiple models.  This just creates
-				//some variables for tweening/manipulation
-				if(!base || !shoulder || !elbow || !wrist1 || !wrist2 || !wrist3) {
-					//console.log("waiting to enumerate all parts");
-					scene.traverse(function(i) {
-						switch(i.name) {
-							case "Base": base = i; break;
-							case "Shoulder": shoulder = i; break; 
-							case "Elbow": elbow = i; break;
-							case "Wrist1": wrist1 = i; break;
-							case "Wrist2": wrist2 = i; break;
-							case "Wrist3": wrist3 = i; break;
-							case "Joint-Base-Lid": jointBase = i; break;
-							case "Joint-Shoulder-Lid": jointShoulder = i; break;
-							case "Joint-Elbow-Lid": jointElbow = i; break;
-							case "Joint-Wrist1-Lid": jointWrist1 = i; break;
-							case "Joint-Wrist2-Lid": jointWrist2 = i; break;
-							case "Joint-Wrist3-Lid": jointWrist3 = i; break;
-						}
-					});
-				} else {
-
-					_.each(data.results, function(d) { 
-
-						//this whole section needs to be fixed for logic reuse (the tween code sucks)
-						//also needs to support multiple models
-						var thisPart = d["part"];
-						var thisPurpose = d["purpose"];
-						var thisValue = d["Value"];
-
-
-				        var dataRadians = undefined;
-				        var dataTemperature = undefined;
-
-				        switch(thisPurpose) {
-				        	case "position": dataRadians = thisValue; break;
-				        	case "temperature": dataTemperature = thisValue; break;
-				        }
-
-				        //tween the various parts for whatever angle is passed in
-						switch(thisPart) {
-							case "base":
-								if(dataTemperature != undefined) { setJointColor(jointBase, dataTemperature); }
-								if(dataRadians != undefined) {
-									var actualRadians = THREE.Math.degToRad((dataRadians*mathjs.PI/180)+200);
-									TWEEN.add(new TWEEN.Tween({y:base.rotation.y, obj:base, tween:activeTween})
-											.to({y:actualRadians}, 300)
-											.onUpdate(function() { this.obj.rotation.y = this.y; })
-											.onComplete( function() { TWEEN.remove(this); })
-											.easing(TWEEN.Easing.Exponential.InOut)
-											.start());
-								}
-								break;
-							case "shoulder":
-								if(dataTemperature != undefined) { setJointColor(jointShoulder, dataTemperature); }
-								if(dataRadians != undefined) {
-									var actualRadians = THREE.Math.degToRad((dataRadians*mathjs.PI/180)-50);
-									TWEEN.add(new TWEEN.Tween({y:shoulder.rotation.y, obj:shoulder, tween:activeTween})
-											.to({y:actualRadians}, 300)
-											.onUpdate(function() { this.obj.rotation.y = this.y; })
-											.onComplete( function() { TWEEN.remove(this); })
-											.easing(TWEEN.Easing.Exponential.InOut)
-											.start());
-								}
-								break;
-							case "elbow":
-								if(dataTemperature != undefined) { setJointColor(jointElbow, dataTemperature); }
-								if(dataRadians != undefined) {
-									var actualRadians = THREE.Math.degToRad((dataRadians*mathjs.PI/180)+100);
-									TWEEN.add(new TWEEN.Tween({x:elbow.rotation.x, obj:elbow, tween:activeTween})
-											.to({x:actualRadians}, 300)
-											.onUpdate(function() { this.obj.rotation.x = this.x; })
-											.onComplete( function() { TWEEN.remove(this); })
-											.easing(TWEEN.Easing.Exponential.InOut)
-											.start());
-								}
-								break;
-							case "wrist1":
-								if(dataTemperature != undefined) { setJointColor(jointWrist1, dataTemperature); }
-								if(dataRadians != undefined) {
-									var actualRadians = THREE.Math.degToRad((dataRadians*mathjs.PI/180)-150);
-									TWEEN.add(new TWEEN.Tween({y:wrist1.rotation.y, obj:wrist1, tween:activeTween})
-											.to({y:actualRadians}, 300)
-											.onUpdate(function() { this.obj.rotation.y = this.y; })
-											.onComplete( function() { TWEEN.remove(this); })
-											.easing(TWEEN.Easing.Exponential.InOut)
-											.start());
-								}
-								break;
-							case "wrist2":
-								if(dataTemperature != undefined) { setJointColor(jointWrist2, dataTemperature); }
-								if(dataRadians != undefined) {
-									var actualRadians = THREE.Math.degToRad((dataRadians*mathjs.PI/180)-100);
-									TWEEN.add(new TWEEN.Tween({y:wrist2.rotation.y, obj:wrist2, tween:activeTween})
-											.to({y:actualRadians}, 300)
-											.onUpdate(function() { this.obj.rotation.y = this.y; })
-											.onComplete( function() { TWEEN.remove(this); })
-											.easing(TWEEN.Easing.Exponential.InOut)
-											.start());
-								}
-								break;
-							case "wrist3":
-								if(dataTemperature != undefined) { setJointColor(jointWrist3, dataTemperature); }
-								if(dataRadians != undefined) {
-									var actualRadians = THREE.Math.degToRad((dataRadians*mathjs.PI/180)-100);
-									TWEEN.add(new TWEEN.Tween({y:wrist3.rotation.y, obj:wrist3, tween:activeTween})
-											.to({y:actualRadians}, 300)
-											.onUpdate(function() { this.obj.rotation.y = this.y; })
-											.onComplete( function() { TWEEN.remove(this); })
-											.easing(TWEEN.Easing.Exponential.InOut)
-											.start());
-								}
-								break;
-						}
-					});
-				}
-				
 	        },
 
 	        // Search data params

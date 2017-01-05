@@ -1,0 +1,14 @@
+modelKey, modelComponentName, dataFieldName, componentPurpose, componentMeasurementUnit, rotationOffset, translationOffset, rotationAxis
+586c61b2b9eef5ff76668c4f, Base, MODBUS1.ROBOT.Position_Base, Rotation,,100,,y
+586c61b2b9eef5ff76668c4f, Shoulder, MODBUS1.ROBOT.Position_Sholder, Rotation,,-150,,y
+586c61b2b9eef5ff76668c4f, Elbow, MODBUS1.ROBOT.Position_Elbow, Rotation,,-200,,x
+586c61b2b9eef5ff76668c4f, Wrist1, MODBUS1.ROBOT.Position_Wrst1, Rotation,,100,,y
+586c61b2b9eef5ff76668c4f, Wrist2, MODBUS1.ROBOT.Position_Wrst2, Rotation,,100,,y
+586c61b2b9eef5ff76668c4f, Wrist3, MODBUS1.ROBOT.Position_Wrst3, Rotation,,100,,y
+586c6395b9eef5ff76668c51, Base, MODBUS2.ROBOT.Position_Base, Rotation,,100,,y
+586c6395b9eef5ff76668c51, Shoulder, MODBUS2.ROBOT.Position_Sholder, Rotation,,-150,,y
+586c6395b9eef5ff76668c51, Elbow, MODBUS2.ROBOT.Position_Elbow, Rotation,,-200,,x
+586c6395b9eef5ff76668c51, Wrist1, MODBUS2.ROBOT.Position_Wrst1, Rotation,,100,,y
+586c6395b9eef5ff76668c51, Wrist2, MODBUS2.ROBOT.Position_Wrst2, Rotation,,100,,y
+586c6395b9eef5ff76668c51, Wrist3, MODBUS2.ROBOT.Position_Wrst3, Rotation,,100,,y
+

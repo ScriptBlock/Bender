@@ -1,7 +1,7 @@
 {
   "name": "rotator",
   "version": "1.0.0",
-  "description": "Simple d3 that rotates a bar around a center for varying degrees.",
+  "description": "A 3d visualization tool",
   "main": "visualization.js",
   "scripts": {
     "build": "$SPLUNK_HOME/bin/splunk cmd node ./node_modules/webpack/bin/webpack.js",

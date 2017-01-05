@@ -1,0 +1,23 @@
+{
+	"metadata": {
+		"version": 4.4,
+		"type": "Object",
+		"generator": "Object3D.toJSON"
+	},
+	"object": {
+		"uuid": "97B697E1-E84D-498E-A7C8-05F3DD15DD54",
+		"type": "Scene",
+		"name": "Scene",
+		"matrix": [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+		"children": [
+			{
+				"uuid": "80D81CF1-5E62-4B4B-B8C7-464B278663C2",
+				"type": "AmbientLight",
+				"name": "AmbientLight 1",
+				"matrix": [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+				"color": 13421772,
+				"intensity": 2
+			}],
+		"background": 11184810
+	}
+}

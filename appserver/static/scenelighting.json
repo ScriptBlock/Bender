@@ -1,0 +1,127 @@
+{
+	"metadata": {
+		"version": 4.4,
+		"type": "Object",
+		"generator": "Object3D.toJSON"
+	},
+	"object": {
+		"uuid": "14CD3B0E-ACC9-4F44-80D3-56591DADF953",
+		"type": "Scene",
+		"name": "Scene",
+		"matrix": [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+		"children": [
+			{
+				"uuid": "883DB5F5-7DA9-48DB-B4EB-886A7CFE2F51",
+				"type": "AmbientLight",
+				"name": "AmbientLight 1",
+				"matrix": [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+				"color": 2236962,
+				"intensity": 1
+			},
+			{
+				"uuid": "B0CF89CA-5D89-467B-AAD9-1BFEDA5ED301",
+				"type": "SpotLight",
+				"name": "SpotLight 2",
+				"matrix": [1,0,0,0,0,1,0,0,0,0,1,0,50,50,50,1],
+				"color": 16777215,
+				"intensity": 3,
+				"distance": 0,
+				"angle": 0.3141592653589793,
+				"decay": 1,
+				"penumbra": 0,
+				"shadow": {
+					"camera": {
+						"uuid": "BBC0CCDB-4A99-49DE-92F3-5D90F02BA436",
+						"type": "PerspectiveCamera",
+						"fov": 50,
+						"zoom": 1,
+						"near": 0.5,
+						"far": 500,
+						"focus": 10,
+						"aspect": 1,
+						"filmGauge": 35,
+						"filmOffset": 0
+					}
+				}
+			},
+			{
+				"uuid": "DB31CB38-9340-4FD6-BA31-56534CC9760E",
+				"type": "SpotLight",
+				"name": "SpotLight 3",
+				"matrix": [1,0,0,0,0,1,0,0,0,0,1,0,50,50,-50,1],
+				"color": 16777215,
+				"intensity": 3,
+				"distance": 0,
+				"angle": 0.3141592653589793,
+				"decay": 1,
+				"penumbra": 0,
+				"shadow": {
+					"camera": {
+						"uuid": "8C4312BB-3036-4052-860B-14DCC4A9123C",
+						"type": "PerspectiveCamera",
+						"fov": 50,
+						"zoom": 1,
+						"near": 0.5,
+						"far": 500,
+						"focus": 10,
+						"aspect": 1,
+						"filmGauge": 35,
+						"filmOffset": 0
+					}
+				}
+			},
+			{
+				"uuid": "832B03FB-6BF3-458D-8E1F-03B104EED297",
+				"type": "SpotLight",
+				"name": "SpotLight 4",
+				"matrix": [1,0,0,0,0,1,0,0,0,0,1,0,-50,50,50,1],
+				"color": 16777215,
+				"intensity": 3,
+				"distance": 0,
+				"angle": 0.3141592653589793,
+				"decay": 1,
+				"penumbra": 0,
+				"shadow": {
+					"camera": {
+						"uuid": "DFC473E0-649A-4EF5-9E7D-5DF164A996DA",
+						"type": "PerspectiveCamera",
+						"fov": 50,
+						"zoom": 1,
+						"near": 0.5,
+						"far": 500,
+						"focus": 10,
+						"aspect": 1,
+						"filmGauge": 35,
+						"filmOffset": 0
+					}
+				}
+			},
+			{
+				"uuid": "F2CEB77B-BA81-4538-868A-29D090ACABD3",
+				"type": "SpotLight",
+				"name": "SpotLight 5",
+				"matrix": [1,0,0,0,0,1,0,0,0,0,1,0,-50,50,-50,1],
+				"color": 16777215,
+				"intensity": 3,
+				"distance": 0,
+				"angle": 0.3141592653589793,
+				"decay": 1,
+				"penumbra": 0,
+				"shadow": {
+					"camera": {
+						"uuid": "6CA2831E-19C6-438A-93EF-4DAEDE0B1B4D",
+						"type": "PerspectiveCamera",
+						"fov": 50,
+						"zoom": 1,
+						"near": 0.5,
+						"far": 500,
+						"focus": 10,
+						"aspect": 1,
+						"filmGauge": 35,
+						"filmOffset": 0
+					}
+				}
+			}],
+		"background": 11184810
+	}
+}

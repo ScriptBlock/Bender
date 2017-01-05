@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>Component Field Mapping HTML</title>
+    <title>Component Field Mapping</title>
     <link rel="shortcut icon" href="/en-US/static/@CB9362F3CB2215002A675E2B5D860015BD3F8B566C762EA5B1738D1543DE8A0A.183/img/favicon.ico" />
     <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/build/css/bootstrap-enterprise.css" />
     <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/css/build/pages/dashboard-simple-bootstrap.min.css" />
@@ -27,7 +27,7 @@ styles in <div> tags, similar to Bootstrap's grid system.
 </header>
 <div class="dashboard-body container-fluid main-section-body" data-role="main">
     <div class="dashboard-header clearfix">
-        <h2>Component Field Mapping HTML</h2>
+        <h2>Component Field Mapping</h2>
     </div>
     <div class="dashboard-row">
         <div class="dashboard-cell" id="metaChooserDiv">
@@ -51,8 +51,9 @@ styles in <div> tags, similar to Bootstrap's grid system.
         </div>
         <div class="dashboard-cell">
             <div class="dashboard-panel">
-                <form id="componentMappingForm">
-                    <div class="fieldset">
+
+                <div class="fieldset">
+                    <form id="componentMappingForm">
                         <div class="input input-text" id="dataKey">
                             <label>Key</label>
                         </div>
@@ -71,15 +72,10 @@ styles in <div> tags, similar to Bootstrap's grid system.
                         <div class="input input-text" id="rotationAxis">
                             <label>Rotation Axis</label>
                         </div>
-                        <!--
-                        <div class="form-submit" id="submit">
-                            <button class="btn btn-primary submit">Submit</button>
-                        </div>
-                        -->
+                    </form>
+                    <button id="componentsavebutton">Save</button><button id="componentdeletebutton">Delete</button>
 
-                    </div>
-                </form>
-                <div><button id="componentsavebutton">Save</button></div>
+                </div>
 
             </div>
 
@@ -602,6 +598,30 @@ fields_list = _key, modelKey, modelComponentName, dataFieldName, componentPurpos
         // SUBMIT FORM DATA
         //
         var service = mvc.createService({ owner: "nobody"});
+
+
+        $("#componentdeletebutton").click(function() {
+            submitTokens();
+            
+            //submitTokens();
+            var localTokens = mvc.Components.get("default");
+            var localDataKey = localTokens.get("dataKey"); 
+
+            if(localDataKey && localDataKey != "") {
+                var uri = "storage/collections/data/model_component_mapping/" + localDataKey;
+
+                service.request(
+                    uri,
+                    "DELETE",
+                    null,
+                    null,
+                    null,
+                    {"Content-Type": "application/json"},
+                    null).done(function(result) {
+                        componentMappingItemsSearch.startSearch();
+                    });            
+            }
+        });
 
 
         $("#componentsavebutton").click(function() {

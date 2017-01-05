@@ -70,6 +70,7 @@ styles in <div> tags, similar to Bootstrap's grid system.
                         <button id="modetranslate">Translate</button>
                         <button id="modescale">Scale</button>
                         <button id="moderotate">Rotate</button>
+                        <button id="removeItem">Delete</button>
                     </div>
                     <div id="modelUniqueComponents" class="dashboard-element event" style="width: 100%">
                         <div class="panel-body"></div>
@@ -334,6 +335,7 @@ require([
             "id": "vizCRUDElement",
             "type": "Bender.rotator",
             "resizable": true,
+            "height": 600,
             "managerid": "vizCRUDSearch",
             "el": $('#vizCRUDElement')
         }, {tokens: true, tokenNamespace: "submitted"}).render();
@@ -358,6 +360,7 @@ require([
             //try to use this to access tokens 
             //setToken("vizbridge_selectmodel", e.data["row.KeyID"]);
             //submitTokens();
+            setToken("selectedModel", e.data["row.KeyID"]);
 
             sendDomCommandToViz("selectcomponent:" + e.data["row.KeyID"]);
 
@@ -530,7 +533,25 @@ require([
             sendDomCommandToViz("switchxform:rotate");
         })
 
-        
+        $("#removeItem").click(function() {
+            var itemToRemove = getToken("selectedModel");
+            if(itemToRemove && itemToRemove != "") {
+                //do delete here
+                service.request(
+                    "storage/collections/data/scene_models/" + itemToRemove,
+                    "DELETE",
+                    null,
+                    null,
+                    null,
+                    {"Content-Type": "application/json"},
+                    null).done(function(result) {
+                        modelUniqueComponentsSearch.startSearch();
+                        sendDomCommandToViz("reloadSceneModels");
+                    });
+            }
+        });
+
+
         DashboardController.onReady(function() {
             if (!submittedTokenModel.has('earliest') && !submittedTokenModel.has('latest')) {
                 submittedTokenModel.set({ earliest: '0', latest: '' });
