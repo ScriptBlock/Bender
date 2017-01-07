@@ -3,8 +3,6 @@
   <view name="component_field_mapping" />
   <view name="arm_automationview" />
   <view name="search" default="true"/>
-  <view name="datasets" />
-  <view name="reports" />
-  <view name="alerts" />
+  <view name="tutorial"/>
   <view name="dashboards" />
 </nav>
