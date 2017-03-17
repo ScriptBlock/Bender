@@ -1,0 +1,51 @@
+{
+	"metadata": {
+		"version": 4.4,
+		"type": "Object",
+		"generator": "Object3D.toJSON"
+	},
+	"geometries": [
+		{
+			"uuid": "0217CEED-16DE-449E-948C-F3383B721A5B",
+			"type": "SphereBufferGeometry",
+			"radius": 1,
+			"widthSegments": 32,
+			"heightSegments": 16,
+			"phiStart": 0,
+			"phiLength": 6.283185307179586,
+			"thetaStart": 0,
+			"thetaLength": 3.141592653589793
+		}],
+	"materials": [
+		{
+			"uuid": "8644B7D9-683C-4400-B52E-09B146AE7561",
+			"type": "MeshStandardMaterial",
+			"color": 16711680,
+			"roughness": 0.5,
+			"metalness": 0.5,
+			"emissive": 0,
+			"opacity": 0.5,
+			"transparent": true,
+			"depthFunc": 3,
+			"depthTest": true,
+			"depthWrite": true,
+			"skinning": false,
+			"morphTargets": false
+		}],
+	"object": {
+		"uuid": "14CD3B0E-ACC9-4F44-80D3-56591DADF953",
+		"type": "Scene",
+		"name": "Scene",
+		"matrix": [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+		"children": [
+			{
+				"uuid": "A63F747A-616C-4A2E-AEC8-BF5FB0126B4F",
+				"type": "Mesh",
+				"name": "TemperatureSphere",
+				"matrix": [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+				"geometry": "0217CEED-16DE-449E-948C-F3383B721A5B",
+				"material": "8644B7D9-683C-4400-B52E-09B146AE7561"
+			}],
+		"background": 11184810
+	}
+}

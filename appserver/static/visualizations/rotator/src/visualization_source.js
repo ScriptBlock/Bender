@@ -1,9 +1,6 @@
 /*
  * Visualization source
  *
- * TODO - refactor code for scene selection & multiple models
- * TODO - refactor code for CRUD integration and Splunk KVStore
- *
  *
  */
 
@@ -64,13 +61,17 @@ var constantRotations = new Object();
 //TODO this needs to get fixed 
 var highTemp, mediumTemp;
 
-//Saved for later
-//var raycaster;
-//var mouse;
+//for model interaction
+var raycaster;
+var mouse;
+
+var partSprites = new Object();
 
 
 var crudMode = false;
 var crudCommand;
+
+
 
 
 /**
@@ -81,8 +82,6 @@ function animate() {
 	TWEEN.update();
 	rotateObjects();	
 	render();
-
-
 }
 
 /**
@@ -96,6 +95,9 @@ function render() {
 	//the dom element and camera is initialized it doesn't work.  once the camera and dom
 	//element is built, you can get the screen size and your model won't be skewed
 	if(camera) {
+
+
+
 		renderer.render(scene, camera);
 	} else {
 
@@ -105,6 +107,7 @@ function render() {
 			camera = new THREE.PerspectiveCamera( 80, globalElement.innerWidth()/globalElement.innerHeight(), 0.1, 1000 );	
 			camera.position.y = 55;
 			camera.position.z = 45;
+			camera.aspect = globalElement.innerWidth()/globalElement.innerHeight();
 			camera.lookAt(scene.position);
 
 
@@ -191,7 +194,8 @@ function saveSceneModels() {
 		}
 
 		mvcService.request(
-			"storage/collections/data/scene_models/" + key,
+			//"storage/collections/data/scene_models/" + key,
+			"/servicesNS/nobody/Bender/storage/collections/data/scene_models/" + key,
 			"POST",
 			null,
 			null,
@@ -215,7 +219,6 @@ function saveSceneModels() {
  * the text and acts on it.  There's probably many and better ways to
  * do this. 
  */
-
 function updateFromDom() {
 
 	//This is like a constant declated in the CRUD screens.
@@ -326,8 +329,7 @@ function createDefaultScene() {
  * This is just a wrapper.
  */
 function loadSceneByName(sceneName) {
-	//console.log("loading scene by name: " + sceneName);
-	mvcService.request("storage/collections/data/scenes",
+	mvcService.request("/servicesNS/nobody/Bender/storage/collections/data/scenes",
 		"GET",
 		null,
 		null,
@@ -336,7 +338,6 @@ function loadSceneByName(sceneName) {
 		function(err, response) {
 			var tempSceneInfo = _.findWhere(response.data, {"sceneName":sceneName});
 			currentSceneName = tempSceneInfo.sceneName;
-			//Call the real scene loader.
 			loadScene(tempSceneInfo._key);
 		});
 }
@@ -370,13 +371,13 @@ function loadScene(sceneKey) {
  * Primary scene loading method.  Does a bunch of data mapping for standard (non-CRUD) use.
  * See comments in code
  */
-
 function loadSceneModels(sceneKey) {
 	var searchString = '{"sceneKey": "' + sceneKey + '"}';
 	var mappingData;
 
 	//Get all of the models that belong in the scene
-	mvcService.request("storage/collections/data/scene_models", 
+	//mvcService.request("storage/collections/data/scene_models", 
+	mvcService.request("/servicesNS/nobody/Bender/storage/collections/data/scene_models", 
 		"GET", 
 		{"query": searchString},  // i set a REST query/filter here.  Probably easier and more maintainable to use underscore to filter and just pull the whole dataset in this query.
 		null,
@@ -387,7 +388,8 @@ function loadSceneModels(sceneKey) {
 			_.each(response.data, function(model) { currentSceneComponents[model._key] = model; });
 
 			//Get all field mappings.  Field mappings contain all of the specific component metdata that is used when drawing and interactive with parts in non-CRUD mode
-			mvcService.request("storage/collections/data/model_component_mapping",
+			//mvcService.request("storage/collections/data/model_component_mapping",
+			mvcService.request("/servicesNS/nobody/Bender/storage/collections/data/model_component_mapping",
 				"GET",
 				null, //no query, just get them all.  filter later
 				null,
@@ -407,7 +409,6 @@ function loadSceneModels(sceneKey) {
 
 					//indicate that the scene is loaded.
 					sceneModelsDeferred.resolve(currentSceneComponents);
-
 				}
 			);
 		});
@@ -453,13 +454,9 @@ function loadSceneModels(sceneKey) {
 				});
 
 				scene.add(currentSceneComponents[model._key].threeObject);
-				
 			});			
 		});
-
 	});
-
-
 }
 
 /**
@@ -480,6 +477,8 @@ function reloadSceneModels() {
 
 	currentSceneComponents = new Object();
 	uniqueToPartMapping = new Object();
+	constantRotations = new Object();
+	partSprites = new Object();
 	
 	rebuildTweens();
 
@@ -510,12 +509,8 @@ function rotateObjects() {
  * because the rotation happens every frame, only very small numbers are useful (.05 -> .2 maybe)
  * 
  */
-
 function constantRotate(partInfo, newValue) {
-	console.log("starting constant rotation for part: " + partInfo.part.name);
-
 	var speed = parseFloat(newValue);
-
 	if(constantRotations[partInfo.mappingData._key]) {
 		if(speed == 0) {
 			delete constantRotations[partInfo.mappingData._key];	
@@ -526,10 +521,7 @@ function constantRotate(partInfo, newValue) {
 		constantRotations[partInfo.mappingData._key] = new Object();
 		constantRotations[partInfo.mappingData._key].part = partInfo;
 		constantRotations[partInfo.mappingData._key].speed = speed;
-
 	}
-
-
 }
 
 
@@ -558,25 +550,68 @@ function rotatePart(partInfo, newValue) {
 
 function setDoor(partInfo, newValue) {
 	if(newValue == "open") {
-		console.log("opening door");
 		rotatePart(partInfo, partInfo.mappingData.rotationOffset);
 	} else {
-		console.log("closing door");
 		rotatePart(partInfo, 0);
 	}
 }
 
 
 function setPartLight(partInfo, newValue) {
-	console.log("setting light values for part: " );
-	console.log(partInfo);
 	if(newValue == "on") {
-		console.log("turning light on");
 		partInfo.part.intensity = 5;
 	} else {
-		console.log("turning light off");
 		partInfo.part.intensity = 0;
 	}
+}
+
+
+function showMotion(partInfo, newValue) {
+	if(newValue == "inactive") {
+		partInfo.part.material.emissive.r = 0;
+		partInfo.part.material.emissive.g = 0;
+		partInfo.part.material.emissive.b = 0;
+	} else {
+		partInfo.part.material.emissive.r = 1;
+		partInfo.part.material.emissive.g = 1;
+		partInfo.part.material.emissive.b = 1;		
+	}
+
+
+}
+
+function setPartTemperature(partInfo, newValue) {
+	//these are all just hardcoded for the moment
+
+	var temperature = parseFloat(newValue);
+
+	if(temperature) {
+		var r = 1;
+		var g = 0, b = 0;
+
+		if(newValue < 80) {
+			r = 1 ;
+			g = 0;
+			b = 0.5;
+		}
+
+
+		if(newValue < 70) {
+			r=0.5;
+			g = 0;
+			b = 1;
+		}
+
+		if(newValue < 60) {
+			r = 0;
+			g = 0;
+			b = 1;
+		} 
+		partInfo.part.material.color.r = r;
+		partInfo.part.material.color.g = g;
+		partInfo.part.material.color.b = b;
+	}
+
 }
 
 /**
@@ -588,8 +623,12 @@ function processPart(partInfo, newValue) {
 	var thePart = partInfo.part;
 	var mappingMetaData = partInfo.mappingData;
 
-	console.log("processing part: ");
-	console.log(thePart);
+	if(!_.isUndefined(partSprites[thePart.name])) {
+		partSprites[thePart.name].position.copy(thePart.children[0].getWorldPosition());
+		partSprites[thePart.name].position.z += 20;
+		updateTextSprite(partSprites[thePart.name], thePart.name + "|Value:" + newValue);
+	}
+
 	switch(mappingMetaData.componentPurpose) {
 		case "Rotation": 
 			rotatePart(partInfo, newValue);
@@ -606,11 +645,126 @@ function processPart(partInfo, newValue) {
 		case "Door":
 			setDoor(partInfo, newValue);
 			break;
-
+		case "Motion":
+			showMotion(partInfo, newValue);
+			break;
 	}
-
-
 }
+
+
+function onDocumentTouchStart( event ) {
+	event.preventDefault();
+	event.clientX = event.touches[0].clientX;
+	event.clientY = event.touches[0].clientY;
+	onDocumentMouseDown( event );
+}
+
+function onDocumentMouseDown( event ) {
+	event.preventDefault();
+	
+	var rect = renderer.domElement.getBoundingClientRect();
+
+	mouse = new THREE.Vector3( (event.clientX - rect.left)/rect.width*2-1,
+							  -(event.clientY - rect.top)/rect.height*2+1,
+							  0.5);
+	
+	raycaster.setFromCamera( mouse, camera );
+
+	var objectsToSearch = _.pluck(currentSceneComponents, 'threeObject');
+	var intersects = raycaster.intersectObjects( objectsToSearch, true );
+	if ( intersects.length > 0 ) {
+
+		var partName = intersects[0].object.name;
+		//this is a little hack to make sure that the parent of the mesh is chosen when the mesh is part of a group of objects
+		if(intersects[0].object.parent.type == 'Group') {
+			partName = intersects[0].object.parent.name;
+		}
+
+		
+		if(!_.isUndefined(partSprites[partName])) {
+			if(partSprites[partName].visible) {
+				partSprites[partName].visible = false;
+			} else {
+				partSprites[partName].visible = true;
+			}
+
+		} else {
+			var spritey = createTextSprite(partName);
+			spritey.position.copy(intersects[0].point);
+			spritey.position.z += 20;
+			partSprites[partName] = spritey;
+			scene.add(partSprites[partName]);
+		}
+		
+	}
+	
+}
+
+
+/**
+ * This creates the sprite texture using the text provided
+ */
+function createTextTexture(textContent) {
+	var textObjs = textContent.split("|");
+	var textLines = _.size(textObjs);
+	var maxTextSize = _.max(_.map(textObjs, function(o) { return _.size(o)}));
+	var longestTextString = _.find(textObjs, function(o) { return o.length == maxTextSize});
+
+
+	var textSize = 30;
+	var borderSize = 4;
+	var canvas = document.createElement('canvas');
+	canvas.width=350;
+
+	var context = canvas.getContext('2d');
+	context.font = textSize + "px Courier New";
+
+	var metrics = context.measureText(longestTextString);
+	var textWidth = metrics.width;
+	
+	context.fillStyle = "rgba(0,0,0,1)";
+	context.fillRect(0,0,textWidth*2+borderSize,textSize*textLines+15+borderSize);
+
+	context.fillStyle = "rgba(255,255,255,1)";
+	context.strokeStyle = "rgba(255,255,255,1)";
+	context.lineWidth = 1;
+	var i = 1;
+	_.each(textObjs, function(o) {
+		context.fillText(o, 10, (textSize*i++)+5);
+	});
+
+	var texture = new THREE.CanvasTexture(canvas);
+	return texture;
+}
+
+/**
+ * Leverages createTextTexture and creates a Sprite material
+ */
+function createTextMaterial(textContent) {
+	var texture = createTextTexture(textContent);
+	var spriteMaterial = new THREE.SpriteMaterial({map:texture});
+	return spriteMaterial;
+}
+
+/**
+ * Uses helper methods to create the on screen sprite
+ */
+function createTextSprite(textContent) {
+	var sprite = new THREE.Sprite(createTextMaterial(textContent));
+	sprite.scale.set(20,20,0);
+	return sprite;
+}
+
+/**
+ * Updating existing sprites with new text textures
+ */
+function updateTextSprite(sprite, textContent) {
+	var newSpriteTexture = createTextTexture(textContent);
+	sprite.material.map = newSpriteTexture;
+	sprite.material.map.needsUpdate = true;
+}
+
+
 
     // Extend from SplunkVisualizationBase
     return SplunkVisualizationBase.extend({
@@ -640,12 +794,15 @@ function processPart(partInfo, newValue) {
 			mediumTemp = 30;
 			globalVizBase = this;
 
-			//these guys were used to selecting objects through clicking on the scene.  keeping around because i'm sure i'll use them again sometime
-			//raycaster = new THREE.Raycaster();
-			//mouse = new THREE.Vector2();
-
 		    mvcService = mvc.createService({ owner: "nobody"});
 			loader = new THREE.ObjectLoader();
+
+
+			//For model interaction
+			renderer.domElement.addEventListener( 'mousedown', onDocumentMouseDown, false );
+			raycaster = new THREE.Raycaster();
+			mouse = new THREE.Vector3();
+
 
 			animate();
 
@@ -668,7 +825,6 @@ function processPart(partInfo, newValue) {
         	if(preferenceBasedSceneName && preferenceBasedSceneName != "") { //something real 
        			if(preferenceBasedSceneName != currentSceneName) { 
        				//switch to the new scene
-       				//console.log("the preference based scene selection does not match the current scene name.  setting to " + preferenceBasedSceneName);
        				loadSceneByName(preferenceBasedSceneName); 
        			}
         	}
@@ -701,7 +857,6 @@ function processPart(partInfo, newValue) {
         // Search data params
         getInitialDataParams: function() {
             return ({
-                //outputMode: SplunkVisualizationBase.ROW_MAJOR_OUTPUT_MODE,
                 outputMode: SplunkVisualizationBase.RAW_OUTPUT_MODE,
                 count: 10000
             });
@@ -710,6 +865,9 @@ function processPart(partInfo, newValue) {
         // Override to respond to re-sizing events
         reflow: function() {
 			renderer.setSize( globalElement.innerWidth(), globalElement.innerHeight() );
+			camera.aspect = globalElement.innerWidth()/globalElement.innerHeight();
+			camera.updateProjectionMatrix();
+			render();			
         }
     });
 });
