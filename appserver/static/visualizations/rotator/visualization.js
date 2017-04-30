@@ -652,9 +652,9 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 				g = 0;
 				b = 1;
 			} 
-			partInfo.part.material.color.r = r;
-			partInfo.part.material.color.g = g;
-			partInfo.part.material.color.b = b;
+			partInfo.part.material.emissive.r = r;
+			partInfo.part.material.emissive.g = g;
+			partInfo.part.material.emissive.b = b;
 		}
 
 	}
@@ -669,8 +669,23 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 		var mappingMetaData = partInfo.mappingData;
 
 		if(!_.isUndefined(partSprites[thePart.name])) {
-			partSprites[thePart.name].position.copy(thePart.children[0].getWorldPosition());
-			partSprites[thePart.name].position.z += 20;
+			//console.log("processing change for " + thePart.name);
+			//console.log(thePart);
+
+			var newPosition = thePart.getWorldPosition();
+			if(_.size(thePart.children) > 0) {
+				newPosition = thePart.children[0].getWorldPosition();
+			}
+
+			partSprites[thePart.name].position.copy(newPosition);
+			//partSprites[thePart.name].position.z += 40;
+			partSprites[thePart.name].position.x += 15;
+
+			//partSprites[thePart.name].position.x += (20*partSprites[thePart.name].vizoffset);
+
+			//partSprites[thePart.name].translateOnAxis(camera.position, 20);
+			//console.log(thePart.name + ": position: ");
+			//console.log(partSprites[thePart.name].position);
 			updateTextSprite(partSprites[thePart.name], thePart.name + "|Value:" + newValue);
 		}
 
@@ -735,8 +750,13 @@ define(["splunkjs/mvc","splunkjs/mvc/tokenutils","api/SplunkVisualizationBase","
 
 			} else {
 				var spritey = createTextSprite(partName);
+				//spritey.vizoffset = _.size(partSprites)+1;
 				spritey.position.copy(intersects[0].point);
-				spritey.position.z += 20;
+				//spritey.position.z += 20;
+				spritey.position.x += 15;
+				//spritey.position.x += (20*spritey.vizoffset);
+
+				//spritey.translateOnAxis(camera.position, 20);
 				partSprites[partName] = spritey;
 				scene.add(partSprites[partName]);
 			}
