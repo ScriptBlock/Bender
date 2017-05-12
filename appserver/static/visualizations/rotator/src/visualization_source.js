@@ -8,7 +8,7 @@ define([
 	    'splunkjs/mvc',
 	    'splunkjs/mvc/utils',
 	    'splunkjs/mvc/tokenutils',
-            'splunkjs/mvc/simplexml/urltokenmodel',
+            //'splunkjs/mvc/simplexml/urltokenmodel',
             'jquery',
             'underscore',
             'api/SplunkVisualizationBase',
@@ -22,7 +22,7 @@ define([
 	        mvc,
 	        utils,
 	        TokenUtils,
-                UrlTokenModel,
+                //UrlTokenModel,
             $,
             _,
             SplunkVisualizationBase,
@@ -76,41 +76,8 @@ var partSprites = new Object();
 var crudMode = false;
 var crudCommand;
 
-//trying some token stuff
-/*
-console.log("init token stuff");
-console.log("new url token model");
-var urlTokenModel = new UrlTokenModel();
-console.log("url token model object");
-console.log(urlTokenModel);
-
-console.log("mvc object");
-console.log(mvc);
-
-console.log("mvc components");
-console.log(mvc.Components);
-
-console.log("register instance");
-mvc.Components.registerInstance('url', urlTokenModel);
-console.log("default token model");
-var defaultTokenModel = mvc.Components.getInstance('default', {create: true});
-console.log("submitted token model");
-var submittedTokenModel = mvc.Components.getInstance('submitted', {create: true});
-
-function setToken(name, value) {
-	defaultTokenModel.set(name, value);
-	submittedTokenModel.set(name, value);
-}
-*/
-
-console.log("getting existing url token model");
 var urlTokenModel = mvc.Components.getInstance('url', {create:true});
-console.log("urltoken model object");
-console.log(urlTokenModel);
-
-console.log("default token model");
 var defaultTokenModel = mvc.Components.getInstance('default', {create: true});
-console.log("submitted token model");
 var submittedTokenModel = mvc.Components.getInstance('submitted', {create: true});
 
 function setToken(name, value) {
