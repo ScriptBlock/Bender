@@ -5,9 +5,10 @@
  */
 
 define([
-			'splunkjs/mvc',
-			'splunkjs/mvc/utils',
-			'splunkjs/mvc/tokenutils',
+	    'splunkjs/mvc',
+	    'splunkjs/mvc/utils',
+	    'splunkjs/mvc/tokenutils',
+            'splunkjs/mvc/simplexml/urltokenmodel',
             'jquery',
             'underscore',
             'api/SplunkVisualizationBase',
@@ -21,6 +22,7 @@ define([
 	        mvc,
 	        utils,
 	        TokenUtils,
+                UrlTokenModel,
             $,
             _,
             SplunkVisualizationBase,
@@ -30,6 +32,7 @@ define([
             TWEEN,
             mathjs
         ) {
+
 
 
 var modelPath = "/en-us/static/app/Bender/";
@@ -65,14 +68,55 @@ var highTemp, mediumTemp;
 var raycaster;
 var mouse;
 
+/*
 var partSprites = new Object();
+*/
 
 
 var crudMode = false;
 var crudCommand;
 
+//trying some token stuff
+/*
+console.log("init token stuff");
+console.log("new url token model");
+var urlTokenModel = new UrlTokenModel();
+console.log("url token model object");
+console.log(urlTokenModel);
 
+console.log("mvc object");
+console.log(mvc);
 
+console.log("mvc components");
+console.log(mvc.Components);
+
+console.log("register instance");
+mvc.Components.registerInstance('url', urlTokenModel);
+console.log("default token model");
+var defaultTokenModel = mvc.Components.getInstance('default', {create: true});
+console.log("submitted token model");
+var submittedTokenModel = mvc.Components.getInstance('submitted', {create: true});
+
+function setToken(name, value) {
+	defaultTokenModel.set(name, value);
+	submittedTokenModel.set(name, value);
+}
+*/
+
+console.log("getting existing url token model");
+var urlTokenModel = mvc.Components.getInstance('url', {create:true});
+console.log("urltoken model object");
+console.log(urlTokenModel);
+
+console.log("default token model");
+var defaultTokenModel = mvc.Components.getInstance('default', {create: true});
+console.log("submitted token model");
+var submittedTokenModel = mvc.Components.getInstance('submitted', {create: true});
+
+function setToken(name, value) {
+        defaultTokenModel.set(name, value);
+        submittedTokenModel.set(name, value);
+}
 
 /**
  * Main animation loop
@@ -291,6 +335,25 @@ function getParentUntil(obj) {
 }
 */
 
+function findFieldIn(obj, fieldToFind) {
+	//console.log("recursing through object: " + obj.name);
+	if(!obj.parent) { 
+		//console.log("object doesn't have a parent, returning null");
+		return null; 
+	}
+
+	if(obj.parent && !obj[fieldToFind]) {
+		//console.log("object has a parent but not fieldToFind, recursing")
+		return findFieldIn(obj.parent, fieldToFind);
+	} 
+
+	//console.log("this object must have fieldToFind.. returning that");
+	return obj[fieldToFind];
+}
+	
+
+
+
 /**
  * Called as a CRUD command.  Sets the transform to whatever component is clicked.
  */
@@ -478,7 +541,7 @@ function reloadSceneModels() {
 	currentSceneComponents = new Object();
 	uniqueToPartMapping = new Object();
 	constantRotations = new Object();
-	partSprites = new Object();
+	//partSprites = new Object();
 	
 	rebuildTweens();
 
@@ -622,7 +685,7 @@ function setPartTemperature(partInfo, newValue) {
 function processPart(partInfo, newValue) {
 	var thePart = partInfo.part;
 	var mappingMetaData = partInfo.mappingData;
-
+/*
 	if(!_.isUndefined(partSprites[thePart.name])) {
 		//console.log("processing change for " + thePart.name);
 		//console.log(thePart);
@@ -642,7 +705,9 @@ function processPart(partInfo, newValue) {
 		//console.log(thePart.name + ": position: ");
 		//console.log(partSprites[thePart.name].position);
 		updateTextSprite(partSprites[thePart.name], thePart.name + "|Value:" + newValue);
+
 	}
+*/
 
 	switch(mappingMetaData.componentPurpose) {
 		case "Rotation": 
@@ -690,12 +755,21 @@ function onDocumentMouseDown( event ) {
 	if ( intersects.length > 0 ) {
 
 		var partName = intersects[0].object.name;
-		//this is a little hack to make sure that the parent of the mesh is chosen when the mesh is part of a group of objects
+
 		if(intersects[0].object.parent.type == 'Group') {
 			partName = intersects[0].object.parent.name;
 		}
 
-		
+		var kvKey = findFieldIn(intersects[0].object, "kvkey");
+		var mappingInfoTemp = currentSceneComponents[kvKey];
+		var dataFieldName = _.findWhere(mappingInfoTemp.mappingData, {"modelComponentName":partName}).dataFieldName
+		if(dataFieldName) {
+			setToken("clickedpartname", dataFieldName);
+		}
+
+/*
+ * Rather than do anything in the GUI, let's pass a token to the dashboard!
+ *
 		if(!_.isUndefined(partSprites[partName])) {
 			if(partSprites[partName].visible) {
 				partSprites[partName].visible = false;
@@ -715,7 +789,7 @@ function onDocumentMouseDown( event ) {
 			partSprites[partName] = spritey;
 			scene.add(partSprites[partName]);
 		}
-		
+*/		
 	}
 	
 }
@@ -724,6 +798,7 @@ function onDocumentMouseDown( event ) {
 /**
  * This creates the sprite texture using the text provided
  */
+/*
 function createTextTexture(textContent) {
 	var textObjs = textContent.split("|");
 	var textLines = _.size(textObjs);
@@ -756,34 +831,37 @@ function createTextTexture(textContent) {
 	var texture = new THREE.CanvasTexture(canvas);
 	return texture;
 }
-
+*/
 /**
  * Leverages createTextTexture and creates a Sprite material
  */
+/*
 function createTextMaterial(textContent) {
 	var texture = createTextTexture(textContent);
 	var spriteMaterial = new THREE.SpriteMaterial({map:texture});
 	return spriteMaterial;
 }
-
+*/
 /**
  * Uses helper methods to create the on screen sprite
  */
+/*
 function createTextSprite(textContent) {
 	var sprite = new THREE.Sprite(createTextMaterial(textContent));
 	sprite.scale.set(20,20,0);
 	return sprite;
 }
-
+*/
 /**
  * Updating existing sprites with new text textures
  */
+/*
 function updateTextSprite(sprite, textContent) {
 	var newSpriteTexture = createTextTexture(textContent);
 	sprite.material.map = newSpriteTexture;
 	sprite.material.map.needsUpdate = true;
 }
-
+*/
 
 
     // Extend from SplunkVisualizationBase
