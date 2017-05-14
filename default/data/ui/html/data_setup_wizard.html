@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <meta name="referrer" content="never" />
+        <meta name="referrer" content="no-referrer" />
+    
+        <script>
+            (function () {
+                window._splunk_metrics_events = [];
+                window._splunk_metrics_events.active = true;
+
+                function onLoadSwa() {
+                    new SWA({"instanceGUID": "20A340D5-A311-4D55-A927-878E15DB631E", "userID": "eaf6ef96e1ae24b1a12c57ab9a87de1d31b27b053c85ceb21cae7d6f7f5bb8bd", "deploymentID": "1ac8b9cb-3d67-58e5-ac4c-7c7b78977205", "version": "2", "url": "https://e1345286.api.splkmobile.com/1.0/e1345286"});
+                };
+
+                document.addEventListener("DOMContentLoaded", function(event) {
+                    var s = document.createElement('script');
+                    s.type = 'text/javascript';
+                    s.async = true;
+                    s.src = '/en-US/static/app/splunk_instrumentation/build/pages/swa.js';
+                    s.addEventListener('load', onLoadSwa);
+                    var x = document.getElementsByTagName('script')[0];
+                    x.parentNode.insertBefore(s, x);
+                });
+            }());
+        </script>
+    
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>Data Setup Wizard</title>
+    <link rel="shortcut icon" href="/en-US/static/@2287D65AC04B8CF5808748DD29C8A4BBC620FDBEECB96DAAE8F19676A1746C77/img/favicon.ico" />
+    <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/build/css/bootstrap-enterprise.css" />
+    <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/css/build/pages/dashboard-simple-bootstrap.min.css" />
+
+</head>
+<body class="simplexml preload locale-en" data-splunk-version="6.6.0" data-splunk-product="enterprise">
+<!-- 
+BEGIN LAYOUT
+This section contains the layout for the dashboard. Splunk uses proprietary
+styles in <div> tags, similar to Bootstrap's grid system. 
+-->
+<header>
+    <a class="navSkip" href="#navSkip" tabindex="1">Screen reader users, click here to skip the navigation bar</a>
+    <div class="header splunk-header">
+            <div id="placeholder-splunk-bar">
+                <a href="{{SPLUNKWEB_URL_PREFIX}}/app/launcher/home" class="brand" title="splunk &gt; listen to your data">splunk<strong>&gt;</strong></a>
+            </div>
+                <div id="placeholder-app-bar"></div>
+    </div>
+    <a id="navSkip"></a>
+</header>
+<div class="dashboard-body container-fluid main-section-body" data-role="main">
+    <div class="dashboard-header clearfix">
+        <h2>Data Setup Wizard</h2>
+    </div>
+    <div class="fieldset">
+        <div class="input input-dropdown" id="demoSelectionInput">
+            <label>Set up data for which demo?</label>
+        </div>
+        <div class="form-submit" id="search_btn">
+            <button class="btn btn-primary submit">Submit</button>
+        </div>
+    </div>
+
+    <div id="row1" class="dashboard-row dashboard-row1">
+	<div id="panel1" class="dashboard-cell" style="width: 100%;">
+	    <div class="dashboard-panel clearfix">
+		<h2 class="panel-title">Wizard Results</h2>
+		<div class="panel-element-row">
+		   <div class="dashboard-element event" style="width:100%">
+                       <div class="panel-body">
+                          <div id="wizardStatusOutput"></div>
+                       </div>
+                   </div>
+		</div>
+            </div>
+        </div>
+   </div>
+
+
+
+
+</div>
+
+<!-- 
+END LAYOUT
+-->
+
+<script src="{{SPLUNKWEB_URL_PREFIX}}/config?autoload=1" crossorigin="use-credentials"></script>
+<script src="{{SPLUNKWEB_URL_PREFIX}}/static/js/i18n.js"></script>
+<script src="{{SPLUNKWEB_URL_PREFIX}}/i18ncatalog?autoload=1"></script>
+<script src="{{SPLUNKWEB_URL_PREFIX}}/static/build/simplexml/index.js"></script>
+<script type="text/javascript">
+// <![CDATA[
+// <![CDATA[
+//
+// LIBRARY REQUIREMENTS
+//
+// In the require function, we include the necessary libraries and modules for
+// the HTML dashboard. Then, we pass variable names for these libraries and
+// modules as function parameters, in order.
+// 
+// When you add libraries or modules, remember to retain this mapping order
+// between the library or module and its function parameter. You can do this by
+// adding to the end of these lists, as shown in the commented examples below.
+
+require([
+    "splunkjs/mvc",
+    "splunkjs/mvc/utils",
+    "splunkjs/mvc/tokenutils",
+    "underscore",
+    "jquery",
+    "splunkjs/mvc/simplexml",
+    "splunkjs/mvc/layoutview",
+    "splunkjs/mvc/simplexml/dashboardview",
+    "splunkjs/mvc/simplexml/dashboard/panelref",
+    "splunkjs/mvc/simplexml/element/chart",
+    "splunkjs/mvc/simplexml/element/event",
+    "splunkjs/mvc/simplexml/element/html",
+    "splunkjs/mvc/simplexml/element/list",
+    "splunkjs/mvc/simplexml/element/map",
+    "splunkjs/mvc/simplexml/element/single",
+    "splunkjs/mvc/simplexml/element/table",
+    "splunkjs/mvc/simplexml/element/visualization",
+    "splunkjs/mvc/simpleform/formutils",
+    "splunkjs/mvc/simplexml/eventhandler",
+    "splunkjs/mvc/simplexml/searcheventhandler",
+    "splunkjs/mvc/simpleform/input/dropdown",
+    "splunkjs/mvc/simpleform/input/radiogroup",
+    "splunkjs/mvc/simpleform/input/linklist",
+    "splunkjs/mvc/simpleform/input/multiselect",
+    "splunkjs/mvc/simpleform/input/checkboxgroup",
+    "splunkjs/mvc/simpleform/input/text",
+    "splunkjs/mvc/simpleform/input/timerange",
+    "splunkjs/mvc/simpleform/input/submit",
+    "splunkjs/mvc/searchmanager",
+    "splunkjs/mvc/savedsearchmanager",
+    "splunkjs/mvc/postprocessmanager",
+    "splunkjs/mvc/simplexml/urltokenmodel"
+    // Add comma-separated libraries and modules manually here, for example:
+    // ..."splunkjs/mvc/simplexml/urltokenmodel",
+    // "splunkjs/mvc/tokenforwarder"
+    ],
+    function(
+        mvc,
+        utils,
+        TokenUtils,
+        _,
+        $,
+        DashboardController,
+        LayoutView,
+        Dashboard,
+        PanelRef,
+        ChartElement,
+        EventElement,
+        HtmlElement,
+        ListElement,
+        MapElement,
+        SingleElement,
+        TableElement,
+        VisualizationElement,
+        FormUtils,
+        EventHandler,
+        SearchEventHandler,
+        DropdownInput,
+        RadioGroupInput,
+        LinkListInput,
+        MultiSelectInput,
+        CheckboxGroupInput,
+        TextInput,
+        TimeRangeInput,
+        SubmitButton,
+        SearchManager,
+        SavedSearchManager,
+        PostProcessManager,
+        UrlTokenModel
+
+        // Add comma-separated parameter names here, for example: 
+        // ...UrlTokenModel, 
+        // TokenForwarder
+        ) {
+
+        var pageLoading = true;
+
+	    var service = mvc.createService({ owner: "nobody"});
+
+
+        // 
+        // TOKENS
+        //
+        
+        // Create token namespaces
+        var urlTokenModel = new UrlTokenModel();
+        mvc.Components.registerInstance('url', urlTokenModel);
+        var defaultTokenModel = mvc.Components.getInstance('default', {create: true});
+        var submittedTokenModel = mvc.Components.getInstance('submitted', {create: true});
+
+        urlTokenModel.on('url:navigate', function() {
+            defaultTokenModel.set(urlTokenModel.toJSON());
+            if (!_.isEmpty(urlTokenModel.toJSON()) && !_.all(urlTokenModel.toJSON(), _.isUndefined)) {
+                submitTokens();
+            } else {
+                submittedTokenModel.clear();
+            }
+        });
+
+        // Initialize tokens
+        defaultTokenModel.set(urlTokenModel.toJSON());
+
+        function submitTokens() {
+            // Copy the contents of the defaultTokenModel to the submittedTokenModel and urlTokenModel
+            FormUtils.submitForm({ replaceState: pageLoading });
+        }
+
+        function setToken(name, value) {
+            defaultTokenModel.set(name, value);
+            submittedTokenModel.set(name, value);
+        }
+
+        function unsetToken(name) {
+            defaultTokenModel.unset(name);
+            submittedTokenModel.unset(name);
+        }
+
+        function getToken(name) {
+            var retVal = defaultTokenModel.get(name);
+            return retVal;
+
+        }
+
+	
+	var demoData = { "robotarm": { 
+				"scenedata": {"sceneName":"Robot Arm", "_user": "nobody", "_key": "586e5461b9eef508454562f1"},
+				"scenemodeldata": [
+					{"sceneKey": "586e5461b9eef508454562f1","componentUniqueName": "scenelighting","modelName": "scenelighting.json","translation": "{\"x\":0,\"y\":298.29255242572583,\"z\":30.93907045308167}","scale": "{\"x\":1,\"y\":1,\"z\":1}","rotation": "{\"x\":0,\"y\":0,\"z\":0}","_user": "nobody","_key": "586ed5c1b9eef50e992f055f"},
+                                        {"sceneKey": "586e5461b9eef508454562f1","componentUniqueName": "arm1","modelName": "ur6.json","translation": "{\"x\":0,\"y\":0,\"z\":0}","scale": "{\"x\":1,\"y\":1,\"z\":1}","rotation": "{\"x\":0,\"y\":0,\"z\":0}","_user": "nobody","_key": "58dd8ecbb9eef56d5652bfe2"}],
+				"modelcomponentmappingdata": [ {"modelKey": "58dd8ecbb9eef56d5652bfe2","modelComponentName": "Base","dataFieldName": "MODBUS1.ROBOT.Position_Base","componentPurpose": "Rotation","componentMeasurementUnit": "x","rotationOffset": "","rotationAxis": "y","_user": "nobody","_key": "58dd8f36b9eef56d5652bfe3"},{"modelKey": "58dd8ecbb9eef56d5652bfe2","modelComponentName": "Elbow","dataFieldName": "MODBUS1.ROBOT.Position_Elbow","componentPurpose": "Rotation","componentMeasurementUnit": "","rotationOffset": "","rotationAxis": "x","_user": "nobody","_key": "58dd8f49b9eef56d5652bfe4"},{"modelKey": "58dd8ecbb9eef56d5652bfe2","modelComponentName": "Shoulder","dataFieldName": "MODBUS1.ROBOT.Position_Sholder","componentPurpose": "Rotation","componentMeasurementUnit": "","rotationOffset": "","rotationAxis": "y","_user": "nobody","_key": "58dd8f64b9eef56d5652bfe5"},{"modelKey":"58dd8ecbb9eef56d5652bfe2","modelComponentName":"Wrist1","dataFieldName":"MODBUS1.ROBOT.Position_Wrst1","componentPurpose":"Rotation","componentMeasurementUnit":"","rotationOffset":"","rotationAxis":"y","_user":"nobody","_key":"58dd8f72b9eef56d5652bfe6"},{"modelKey":"58dd8ecbb9eef56d5652bfe2","modelComponentName":"Wrist2","dataFieldName":"MODBUS1.ROBOT.Position_Wrst2","componentPurpose":"Rotation","componentMeasurementUnit":"","rotationOffset":"","rotationAxis":"y","_user":"nobody","_key":"58dd8f7ab9eef56d5652bfe7"},{"modelKey":"58dd8ecbb9eef56d5652bfe2","modelComponentName":"Wrist3","dataFieldName":"MODBUS1.ROBOT.Position_Wrst3","componentPurpose":"Rotation","componentMeasurementUnit":"","rotationOffset":"","rotationAxis":"y","_user":"nobody","_key":"58dd8f84b9eef56d5652bfe8"}],
+			},
+
+			"assetintel": {
+				"scenedata": { "sceneName" : "Paper Grinder", "_user" : "nobody", "_key" : "58e39e00b9eef50ce72a9f21" },
+				"scenemodeldata": [ { "sceneKey" : "58e39e00b9eef50ce72a9f21", "componentUniqueName" : "grinder1", "modelName" : "grinder.json", "translation" : "{\"x\":0,\"y\":0,\"z\":0}", "scale" : "{\"x\":1,\"y\":1,\"z\":1}", "rotation" : "{\"x\":0,\"y\":0,\"z\":0}", "_user" : "nobody", "_key" : "58e39e0bb9eef50ce72a9f22" }, { "sceneKey" : "58e39e00b9eef50ce72a9f21", "componentUniqueName" : "scenelighting", "modelName" : "scenelighting.json", "translation" : "{\"x\":95.74720139433123,\"y\":97.8500117022407,\"z\":-261.94745340532245}", "scale" : "{\"x\":1,\"y\":1,\"z\":1}", "rotation" : "{\"x\":0,\"y\":0,\"z\":0}", "_user" : "nobody", "_key" : "58e3ba94b9eef52f7d16b891" } ],
+				"modelcomponentmappingdata": [ { "modelKey" : "58e39e0bb9eef50ce72a9f22", "modelComponentName" : "Grinder-Barrel", "dataFieldName" : "Scranton.Line #1.Wood Grinder A.RPM", "componentPurpose" : "ConstantRotation", "componentMeasurementUnit" : "", "rotationOffset" : "", "rotationAxis" : "z", "_user" : "nobody", "_key" : "58e3bb0ab9eef52f7d16b892" }, { "modelKey" : "58e39e0bb9eef50ce72a9f22", "modelComponentName" : "Grinder-Bearings", "dataFieldName" : "Scranton.Line #1.Wood Grinder A.Torque", "componentPurpose" : "Temperature", "componentMeasurementUnit" : "", "rotationOffset" : "", "rotationAxis" : "", "_user" : "nobody", "_key" : "58e3bb21b9eef52f7d16b893" } ]
+			},
+			"windmillfarm": {
+				"scenedata": {},
+				"scenemodeldata": [],
+				"modelcomponentmappingdata": []
+			}
+	};
+		
+	function clearStatus() {
+	   $('#wizardStatusOutput').html("");
+        }
+
+        function writeToStatus(words) {
+	   var existingWords = $('#wizardStatusOutput').html();
+	   existingWords = existingWords + "<br/>" + words;
+	   $('#wizardStatusOutput').html(existingWords);
+        }
+
+
+	function buildDemoData(buildType) {
+            var baseUri = "storage/collections/data/";
+            var uris = { "scenesUri": "scenes",
+                         "sceneModelsUri": "scene_models",
+                         "modelComponentMappingUri": "model_component_mapping" };
+
+            
+
+            //check for existig data
+            var demoDataExists = true;
+	    writeToStatus("Looking for key for " + buildType);
+	    var keyToCheckFor = demoData[buildType].scenedata._key;
+	    writeToStatus("Checking for exising scene key: " + keyToCheckFor);
+
+
+            service.request(
+                baseUri+uris["scenesUri"],
+                "GET",
+                null,
+                null,
+                null,
+                null,
+		null).done(function(result) {
+		    var findResults = _.findWhere(JSON.parse(result), {"_key":keyToCheckFor});
+                    if(!findResults) { demoDataExists = false; }
+
+		            if(demoDataExists) { 
+				writeToStatus("Already found demo data. Ending.");
+				return;
+		            }
+
+		            writeToStatus("Demo data not found.");
+		            writeToStatus("<span style='font-weight:bold'>When data is done being written, don't forget to add the scene name to your viz in the viz formatter window!</span>");
+
+		            service.request(
+		                    baseUri+uris["scenesUri"],
+		                    "POST",
+		                    null,
+		                    null,
+		                    JSON.stringify(demoData[buildType].scenedata),
+		                    {"Content-Type": "application/json" },
+		                    null).done(function(result) { writeToStatus("Added scene data to kvstore"); });
+		
+                            _.each(demoData[buildType].scenemodeldata, function(smd) {
+			            service.request(
+			                    baseUri+uris["sceneModelsUri"],
+			                    "POST",
+			                    null,
+			                    null,
+			                    JSON.stringify(smd),
+			                    {"Content-Type": "application/json" },
+			                    null).done(function(result) { writeToStatus("Added scene model data to kvstore");  });
+                            });
+		
+                            _.each(demoData[buildType].modelcomponentmappingdata, function(cmd) {
+			            service.request(
+			                    baseUri+uris["modelComponentMappingUri"],
+			                    "POST",
+			                    null,
+			                    null,
+			                    JSON.stringify(cmd),
+			                    {"Content-Type": "application/json" },
+			                    null).done(function(result) { writeToStatus("Added model component mapping to kvstore"); });
+                            });
+		});
+            
+	
+
+	}
+        
+        
+        //
+        // SEARCH MANAGERS
+        //
+
+
+
+        //
+        // SPLUNK LAYOUT
+        //
+
+        $('header').remove();
+        new LayoutView({"hideAppBar": false, "hideChrome": false, "hideFooter": false, "hideSplunkBar": false})
+            .render()
+            .getContainerElement()
+            .appendChild($('.dashboard-body')[0]);
+
+        //
+        // DASHBOARD EDITOR
+        //
+
+        new Dashboard({
+            id: 'dashboard',
+            el: $('.dashboard-body'),
+            showTitle: true,
+            editable: true
+        }, {tokens: true}).render();
+
+
+        //
+        // VIEWS: VISUALIZATION ELEMENTS
+        //
+
+
+        //
+        // VIEWS: FORM INPUTS
+        //
+
+        var demoSelectionInput = new DropdownInput({
+            "id": "demoSelectionInput",
+            "choices": [
+                {"value": "robotarm", "label": "Robot Arm"},
+                {"value": "windmillfarm", "label": "Windmill Farm"},
+		{"value": "assetintel", "label": "Asset Intelligence"}
+            ],
+            "selectFirstChoice": false,
+            "showClearButton": true,
+            "value": "$form.dataSetupDemoToken$",
+            "el": $('#demoSelectionInput')
+        }, {tokens: true}).render();
+
+        demoSelectionInput.on("change", function(newValue) {
+            FormUtils.handleValueChange(demoSelectionInput);
+        });
+        
+
+        // 
+        // SUBMIT FORM DATA
+        //
+
+        var submit = new SubmitButton({
+            id: 'submit',
+            el: $('#search_btn')
+        }, {tokens: true}).render();
+
+        submit.on("submit", function() {
+            submitTokens();
+            clearStatus();
+            buildDemoData(defaultTokenModel.get("dataSetupDemoToken"));
+        });
+
+        // Initialize time tokens to default
+        if (!defaultTokenModel.has('earliest') && !defaultTokenModel.has('latest')) {
+            defaultTokenModel.set({ earliest: '0', latest: '' });
+        }
+
+        if (!_.isEmpty(urlTokenModel.toJSON())){
+            submitTokens();
+        }
+
+
+        //
+        // DASHBOARD READY
+        //
+
+        DashboardController.ready();
+        pageLoading = false;
+
+    }
+);
+// ]]>
+</script>
+</body>
+</html>

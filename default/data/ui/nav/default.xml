@@ -2,7 +2,10 @@
   <view name="scene_builder" />
   <view name="component_field_mapping" />
   <view name="arm_automationview" />
-  <view name="search" default="true"/>
-  <view name="tutorial"/>
-  <view name="dashboards" />
+  <view name="search" default="true"/>
+  <collection label="Setup">
+     <view name="tutorial"/>
+     <view name="data_setup_wizard"/>
+  </collection>
+  <view name="dashboards" />
 </nav>
