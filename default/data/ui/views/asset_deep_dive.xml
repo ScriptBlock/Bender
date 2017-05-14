@@ -1,0 +1,94 @@
+<form>
+  <label>Asset Deep Dive</label>
+  <fieldset submitButton="false">
+    <input type="dropdown" token="tok_asset" searchWhenChanged="true">
+      <label>Available Assets</label>
+      <fieldForLabel>L2</fieldForLabel>
+      <fieldForValue>L2</fieldForValue>
+      <search>
+        <query>|inputlookup 58d173ebb9eef5c46c37de21_lookup | where length(L2) &gt; 1 | table L2</query>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </search>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>Grinder Viz</title>
+      <viz type="Bender.rotator">
+        <search>
+          <query>| mstats latest(_value) where metric_name = "Scranton.Line #1.Wood Grinder A*" by metric_name | rename metric_name as part | rename latest(_value) as value | eval value = case(like(part, "%RPM%"), value/10000, like(part, "%Torque%"), value/10, 1==1, value)</query>
+          <earliest>rt</earliest>
+          <latest>rt</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="Bender.rotator.highTemp">40</option>
+        <option name="Bender.rotator.medTemp">30</option>
+        <option name="Bender.rotator.sceneName">Paper Grinder</option>
+        <option name="drilldown">none</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.size">medium</option>
+      </viz>
+    </panel>
+    <panel>
+      <title>Metrics Over Time</title>
+      <chart>
+        <search>
+          <query>| mstats span=5s latest(_value) as value where metric_name = "Scranton.Line #1.Wood Grinder A*" by metric_name | timechart cont=f max(value) by metric_name</query>
+          <earliest>rt-30m</earliest>
+          <latest>rt</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">line</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.size">medium</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <single depends="$clickedpartname$">
+        <title>Current value of $clickedpartname$</title>
+        <search>
+          <query>|mstats span=30s latest(_value) as Value where metric_name = "Scranton.Line #1.Wood Grinder A.RPM"</query>
+          <earliest>rt-5m</earliest>
+          <latest>rt</latest>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+    <panel>
+      <chart depends="$clickedpartname$">
+        <title>Standard Deviation over last 5minutes for $clickedpartname$</title>
+        <search>
+          <query>|mstats span=30s stdev(_value) as value where metric_name = "Scranton.Line #1.Wood Grinder A.Torque" | timechart cont=f latest(value) as "Standard Deviation"</query>
+          <earliest>rt-5m</earliest>
+          <latest>rt</latest>
+        </search>
+        <option name="drilldown">none</option>
+      </chart>
+    </panel>
+  </row>
+</form>
