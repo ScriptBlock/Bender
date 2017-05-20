@@ -6,6 +6,7 @@ JavaScript tweening engine for easy animations, incorporating optimised Robert P
 [![NPM Downloads][downloads-image]][downloads-url]
 [![Travis tests][travis-image]][travis-url]
 [![Flattr this][flattr-image]][flattr-url]
+[![CDNJS][cdnjs-image]][cdnjs-url]
 
 ```javascript
 var coords = { x: 0, y: 0 };
@@ -31,6 +32,14 @@ Download the [library](https://raw.githubusercontent.com/tweenjs/tween.js/master
 ```html
 <script src="js/Tween.js"></script>
 ```
+
+You can also reference a CDN-hosted version in your code, thanks to cdnjs. For example:
+
+```html
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/16.3.5/Tween.min.js"></script>
+```
+
+See [tween.js](https://cdnjs.com/libraries/tween.js/) for more versions.
 
 ### More advanced users might want to...
 
@@ -124,7 +133,7 @@ If you want to add any feature or change existing features, you *must* run the t
 
 ## People
 
-Maintainer: [sole](https://github.com/sole).
+Maintainers: [mikebolt](https://github.com/mikebolt), [sole](https://github.com/sole).
 
 [All contributors](http://github.com/tweenjs/tween.js/contributors).
 
@@ -149,3 +158,5 @@ Maintainer: [sole](https://github.com/sole).
 [travis-url]: https://travis-ci.org/tweenjs/tween.js
 [flattr-image]: https://api.flattr.com/button/flattr-badge-large.png
 [flattr-url]: https://flattr.com/thing/45014/tween-js
+[cdnjs-image]: https://img.shields.io/cdnjs/v/tween.js.svg
+[cdnjs-url]: https://cdnjs.com/libraries/tween.js

@@ -10,15 +10,20 @@
 </form>
 
 <form class="splunk-formatter-section" section-label="Threshold">
-	<p>Everything over high temperature value will reflect a bright red cap for that joint</p>
-    <splunk-control-group label="High">
-        <splunk-text-input name="{{VIZ_NAMESPACE}}.highTemp" value="40">
-        </splunk-text-input>
-    </splunk-control-group>
-	<p>Everything over medium temperature value but below high will reflect a medium red cap for that joint</p>
-    <splunk-control-group label="Medium">
-        <splunk-text-input name="{{VIZ_NAMESPACE}}.medTemp" value="30">
-        </splunk-text-input>
-    </splunk-control-group>
-    <p>All other temperatures will be standard blue</p>
+	<p>Everything above this temperature value will be this color</p>
+	    <splunk-control-group label="High">
+		<splunk-color-picker name="{{VIZ_NAMESPACE}}.highTempColor" value="#ff0000"></splunk-color-picker>
+        	<splunk-text-input name="{{VIZ_NAMESPACE}}.highTemp" value="80"></splunk-text-input>
+	    </splunk-control-group>
+
+	<p>Everything above this temperature value will be this color</p>
+	    <splunk-control-group label="Medium">
+		<splunk-color-picker name="{{VIZ_NAMESPACE}}.medTempColor" value="#ff6666"></splunk-color-picker>
+	        <splunk-text-input name="{{VIZ_NAMESPACE}}.medTemp" value="60"></splunk-text-input>
+	    </splunk-control-group>
+
+	<p>Everything else will be this color</p>
+	    <splunk-control-group label="All Others">
+		<splunk-color-picker name="{{VIZ_NAMESPACE}}.otherTempColor" value="#0000ff"></splunk-color-picker>
+        	</splunk-control-group>
 </form>

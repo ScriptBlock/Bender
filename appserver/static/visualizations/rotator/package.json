@@ -14,11 +14,11 @@
     "webpack": "^1.12.6"
   },
   "dependencies": {
-    "three": "^0.82.1",
-    "three-math": "^0.69.0",
-    "tween.js":"^16.3.5",
     "jquery": "^2.2.4",
-    "underscore": "^1.8.3",
-    "mathjs":"^3.7.0"
+    "mathjs": "^3.7.0",
+    "three": "^0.85.2",
+    "three-math": "^0.69.0",
+    "tween.js": "^16.3.5",
+    "underscore": "^1.8.3"
   }
 }
