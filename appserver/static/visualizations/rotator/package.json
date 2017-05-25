@@ -16,7 +16,7 @@
   "dependencies": {
     "jquery": "^2.2.4",
     "mathjs": "^3.7.0",
-    "three": "^0.85.2",
+    "three": "^0.82.0",
     "three-math": "^0.69.0",
     "tween.js": "^16.3.5",
     "underscore": "^1.8.3"

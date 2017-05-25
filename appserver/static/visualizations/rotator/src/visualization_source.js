@@ -54,7 +54,10 @@ var sceneComponentsCounted = 0;
 
 var sceneModelsDeferred = $.Deferred();
 var modelMappingDeferred = $.Deferred();
+var sceneReady =  $.Deferred();
+var canMouseOver = false;
 
+var modelPartNameToken, modelPartMappingToken, modelKVKeyToken;
 
 var globalVizBase, globalConfig, globalNamespace, globalElement;
 var orbitControls, transformControl;
@@ -132,7 +135,7 @@ function render() {
         //100 is the default bogus value for some reason.  this code is a little henky, but works.
         if(globalElement.innerWidth() != 100 && globalElement.innerHeight() != 100) {
   //          console.log("running first pass render...");
-
+console.log("first time render call.. creating camera and stuff");
             renderer.setSize( globalElement.innerWidth(), globalElement.innerHeight() );
             camera = new THREE.PerspectiveCamera( 80, globalElement.innerWidth()/globalElement.innerHeight(), 0.1, 1000 );
             camera.position.y = 55;
@@ -224,6 +227,7 @@ function saveSceneModels() {
  * do this.
  */
 function updateFromDom() {
+
 
         //This is like a constant declated in the CRUD screens.
         if($("vizbridge_crudmode").text() != "") {
@@ -367,6 +371,8 @@ function loadSceneByName(sceneName) {
  * Sets up scene loading.  Might need some extra checks to make sure the viz/DOM is all clean
  */
 function loadScene(sceneKey) {
+    console.log("calling load scene");
+    canMouseOver = false;
     if(transformControl) {
         transformControl.detach();
     }
@@ -379,6 +385,8 @@ function loadScene(sceneKey) {
 
     sceneModelsDeferred = $.Deferred();
     modelMappingDeferred = $.Deferred();
+    sceneReady = $.Deferred();
+
 
 
         //TODO review whether we need to do this long-term
@@ -393,6 +401,7 @@ function loadScene(sceneKey) {
  * See comments in code
  */
 function loadSceneModels(sceneKey) {
+console.log("loading scene models");
     var searchString = '{"sceneKey": "' + sceneKey + '"}';
     var mappingData;
     objectsHaveBeenAdded = true;
@@ -431,6 +440,7 @@ function loadSceneModels(sceneKey) {
 
                                         //indicate that the scene is loaded.
                                         sceneModelsDeferred.resolve(currentSceneComponents);
+					console.log("finished loading scene models (deferred)");
                                     }
                                     );
                     });
@@ -438,7 +448,9 @@ function loadSceneModels(sceneKey) {
         //since the queries above can take a little bit, we wait here for the data to populate before creating the actual scene models.
         //here is where we are actually building the three.js objects
         $.when(sceneModelsDeferred).done(function() {
-
+            console.log("waited for scene models to load, mapping components");
+            console.log("there are " + _.size(currentSceneComponents) + " components to load");
+            var modelLoadCounter = 0;
             _.each(currentSceneComponents,function(model) {
 
                         //use the provided model name to load the object from static or whatever
@@ -470,14 +482,21 @@ function loadSceneModels(sceneKey) {
                                 //loop through this model's mapping data (set above).  Loop through each mapped field and build the hash.  the hash contains the specific mapping metdata but also a reference
                                 //to the part itself.  this let's us call property changes/methods right on the object without having to look things up or traverse any more than necessary.
                                 _.each(model.mappingData,function(mapping) {
+				    console.log("adding mapping data");
                                     uniqueToPartMapping[mapping.dataFieldName] = new Object();
                                     uniqueToPartMapping[mapping.dataFieldName].part = currentSceneComponents[model._key].threeObject.getObjectByName(mapping.modelComponentName);
                                     uniqueToPartMapping[mapping.dataFieldName].mappingData = mapping;
                                 });
 
                                 scene.add(currentSceneComponents[model._key].threeObject);
+				modelLoadCounter++; console.log("loaded item number: " + modelLoadCounter);
+				if(modelLoadCounter == _.size(currentSceneComponents)) { console.log("loaded all models, resolving sceneready"); sceneReady.resolve(); }
+				console.log("finished adding scene model components");
+				
                             });
                     });
+//		sceneReady.resolve();
+		
         });
     }
 
@@ -485,6 +504,7 @@ function loadSceneModels(sceneKey) {
  * Tear things down and rebuild.
  */
 function reloadSceneModels() {
+console.log("reloading scene models");
 
     sceneModelsDeferred = $.Deferred();
     modelMappingDeferred = $.Deferred();
@@ -646,6 +666,7 @@ function setPartTemperature(partInfo, newValue) {
  *    Rotation, constantrotation, temperature, light, door, motion, linear/rail
  */
 function processPart(partInfo, newValue) {
+    console.log("processing part");
     var thePart = partInfo.part;
     var mappingMetaData = partInfo.mappingData;
 /*
@@ -724,6 +745,7 @@ function setEmissive(source, dest) {
 var selectedComponentEmissive = { r: 255, g: 0, b: 0};
 
 function onMouseMove(event) {
+     if(!canMouseOver) { return; }
 //     if(objectUnderMouse.obj) { return null; }
      var tempObjectUnderMouse = findObjectUnderMouse(event);
 
@@ -818,12 +840,30 @@ function onDocumentMouseDown( event ) {
             //var kvKey = findFieldIn(intersects[0].object, "kvkey");
             var kvKey = findFieldIn(objectUnderMouse.obj, "kvkey");
             var mappingInfoTemp = currentSceneComponents[kvKey];
-            var dataFieldName = _.findWhere(mappingInfoTemp.mappingData, {"modelComponentName":objectUnderMouse.partName}).dataFieldName
+
+
+            console.log("setting kvkey token: " + modelKVKeyToken + " to " + kvKey);
+            setToken(modelKVKeyToken, kvKey);
+
+            setToken(modelPartNameToken, objectUnderMouse.partName);
+  //  console.log("setting token: " + modelPartNameToken + " : to : " + objectUnderMouse.partName);            
+
+
+            var componentMappingTemp = _.findWhere(mappingInfoTemp.mappingData, {"modelComponentName":objectUnderMouse.partName});
+            var dataFieldName = null;
+            if(componentMappingTemp && componentMappingTemp.dataFieldName) {
+                dataFieldName = componentMappingTemp.dataFieldName;
+            }
             if(dataFieldName) {
                 //console.log("settinf clickedpartname token to " + dataFieldName);
-                setToken("clickedpartname", dataFieldName);
+                //setToken("clickedpartname", dataFieldName);
+                setToken(modelPartMappingToken, dataFieldName);
+//    console.log("setting token: " + modelPartMappingToken + " : to : " + dataFieldName);
+            } else {
+                setToken(modelPartMappingToken, null);
             }
         }
+
 
 /*
 * Rather than do anything in the GUI, let's pass a token to the dashboard!
@@ -932,18 +972,19 @@ function updateTextSprite(sprite, textContent) {
 
 
         initialize:function() {
-
+		console.log("calling visualization initialize");
             //just some viz setup stuff
             SplunkVisualizationBase.prototype.initialize.apply(this, arguments);
             this.$el = $(this.el);
             globalElement = this.$el;
 
+	console.log("adding bender class");
             this.$el.addClass('bender');
 
             //build up the base scane
             scene = createDefaultScene();
 
-
+	console.log("creating renderer");
             //build up the viz renderer
             renderer = new THREE.WebGLRenderer();
             renderer.setPixelRatio( window.devicePixelRatio );
@@ -951,12 +992,13 @@ function updateTextSprite(sprite, textContent) {
 
 
             globalVizBase = this;
-
+	console.log("creating mvc service");
             mvcService = mvc.createService({ owner: "nobody"});
             loader = new THREE.ObjectLoader();
 
 
             //For model interaction
+    	console.log("adding event listeners");
             renderer.domElement.addEventListener( 'mousedown', onDocumentMouseDown, false );
             renderer.domElement.addEventListener( 'mousemove', onMouseMove, false);
             raycaster = new THREE.Raycaster();
@@ -973,7 +1015,7 @@ function updateTextSprite(sprite, textContent) {
             composer.addPass(outlinePass);
 */
 
-
+	console.log("calling animate");
             animate();
 
         },
@@ -985,8 +1027,11 @@ function updateTextSprite(sprite, textContent) {
 
 
         updateView:function(data,config) {
-            globalConfig = config;
-            globalNamespace = this.getPropertyNamespaceInfo().propertyNamespace;
+	   globalConfig = config;
+	   globalNamespace = this.getPropertyNamespaceInfo().propertyNamespace;
+            console.log("update view called");
+            //globalConfig = config;
+            //globalNamespace = this.getPropertyNamespaceInfo().propertyNamespace;
             var preferenceBasedSceneName = getVizFormatterParam("sceneName");
 
 
@@ -999,7 +1044,18 @@ function updateTextSprite(sprite, textContent) {
                 }
             }
 
+            modelPartNameToken = getVizFormatterParam("modelPartNameToken") || "clickedPartName_tok";
+            modelPartMappingToken = getVizFormatterParam("modelPartMappingToken") || "clickedModelMapping_tok";
+            modelKVKeyToken = getVizFormatterParam("modelKVKeyToken") || "clickedModelKVKey_tok";
+
+
+
                     // Check for empty data
+
+	  console.log("in update view, waiting for sceneready...");
+	  $.when(sceneReady).done(function() {
+            console.log("sceneready executed, processing data");
+            canMouseOver = true;
             if(_.size(data.results) < 1) { console.log("no data"); return; }
 
 
@@ -1020,6 +1076,7 @@ function updateTextSprite(sprite, textContent) {
                 }
 
             });
+         }); //when sceneready done
         },
 
         // Search data params
@@ -1032,6 +1089,7 @@ function updateTextSprite(sprite, textContent) {
 
         // Override to respond to re-sizing events
         reflow:function() {
+	    console.log("viz reflow called");
             renderer.setSize( globalElement.innerWidth(), globalElement.innerHeight() );
             //composer.setSize( globalElement.innerWidth(), globalElement.innerHeight() );
 

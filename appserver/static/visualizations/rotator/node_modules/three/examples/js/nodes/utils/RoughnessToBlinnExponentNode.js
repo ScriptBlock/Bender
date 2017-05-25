@@ -35,15 +35,7 @@ THREE.RoughnessToBlinnExponentNode.prototype.generate = function( builder, outpu
 
 			builder.include( THREE.RoughnessToBlinnExponentNode.getSpecularMIPLevel );
 
-			if ( builder.isCache( 'clearCoat' ) ) {
-
-				return builder.format( 'getSpecularMIPLevel( Material_ClearCoat_BlinnShininessExponent( material ), 8 )', this.type, output );
-
-			} else {
-				
-				return builder.format( 'getSpecularMIPLevel( Material_BlinnShininessExponent( material ), 8 )', this.type, output );
-				
-			}
+			return builder.format( 'getSpecularMIPLevel( Material_BlinnShininessExponent( material ), 8 )', this.type, output );
 
 		} else {
 

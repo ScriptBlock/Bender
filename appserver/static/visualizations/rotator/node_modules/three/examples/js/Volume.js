@@ -75,6 +75,7 @@ THREE.Volume = function( xLength, yLength, zLength, type, arrayBuffer ) {
 			case 'uint32' :
 			case 'uint' :
 			case 'unsigned int' :
+			case 'uint32' :
 			case 'uint32_t' :
 				this.data = new Uint32Array( arrayBuffer );
 				break;
@@ -187,7 +188,7 @@ THREE.Volume = function( xLength, yLength, zLength, type, arrayBuffer ) {
 	 * @member {Array} RASDimensions This array holds the dimensions of the volume in the RAS space
 	 */
 
-};
+}
 
 THREE.Volume.prototype = {
 
@@ -444,4 +445,4 @@ THREE.Volume.prototype = {
 
 	}
 
-};
+}

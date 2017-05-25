@@ -1,12 +1,22 @@
 #ifdef USE_FOG
 
-	#ifdef FOG_EXP2
+	#ifdef USE_LOGDEPTHBUF_EXT
 
-		float fogFactor = whiteCompliment( exp2( - fogDensity * fogDensity * fogDepth * fogDepth * LOG2 ) );
+		float depth = gl_FragDepthEXT / gl_FragCoord.w;
 
 	#else
 
-		float fogFactor = smoothstep( fogNear, fogFar, fogDepth );
+		float depth = gl_FragCoord.z / gl_FragCoord.w;
+
+	#endif
+
+	#ifdef FOG_EXP2
+
+		float fogFactor = whiteCompliment( exp2( - fogDensity * fogDensity * depth * depth * LOG2 ) );
+
+	#else
+
+		float fogFactor = smoothstep( fogNear, fogFar, depth );
 
 	#endif
 

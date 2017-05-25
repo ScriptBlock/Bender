@@ -2,7 +2,7 @@
  * @author mrdoob / http://mrdoob.com/
  */
 
-function RollerCoasterGeometry( curve, divisions ) {
+var RollerCoasterGeometry = function ( curve, size ) {
 
 	THREE.BufferGeometry.call( this );
 
@@ -28,13 +28,13 @@ function RollerCoasterGeometry( curve, divisions ) {
 	// shapes
 
 	var step = [
-		new THREE.Vector3( -0.225,  0, 0 ),
-		new THREE.Vector3(  0, -0.050, 0 ),
-		new THREE.Vector3(  0, -0.175, 0 ),
+		new THREE.Vector3( -2.25,  0, 0 ),
+		new THREE.Vector3(  0,  -0.5, 0 ),
+		new THREE.Vector3(  0, -1.75, 0 ),
 
-		new THREE.Vector3(  0, -0.050, 0 ),
-		new THREE.Vector3(  0.225,  0, 0 ),
-		new THREE.Vector3(  0, -0.175, 0 )
+		new THREE.Vector3(  0,  -0.5, 0 ),
+		new THREE.Vector3(  2.25,  0, 0 ),
+		new THREE.Vector3(  0, -1.75, 0 )
 	];
 
 	var PI2 = Math.PI * 2;
@@ -45,7 +45,7 @@ function RollerCoasterGeometry( curve, divisions ) {
 	for ( var i = 0; i < sides; i ++ ) {
 
 		var angle = ( i / sides ) * PI2;
-		tube1.push( new THREE.Vector3( Math.sin( angle ) * 0.06, Math.cos( angle ) * 0.06, 0 ) );
+		tube1.push( new THREE.Vector3( Math.sin( angle ) * 0.6, Math.cos( angle ) * 0.6, 0 ) );
 
 	}
 
@@ -55,14 +55,14 @@ function RollerCoasterGeometry( curve, divisions ) {
 	for ( var i = 0; i < sides; i ++ ) {
 
 		var angle = ( i / sides ) * PI2;
-		tube2.push( new THREE.Vector3( Math.sin( angle ) * 0.025, Math.cos( angle ) * 0.025, 0 ) );
+		tube2.push( new THREE.Vector3( Math.sin( angle ) * 0.25, Math.cos( angle ) * 0.25, 0 ) );
 
 	}
 
 	var vector = new THREE.Vector3();
 	var normal = new THREE.Vector3();
 
-	function drawShape( shape, color ) {
+	var drawShape = function ( shape, color ) {
 
 		normal.set( 0, 0, -1 ).applyQuaternion( quaternion );
 
@@ -104,7 +104,7 @@ function RollerCoasterGeometry( curve, divisions ) {
 	var normal3 = new THREE.Vector3();
 	var normal4 = new THREE.Vector3();
 
-	function extrudeShape( shape, offset, color ) {
+	var extrudeShape = function ( shape, offset, color ) {
 
 		for ( var j = 0, jl = shape.length; j < jl; j ++ ) {
 
@@ -175,9 +175,9 @@ function RollerCoasterGeometry( curve, divisions ) {
 
 	var offset = new THREE.Vector3();
 
-	for ( var i = 1; i <= divisions; i ++ ) {
+	for ( var i = 1; i <= size; i ++ ) {
 
-		point.copy( curve.getPointAt( i / divisions ) );
+		point.copy( curve.getPointAt( i / size ) );
 
 		up.set( 0, 1, 0 );
 
@@ -195,9 +195,9 @@ function RollerCoasterGeometry( curve, divisions ) {
 
 		}
 
-		extrudeShape( tube1, offset.set(  0,  -0.125, 0 ), color2 );
-		extrudeShape( tube2, offset.set(  0.2, 0,     0 ), color1 );
-		extrudeShape( tube2, offset.set( -0.2, 0,     0 ), color1 );
+		extrudeShape( tube1, offset.set( 0, -1.25, 0 ), color2 );
+		extrudeShape( tube2, offset.set( 2, 0, 0 ), color1 );
+		extrudeShape( tube2, offset.set( -2, 0, 0 ), color1 );
 
 		prevPoint.copy( point );
 		prevQuaternion.copy( quaternion );
@@ -214,7 +214,7 @@ function RollerCoasterGeometry( curve, divisions ) {
 
 RollerCoasterGeometry.prototype = Object.create( THREE.BufferGeometry.prototype );
 
-function RollerCoasterLiftersGeometry( curve, divisions ) {
+var RollerCoasterLiftersGeometry = function ( curve, size ) {
 
 	THREE.BufferGeometry.call( this );
 
@@ -231,21 +231,21 @@ function RollerCoasterLiftersGeometry( curve, divisions ) {
 	// shapes
 
 	var tube1 = [
-		new THREE.Vector3(  0,  0.05, -0.05 ),
-		new THREE.Vector3(  0,  0.05,  0.05 ),
-		new THREE.Vector3(  0, -0.05,  0 )
+		new THREE.Vector3(  0,  0.5, -0.5 ),
+		new THREE.Vector3(  0,  0.5,  0.5 ),
+		new THREE.Vector3(  0, -0.5,  0 )
 	];
 
 	var tube2 = [
-		new THREE.Vector3( -0.05, 0,  0.05 ),
-		new THREE.Vector3( -0.05, 0, -0.05 ),
-		new THREE.Vector3(  0.05, 0,  0 )
+		new THREE.Vector3( -0.5, 0,  0.5 ),
+		new THREE.Vector3( -0.5, 0, -0.5 ),
+		new THREE.Vector3(  0.5, 0,  0 )
 	];
 
 	var tube3 = [
-		new THREE.Vector3(  0.05, 0, -0.05 ),
-		new THREE.Vector3(  0.05, 0,  0.05 ),
-		new THREE.Vector3( -0.05, 0,  0 )
+		new THREE.Vector3(  0.5, 0, -0.5 ),
+		new THREE.Vector3(  0.5, 0,  0.5 ),
+		new THREE.Vector3( -0.5, 0,  0 )
 	];
 
 	var vector1 = new THREE.Vector3();
@@ -258,26 +258,26 @@ function RollerCoasterLiftersGeometry( curve, divisions ) {
 	var normal3 = new THREE.Vector3();
 	var normal4 = new THREE.Vector3();
 
-	function extrudeShape( shape, fromPoint, toPoint ) {
+	var extrudeShape = function ( shape, fromPoint, toPoint ) {
 
 		for ( var j = 0, jl = shape.length; j < jl; j ++ ) {
 
 			var point1 = shape[ j ];
 			var point2 = shape[ ( j + 1 ) % jl ];
 
-			vector1.copy( point1 );
+			vector1.copy( point1 )
 			vector1.applyQuaternion( quaternion );
 			vector1.add( fromPoint );
 
-			vector2.copy( point2 );
+			vector2.copy( point2 )
 			vector2.applyQuaternion( quaternion );
 			vector2.add( fromPoint );
 
-			vector3.copy( point2 );
+			vector3.copy( point2 )
 			vector3.applyQuaternion( quaternion );
 			vector3.add( toPoint );
 
-			vector4.copy( point1 );
+			vector4.copy( point1 )
 			vector4.applyQuaternion( quaternion );
 			vector4.add( toPoint );
 
@@ -322,10 +322,10 @@ function RollerCoasterLiftersGeometry( curve, divisions ) {
 	var fromPoint = new THREE.Vector3();
 	var toPoint = new THREE.Vector3();
 
-	for ( var i = 1; i <= divisions; i ++ ) {
+	for ( var i = 1; i <= size; i ++ ) {
 
-		point.copy( curve.getPointAt( i / divisions ) );
-		tangent.copy( curve.getTangentAt( i / divisions ) );
+		point.copy( curve.getPointAt( i / size ) );
+		tangent.copy( curve.getTangentAt( i / size ) );
 
 		var angle = Math.atan2( tangent.x, tangent.z );
 
@@ -333,33 +333,33 @@ function RollerCoasterLiftersGeometry( curve, divisions ) {
 
 		//
 
-		if ( point.y > 10 ) {
+		if ( point.y > 100 ) {
 
-			fromPoint.set( -0.75, -0.35, 0 );
+			fromPoint.set( -7.5, -3.5, 0 );
 			fromPoint.applyQuaternion( quaternion );
 			fromPoint.add( point );
 
-			toPoint.set( 0.75, -0.35, 0 );
+			toPoint.set( 7.5, -3.5, 0 );
 			toPoint.applyQuaternion( quaternion );
 			toPoint.add( point );
 
 			extrudeShape( tube1, fromPoint, toPoint );
 
-			fromPoint.set( -0.7, -0.3, 0 );
+			fromPoint.set( -7, -3, 0 );
 			fromPoint.applyQuaternion( quaternion );
 			fromPoint.add( point );
 
-			toPoint.set( -0.7, -point.y, 0 );
+			toPoint.set( -7, -point.y, 0 );
 			toPoint.applyQuaternion( quaternion );
 			toPoint.add( point );
 
 			extrudeShape( tube2, fromPoint, toPoint );
 
-			fromPoint.set( 0.7, -0.3, 0 );
+			fromPoint.set( 7, -3, 0 );
 			fromPoint.applyQuaternion( quaternion );
 			fromPoint.add( point );
 
-			toPoint.set( 0.7, -point.y, 0 );
+			toPoint.set( 7, -point.y, 0 );
 			toPoint.applyQuaternion( quaternion );
 			toPoint.add( point );
 
@@ -367,7 +367,7 @@ function RollerCoasterLiftersGeometry( curve, divisions ) {
 
 		} else {
 
-			fromPoint.set( 0, -0.2, 0 );
+			fromPoint.set( 0, -2, 0 );
 			fromPoint.applyQuaternion( quaternion );
 			fromPoint.add( point );
 
@@ -388,7 +388,7 @@ function RollerCoasterLiftersGeometry( curve, divisions ) {
 
 RollerCoasterLiftersGeometry.prototype = Object.create( THREE.BufferGeometry.prototype );
 
-function RollerCoasterShadowGeometry( curve, divisions ) {
+var RollerCoasterShadowGeometry = function ( curve, size ) {
 
 	THREE.BufferGeometry.call( this );
 
@@ -412,9 +412,9 @@ function RollerCoasterShadowGeometry( curve, divisions ) {
 	var vector3 = new THREE.Vector3();
 	var vector4 = new THREE.Vector3();
 
-	for ( var i = 1; i <= divisions; i ++ ) {
+	for ( var i = 1; i <= size; i ++ ) {
 
-		point.copy( curve.getPointAt( i / divisions ) );
+		point.copy( curve.getPointAt( i / size ) );
 		point.y = 0;
 
 		forward.subVectors( point, prevPoint );
@@ -423,19 +423,19 @@ function RollerCoasterShadowGeometry( curve, divisions ) {
 
 		quaternion.setFromAxisAngle( up, angle );
 
-		vector1.set( -0.3, 0, 0 );
+		vector1.set( -3, 0, 0 );
 		vector1.applyQuaternion( quaternion );
 		vector1.add( point );
 
-		vector2.set(  0.3, 0, 0 );
+		vector2.set(  3, 0, 0 );
 		vector2.applyQuaternion( quaternion );
 		vector2.add( point );
 
-		vector3.set(  0.3, 0, 0 );
+		vector3.set(  3, 0, 0 );
 		vector3.applyQuaternion( prevQuaternion );
 		vector3.add( prevPoint );
 
-		vector4.set( -0.3, 0, 0 );
+		vector4.set( -3, 0, 0 );
 		vector4.applyQuaternion( prevQuaternion );
 		vector4.add( prevPoint );
 
@@ -458,7 +458,7 @@ function RollerCoasterShadowGeometry( curve, divisions ) {
 
 RollerCoasterShadowGeometry.prototype = Object.create( THREE.BufferGeometry.prototype );
 
-function SkyGeometry() {
+var SkyGeometry = function () {
 
 	THREE.BufferGeometry.call( this );
 
@@ -466,11 +466,11 @@ function SkyGeometry() {
 
 	for ( var i = 0; i < 100; i ++ ) {
 
-		var x = Math.random() * 800 - 400;
-		var y = Math.random() * 50 + 50;
-		var z = Math.random() * 800 - 400;
+		var x = Math.random() * 8000 - 4000;
+		var y = Math.random() * 500 + 500;
+		var z = Math.random() * 8000 - 4000;
 
-		var size = Math.random() * 40 + 20;
+		var size = Math.random() * 400 + 200;
 
 		vertices.push( x - size, y, z - size );
 		vertices.push( x + size, y, z - size );
@@ -489,7 +489,7 @@ function SkyGeometry() {
 
 SkyGeometry.prototype = Object.create( THREE.BufferGeometry.prototype );
 
-function TreesGeometry( landscape ) {
+var TreesGeometry = function ( landscape ) {
 
 	THREE.BufferGeometry.call( this );
 
@@ -501,10 +501,10 @@ function TreesGeometry( landscape ) {
 
 	for ( var i = 0; i < 2000; i ++ ) {
 
-		var x = Math.random() * 500 - 250;
-		var z = Math.random() * 500 - 250;
+		var x = Math.random() * 5000 - 2500;
+		var z = Math.random() * 5000 - 2500;
 
-		raycaster.ray.origin.set( x, 50, z );
+		raycaster.ray.origin.set( x, 500, z );
 
 		var intersections = raycaster.intersectObject( landscape );
 
@@ -512,19 +512,19 @@ function TreesGeometry( landscape ) {
 
 		var y = intersections[ 0 ].point.y;
 
-		var height = Math.random() * 5 + 0.5;
+		var height = Math.random() * 50 + 5;
 
 		var angle = Math.random() * Math.PI * 2;
 
-		vertices.push( x + Math.sin( angle ), y, z + Math.cos( angle ) );
+		vertices.push( x + Math.sin( angle ) * 10, y, z + Math.cos( angle ) * 10 );
 		vertices.push( x, y + height, z );
-		vertices.push( x + Math.sin( angle + Math.PI ), y, z + Math.cos( angle + Math.PI ) );
+		vertices.push( x + Math.sin( angle + Math.PI ) * 10, y, z + Math.cos( angle + Math.PI ) * 10 );
 
 		angle += Math.PI / 2;
 
-		vertices.push( x + Math.sin( angle ), y, z + Math.cos( angle ) );
+		vertices.push( x + Math.sin( angle ) * 10, y, z + Math.cos( angle ) * 10 );
 		vertices.push( x, y + height, z );
-		vertices.push( x + Math.sin( angle + Math.PI ), y, z + Math.cos( angle + Math.PI ) );
+		vertices.push( x + Math.sin( angle + Math.PI ) * 10, y, z + Math.cos( angle + Math.PI ) * 10 );
 
 		var random = Math.random() * 0.1;
 

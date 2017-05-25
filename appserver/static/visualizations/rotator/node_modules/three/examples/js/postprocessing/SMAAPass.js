@@ -15,7 +15,6 @@ THREE.SMAAPass = function ( width, height ) {
 		minFilter: THREE.LinearFilter,
 		format: THREE.RGBFormat
 	} );
-	this.edgesRT.texture.name = "SMAAPass.edges";
 
 	this.weightsRT = new THREE.WebGLRenderTarget( width, height, {
 		depthBuffer: false,
@@ -24,7 +23,6 @@ THREE.SMAAPass = function ( width, height ) {
 		minFilter: THREE.LinearFilter,
 		format: THREE.RGBAFormat
 	} );
-	this.weightsRT.texture.name = "SMAAPass.weights";
 
 	// textures
 
@@ -32,7 +30,6 @@ THREE.SMAAPass = function ( width, height ) {
 	areaTextureImage.src = this.getAreaTexture();
 
 	this.areaTexture = new THREE.Texture();
-	this.areaTexture.name = "SMAAPass.area";
 	this.areaTexture.image = areaTextureImage;
 	this.areaTexture.format = THREE.RGBFormat;
 	this.areaTexture.minFilter = THREE.LinearFilter;
@@ -44,7 +41,6 @@ THREE.SMAAPass = function ( width, height ) {
 	searchTextureImage.src = this.getSearchTexture();
 
 	this.searchTexture = new THREE.Texture();
-	this.searchTexture.name = "SMAAPass.search";
 	this.searchTexture.image = searchTextureImage;
 	this.searchTexture.magFilter = THREE.NearestFilter;
 	this.searchTexture.minFilter = THREE.NearestFilter;
@@ -104,7 +100,6 @@ THREE.SMAAPass = function ( width, height ) {
 	this.scene  = new THREE.Scene();
 
 	this.quad = new THREE.Mesh( new THREE.PlaneBufferGeometry( 2, 2 ), null );
-	this.quad.frustumCulled = false; // Avoid getting clipped
 	this.scene.add( this.quad );
 
 };

@@ -27,3 +27,19 @@
 		<splunk-color-picker name="{{VIZ_NAMESPACE}}.otherTempColor" value="#0000ff"></splunk-color-picker>
         	</splunk-control-group>
 </form>
+
+<form class="splunk-formatter-section" section-label="Tokens">
+	<p>Token names for use in dashboards when the 3d model is clicked</p>
+        <splunk-control-group label="Model part name">
+		<splunk-text-input name="{{VIZ_NAMESPACE}}.modelPartNameToken" value="clickedPartName_tok"></splunk-text-input>
+        </splunk-control-group>
+
+        <splunk-control-group label="Model part mapping name"> 
+                <splunk-text-input name="{{VIZ_NAMESPACE}}.modelPartMappingToken" value="clickedModelMapping_tok"></splunk-text-input>
+        </splunk-control-group>
+
+        <splunk-control-group label="Model KV Key">
+                <splunk-text-input name="{{VIZ_NAMESPACE}}.modelKVKeyToken" value="clickedModelKVKey_tok"></splunk-text-input>
+        </splunk-control-group>
+
+</form>

@@ -1,0 +1,25 @@
+index,host,source,sourcetype,_raw
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill1_naselle_rotation Value=@@naselle_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill1_cone_rotation Value=@@cone_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill2_naselle_rotation Value=@@naselle_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill2_cone_rotation Value=@@cone_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill3_naselle_rotation Value=@@naselle_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill3_cone_rotation Value=@@cone_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill4_naselle_rotation Value=@@naselle_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill4_cone_rotation Value=@@cone_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill5_naselle_rotation Value=@@naselle_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill5_cone_rotation Value=@@cone_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill6_naselle_rotation Value=@@naselle_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill6_cone_rotation Value=@@cone_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill7_naselle_rotation Value=@@naselle_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill7_cone_rotation Value=@@cone_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill8_naselle_rotation Value=@@naselle_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill8_cone_rotation Value=@@cone_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill9_naselle_rotation Value=@@naselle_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill9_cone_rotation Value=@@cone_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill10_naselle_rotation Value=@@naselle_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill10_cone_rotation Value=@@cone_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill11_naselle_rotation Value=@@naselle_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill11_cone_rotation Value=@@cone_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill12_naselle_rotation Value=@@naselle_rotation@@
+main,windmill_data_host,windmill_data_source,windmill_status_data,@@time@@ Part=windmill12_cone_rotation Value=@@cone_rotation@@
